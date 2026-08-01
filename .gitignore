@@ -363,3 +363,5 @@ pyrightconfig.json
 .idea/
 
 # End of https://www.toptal.com/developers/gitignore/api/pycharm,jetbrains,python
+.vercel
+.env*

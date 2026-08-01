@@ -65,6 +65,6 @@ class Application:
         return self.app
 
 
-app = Application()
+app = Application().app
 
 
