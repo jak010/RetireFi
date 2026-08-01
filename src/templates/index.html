@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>INVESTRA :: 실시간 테마 수급 매트릭스</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- External Premium Light Mode Stylesheet -->
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <header>
+        <div class="header-title-container">
+            <h1><span class="pulse-dot"></span> INVESTRA MARKET MATRIX</h1>
+            <p>실시간 테마 수급 분석 및 분할 매수 타점 전광판</p>
+        </div>
+
+        <!-- 실시간 글로벌 지수 보드 -->
+        <div class="header-indices-container" id="header-indices-container">
+            <div class="index-item" id="index-kospi">
+                <span class="index-label">코스피</span>
+                <span class="index-val">-</span>
+                <span class="index-rate">-</span>
+            </div>
+            <div class="index-item" id="index-nasdaq">
+                <span class="index-label">나스닥100 선물</span>
+                <span class="index-val">-</span>
+                <span class="index-rate">-</span>
+            </div>
+            <div class="index-item" id="index-sox">
+                <span class="index-label">필라델피아 반도체</span>
+                <span class="index-val">-</span>
+                <span class="index-rate">-</span>
+            </div>
+        </div>
+
+        <div class="header-meta">
+            <div class="refresh-badge" id="time-badge" style="background: rgba(0, 0, 0, 0.02); margin-right: 0.5rem; font-weight: 600;">
+                🕒 &nbsp;<span id="current-time-display">00:00:00</span>
+            </div>
+            <div class="refresh-badge" id="refresh-indicator">
+                🔄 업데이트&nbsp;<span id="countdown">3</span>초 전
+            </div>
+        </div>
+    </header>
+
+    <!-- Top Summary Dashboard Banner -->
+    <div class="summary-dashboard">
+        <!-- Left: Leader Sectors Chip Panel -->
+        <div class="summary-panel leader-sectors">
+            <h3 class="summary-panel-title">
+                🔥 실시간 주도 업종 TOP 3
+                <span class="info-tooltip-trigger">
+                    ℹ️
+                    <span class="info-tooltip">
+                        <h4>실시간 주도 업종</h4>
+                        평균 등락률이 가장 높은 상위 3개 테마군입니다. 시장을 주도하고 있는 핵심 섹터를 파악하는 데 용이합니다.
+                    </span>
+                </span>
+            </h3>
+            <div class="summary-chips-container" id="leader-sectors-chips">
+                <!-- Injected via JS -->
+            </div>
+        </div>
+
+        <!-- Right: Recent Breaking News Feed Panel -->
+        <div class="summary-panel recent-news">
+            <h3 class="summary-panel-title">
+                📰 실시간 주요 속보 뉴스
+                <span class="info-tooltip-trigger">
+                    ℹ️
+                    <span class="info-tooltip">
+                        <h4>실시간 속보 뉴스</h4>
+                        시장에 실시간으로 생성되는 특징주 및 주요 공시 속보 뉴스 피드입니다. 뉴스를 클릭하면 해당 기사 원문으로 바로 이동합니다.
+                    </span>
+                </span>
+            </h3>
+            <div class="summary-chips-container" id="recent-news-chips">
+                <!-- Injected via JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Upgraded Control & Search Filter Bar -->
+    <div class="control-bar">
+        <div class="search-filter-group">
+            <!-- Rate Filter Option -->
+            <select class="filter-select" id="filter-rate" onchange="onFilterChange()">
+                <option value="all">📊 등락률: 전체</option>
+                <option value="up">📈 상승 테마 (> 0%)</option>
+                <option value="strong">🔥 급등 테마 (≥ 5%)</option>
+                <option value="down">📉 하락 테마 (< 0%)</option>
+            </select>
+
+            <!-- Volume Filter Option -->
+            <select class="filter-select" id="filter-volume" onchange="onFilterChange()">
+                <option value="all">💰 거래대금: 전체</option>
+                <option value="500b">💵 5,000억 이상</option>
+                <option value="100b">💵 1,000억 이상</option>
+                <option value="50b">💵 500억 이상</option>
+            </select>
+
+            <!-- Target Signal Filter Option -->
+            <select class="filter-select" id="filter-target" onchange="onFilterChange()">
+                <option value="all">🎯 매수신호: 전체</option>
+                <option value="has-target">🟢 타점 도달 테마만</option>
+            </select>
+
+            <!-- Sorting Option -->
+            <select class="filter-select" id="filter-sort" onchange="onFilterChange()">
+                <option value="volume">💎 정렬: 거래대금 순</option>
+                <option value="rate">📈 정렬: 평균 등락률 순</option>
+            </select>
+
+            <div class="search-wrapper">
+                <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                </svg>
+                <input type="text" class="search-input" id="search-box" placeholder="테마 또는 종목명 검색...">
+                <button class="search-clear-btn" id="search-clear-btn" onclick="resetAllFilters()" style="display: none;" title="필터 및 검색 초기화">✖</button>
+            </div>
+        </div>
+        
+        <div class="control-actions">
+            <button class="btn-toggle" id="btn-toggle-all" onclick="toggleAllCards()">📁 모두 접기</button>
+            <div class="stats-summary" id="stats-summary-info">
+                수집 테마: <span id="themes-count">0</span>개 | 매수 진입 타점: <span id="buying-targets-count" style="color:var(--accent-green)">0</span>개
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Split Layout -->
+    <div class="dashboard-layout">
+        <!-- Left Side: Total Themes Ranking List -->
+        <div class="ranking-sidebar">
+            <div class="ranking-sidebar-header">
+                <span>📊 전체 테마 수급 랭킹</span>
+                <span style="font-size:0.65rem; color:var(--text-muted);" id="ranking-sort-label">거래대금 순</span>
+            </div>
+            <div class="ranking-list-container" id="ranking-list-container">
+                <!-- Injected via JS -->
+            </div>
+        </div>
+
+        <!-- Right Side: Top 9 Dashboard Grid -->
+        <div class="dashboard-grid" id="dashboard-grid-container">
+            <div class="no-data-msg">
+                <div class="no-data-icon">⏳</div>
+                <h3>실시간 시장 데이터를 로딩하고 있습니다...</h3>
+                <p>테마별 5대 주도 종목의 실시간 호가 및 장중 낙폭 밴드를 연산 중입니다.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- External App Business Logic Script -->
+    <script src="/static/js/main.js"></script>
+</body>
+</html>

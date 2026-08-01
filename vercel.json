@@ -1,0 +1,24 @@
+{
+  "builds": [
+    {
+      "src": "src/main.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "src/main.py"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "src/main.py"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/v1/market/cron/news-summary",
+      "schedule": "0 * * * *"
+    }
+  ]
+}
