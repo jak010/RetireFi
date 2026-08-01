@@ -1,4 +1,7 @@
 import os
+import asyncio
+from datetime import datetime, timedelta
+
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -12,59 +15,131 @@ class Application:
         self.app = FastAPI(
             title="투자 대시보드 애플리케이션"
         )
-        # Mount static directory for external CSS & JS
-        static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+
+        self.configure_static()
+        self.configure_routes()
+        self.configure_events()
+
+    def configure_static(self):
+        static_dir = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "static"
+        )
+
         if not os.path.exists(static_dir):
             os.makedirs(static_dir)
-        self.app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
-    def __call__(self, *args, **kwargs):
+        self.app.mount(
+            "/static",
+            StaticFiles(directory=static_dir),
+            name="static"
+        )
+
+    def configure_routes(self):
         self.app.include_router(market_entrypoint)
 
-        # 루트 경로 진입 시 대시보드 index.html 렌더링
-        @self.app.get("/", response_class=HTMLResponse, tags=["UI"])
+        @self.app.get(
+            "/",
+            response_class=HTMLResponse,
+            tags=["UI"]
+        )
         def read_root():
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            template_path = os.path.join(current_dir, "templates", "index.html")
-            if os.path.exists(template_path):
-                with open(template_path, "r", encoding="utf-8") as f:
-                    return HTMLResponse(content=f.read())
-            return HTMLResponse(content="<h2>로얄로더 & 네이버 테마 매트릭스 대시보드가 준비 중입니다.</h2>")
+            current_dir = os.path.dirname(
+                os.path.abspath(__file__)
+            )
 
-        # Uvicorn/FastAPI 기동 시 정각마다 도는 뉴스 요약 스케줄러 태스크 추가
+            template_path = os.path.join(
+                current_dir,
+                "templates",
+                "index.html"
+            )
+
+            if os.path.exists(template_path):
+                with open(
+                        template_path,
+                        "r",
+                        encoding="utf-8"
+                ) as f:
+                    return HTMLResponse(
+                        content=f.read()
+                    )
+
+            return HTMLResponse(
+                content="<h2>로얄로더 & 네이버 테마 매트릭스 대시보드가 준비 중입니다.</h2>"
+            )
+
+    def configure_events(self):
+
         @self.app.on_event("startup")
         async def startup_event():
-            import asyncio
-            from datetime import datetime, timedelta
-            from src.application.libs.market.news_summarizer_service import NewsSummaryService
+            # Vercel 환경에서는 장기 실행 scheduler 비활성화
+            if os.getenv("VERCEL"):
+                print(
+                    "[INFO] Vercel environment detected. "
+                    "Background scheduler disabled."
+                )
+                return
 
-            async def schedule_news_summary_loop():
-                service = NewsSummaryService()
-                # 구동 10초 후 최초 1회 동작하여 작동 확인
-                await asyncio.sleep(10)
-                try:
-                    loop = asyncio.get_event_loop()
-                    await loop.run_in_executor(None, service.execute_summary_and_alert)
-                except Exception as e:
-                    print(f"[BACKGROUND CRON INITIAL ERROR] {e}")
+            asyncio.create_task(
+                self.schedule_news_summary_loop()
+            )
 
-                while True:
-                    now = datetime.now()
-                    next_hour = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
-                    sleep_seconds = (next_hour - now).total_seconds()
-                    await asyncio.sleep(max(1.0, sleep_seconds))
-                    
-                    try:
-                        loop = asyncio.get_event_loop()
-                        await loop.run_in_executor(None, service.execute_summary_and_alert)
-                    except Exception as e:
-                        print(f"[BACKGROUND CRON LOOP ERROR] {e}")
+    async def schedule_news_summary_loop(self):
 
-            asyncio.create_task(schedule_news_summary_loop())
+        from src.application.libs.market.news_summarizer_service import (
+            NewsSummaryService
+        )
 
-        return self.app
+        service = NewsSummaryService()
+
+        await asyncio.sleep(10)
+
+        try:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                None,
+                service.execute_summary_and_alert
+            )
+
+        except Exception as e:
+            print(
+                f"[BACKGROUND CRON INITIAL ERROR] {e}"
+            )
+
+        while True:
+
+            now = datetime.now()
+
+            next_hour = (
+                    now + timedelta(hours=1)
+            ).replace(
+                minute=0,
+                second=0,
+                microsecond=0
+            )
+
+            sleep_seconds = (
+                    next_hour - now
+            ).total_seconds()
+
+            await asyncio.sleep(
+                max(1.0, sleep_seconds)
+            )
+
+            try:
+
+                loop = asyncio.get_event_loop()
+
+                await loop.run_in_executor(
+                    None,
+                    service.execute_summary_and_alert
+                )
+
+            except Exception as e:
+
+                print(
+                    f"[BACKGROUND CRON LOOP ERROR] {e}"
+                )
 
 
 app = Application().app
-
-
