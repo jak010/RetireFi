@@ -1,6 +1,7 @@
 from fastapi.routing import APIRouter
 
 from src.application.libs.market.naver_theme_service import NaverThemeService
+from src.application.libs.market.news_summarizer_service import NewsSummaryService
 
 naver_theme_service = NaverThemeService()
 
@@ -30,5 +31,16 @@ class MarketController:
         return {
             "status": "success",
             "data": naver_theme_service.get_theme_stocks_detail(theme_name)
+        }
+
+    @staticmethod
+    @market_entrypoint.get(path="/cron/news-summary",
+                           summary="[CRON] : 최신 마켓 속보 요약 및 슬랙 브리핑 전송")
+    def run_news_summary():
+        service = NewsSummaryService()
+        summary = service.execute_summary_and_alert()
+        return {
+            "status": "success",
+            "summary": summary
         }
 
