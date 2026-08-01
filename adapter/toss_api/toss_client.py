@@ -41,11 +41,18 @@ class TossInvestmentAPI:
 
     def __init__(self):
         self.base_url = "https://openapi.tossinvest.com"
-        self._oauth_token = self.initialized()
-
-        self.headers = {
-            "Authorization": f"{self._oauth_token.token_type} {self._oauth_token.access_token}"
-        }
+        
+        # 만약 로컬 배포 스크립트를 통해 주입된 TOSS_ACCESS_TOKEN이 존재한다면 API 호출 없이 즉시 연동
+        if settings.TOSS_ACCESS_TOKEN:
+            token_type = settings.TOSS_TOKEN_TYPE or "Bearer"
+            self.headers = {
+                "Authorization": f"{token_type} {settings.TOSS_ACCESS_TOKEN}"
+            }
+        else:
+            self._oauth_token = self.initialized()
+            self.headers = {
+                "Authorization": f"{self._oauth_token.token_type} {self._oauth_token.access_token}"
+            }
 
     def initialized(self) -> _Token:
         _endpoint = "/oauth2/token"
