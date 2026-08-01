@@ -4,5 +4,7 @@ requests
 beautifulsoup4
 pandas
 pydantic
-apscheduler
+pydantic-settings
 yfinance
+langchain-core
+langchain-google-genai
