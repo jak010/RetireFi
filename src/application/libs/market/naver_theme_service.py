@@ -7,7 +7,6 @@ import pandas as pd
 
 from adapter.thema.royalroader import load_realtime_theme_data
 from adapter.thema.dto.ranking_dto import ThemeResponseDTO
-from adapter.toss_api.toss_client import TossInvestmentAPI
 from adapter.slack.client import SlackClient
 from adapter.naver.naver_finanacial_theme import ThemeStockMapper
 from src.config.setup import settings
@@ -20,12 +19,6 @@ class NaverThemeService:
     def __init__(self):
         # 100% 인메모리 매핑 데이터 구조
         self.mapping_df = pd.DataFrame()
-        
-        try:
-            self.toss = TossInvestmentAPI()
-        except Exception as e:
-            logger.warning(f"Toss API 초기화 실패 (시세 조회 제한 가능성): {e}")
-            self.toss = None
 
         self.slack = SlackClient(token=settings.SLACK_TOKEN) if settings.SLACK_TOKEN else None
         
@@ -311,14 +304,50 @@ class NaverThemeService:
             logger.error(f"지수 수집 실패 ({symbol}): {e}")
         return {"price": 0.0, "change": 0.0, "rate": 0.0, "price_str": "-", "change_str": "-", "rate_str": "-"}
 
+    def fetch_naver_realtime_prices(self, codes: List[str]) -> Dict[str, Dict[str, Any]]:
+        """
+        네이버 금융 실시간 시세 API를 사용하여 복수 종목의 현재가, 등락률, 거래대금을 일괄 스크래핑합니다.
+        """
+        if not codes:
+            return {}
+        
+        formatted_codes = [c.zfill(6) for c in codes]
+        query_str = ",".join([f"SERVICE_ITEM:{c}" for c in formatted_codes])
+        url = f"https://polling.finance.naver.com/api/realtime?query={query_str}"
+        
+        result_map = {}
+        try:
+            r = requests.get(
+                url, 
+                headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}, 
+                timeout=4.0
+            )
+            if r.status_code == 200:
+                data = r.json()
+                areas = data.get("result", {}).get("areas", [])
+                for area in areas:
+                    for item in area.get("datas", []):
+                        code = item.get("cd")
+                        price = item.get("nv", 0)
+                        rate = item.get("cr", 0.0)
+                        volume = item.get("aa", 0) # 거래대금(원 단위)
+                        
+                        result_map[code] = {
+                            "price": price,
+                            "rate": rate,
+                            "volume": volume
+                        }
+        except Exception as e:
+            logger.error(f"네이버 금융 실시간 시세 일괄 조회 실패: {e}")
+        return result_map
+
     def get_theme_stocks_detail(self, theme_name: str) -> List[Dict[str, Any]]:
         """
-        특정 네이버 테마에 속하는 종목 리스트와 토스/로얄로더를 통한 실시간 상세 정보를 조회합니다.
+        특정 네이버 테마에 속하는 종목 리스트와 네이버 금융/로얄로더 실시간 결합 상세 정보를 조회합니다.
         """
         self.ensure_mapping_data()
         if self.mapping_df.empty:
             return []
-
 
         # 해당 테마의 종목 정보 필터링
         theme_group = self.mapping_df[self.mapping_df['theme_name'] == theme_name]
@@ -340,30 +369,10 @@ class NaverThemeService:
             for s in rt.stocks:
                 rr_stock_map[s.stock_code[-6:]] = s
 
-        # 2. 토스 API를 사용하여 현재가 일괄 조회
-        toss_prices = {}
-        if self.toss:
-            try:
-                # Toss API 규격에 맞춰 종목코드 일괄 전달
-                prices_resp = self.toss.get_current_price(stock_codes)
-                toss_prices = {p.symbol: int(p.lastPrice) for p in prices_resp}
-            except Exception as e:
-                logger.error(f"Toss 실시간 시세 조회 중 오류: {e}")
+        # 2. 네이버 금융 실시간 시세 일괄 조회
+        naver_prices = self.fetch_naver_realtime_prices(stock_codes)
 
-        # 3. 토스 실시간 거래대금 랭킹 융합
-        toss_rankings = {}
-        if self.toss:
-            try:
-                rankings_resp = self.toss.get_ranking()
-                for rank_item in rankings_resp.result.rankings:
-                    toss_rankings[rank_item.symbol[-6:]] = {
-                        "rank": rank_item.rank,
-                        "trading_amount": rank_item.trading_amount,
-                    }
-            except Exception:
-                pass
-
-        # 4. 종목별 연산 및 가공
+        # 3. 종목별 연산 및 가공
         stock_details = []
         for code in stock_codes:
             name = stock_name_map[code]
@@ -371,28 +380,30 @@ class NaverThemeService:
             if not isinstance(desc, str):
                 desc = ""
             
-            # 실시간 등락률 & 거래대금 (로얄로더 연동 우선)
+            # 네이버 데이터 및 로얄로더 매핑
+            naver_data = naver_prices.get(code)
             rr_data = rr_stock_map.get(code)
-            rr_rate = rr_data.stock_rate if rr_data else 0.0
-            rr_volume = rr_data.trade_volume_krw * 1000000 if rr_data else 0
             
-            # 토스 현재가 우선, 없으면 로얄로더 가격, 없으면 0
-            price_won = toss_prices.get(code)
+            # 현재가 결정 (네이버 시세 우선 ➡️ 로얄로더 ➡️ 0)
+            price_won = naver_data["price"] if naver_data else 0
             if not price_won and rr_data:
                 price_won = rr_data.current_price_krw
             price_won = price_won or 0
 
-            # 토스 랭킹 기반 거래대금 갱신
-            market_rank = None
-            if code in toss_rankings:
-                market_rank = toss_rankings[code]["rank"]
-                rr_volume = toss_rankings[code]["trading_amount"]
+            # 등락률 결정 (네이버 시세 우선 ➡️ 로얄로더 ➡️ 0.0)
+            rr_rate = naver_data["rate"] if naver_data else 0.0
+            if not naver_data and rr_data:
+                rr_rate = rr_data.stock_rate
+
+            # 거래대금 결정 (네이버 시세 우선 ➡️ 로얄로더 ➡️ 0)
+            rr_volume = naver_data["volume"] if naver_data else 0
+            if not naver_data and rr_data:
+                rr_volume = rr_data.trade_volume_krw * 1000000
 
             # 거래대금 포맷 변환
             t_trillion = int(rr_volume // 1000000000000)
             t_billion = int((rr_volume % 1000000000000) // 100000000)
-            rank_suffix = f" (시장 {market_rank}위)" if market_rank else ""
-            volume_str = f"{t_trillion}조 {t_billion:,}억 원{rank_suffix}" if t_trillion > 0 else f"{t_billion:,}억 원{rank_suffix}"
+            volume_str = f"{t_trillion}조 {t_billion:,}억 원" if t_trillion > 0 else f"{t_billion:,}억 원"
 
             # 장중 고점 및 낙폭 계산 (Zero-Safe Guard)
             safe_price = max(1, price_won)
@@ -427,7 +438,7 @@ class NaverThemeService:
                 "rate_str": f"{rr_rate:+.2f}%",
                 "volume": rr_volume,
                 "volume_str": volume_str if rr_volume > 0 else "-",
-                "market_rank": market_rank,
+                "market_rank": None,
                 "day_high": day_high,
                 "day_high_str": f"{day_high:,}원" if price_won > 0 else "-",
                 "drop": round(intraday_drop, 2),
