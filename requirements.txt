@@ -8,3 +8,4 @@ pydantic-settings
 yfinance
 langchain-core
 langchain-google-genai
+slack-sdk
