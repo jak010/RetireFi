@@ -1260,11 +1260,9 @@ function renderNetworkMindmap(data) {
     const minGridY = cy - 400;
     const maxGridY = cy + 400;
     const columns = [
-        { x: cx - 420, label: "연관 보통주 (L)" },
-        { x: cx - 220, label: "소속 테마 (L)" },
+        { x: cx - 220, label: "좌측 연관 테마군" },
         { x: cx,       label: "기준 종목 (Root)" },
-        { x: cx + 220, label: "소속 테마 (R)" },
-        { x: cx + 420, label: "연관 보통주 (R)" }
+        { x: cx + 220, label: "우측 연관 테마군" }
     ];
 
     columns.forEach(col => {
@@ -1334,42 +1332,20 @@ function renderNetworkMindmap(data) {
             });
     };
 
-    // Count stock slots on left
-    let leftStockCount = 0;
-    leftThemes.forEach(t => {
+    // 2. Render Left Side Themes (spaced dynamically)
+    const leftHeights = leftThemes.map(t => {
+        const isCollapsed = collapsedThemesSet.has(t.theme_name);
         const validStocks = getSortedPeerStocks(t);
-        leftStockCount += Math.max(1, validStocks.length);
+        return (isCollapsed || validStocks.length === 0) ? 65 : 160;
     });
+    const leftTotalHeight = leftHeights.reduce((sum, h) => sum + h, 0);
+    let currentLeftY = cy - leftTotalHeight / 2;
 
-    // Count stock slots on right
-    let rightStockCount = 0;
-    rightThemes.forEach(t => {
-        const validStocks = getSortedPeerStocks(t);
-        rightStockCount += Math.max(1, validStocks.length);
-    });
-
-    const slotHeight = 65; // vertical height per slot
-
-    // 1. Render Left Side
-    const leftTotalHeight = leftStockCount * slotHeight;
-    let leftY = cy - leftTotalHeight / 2 + slotHeight / 2;
-
-    leftThemes.forEach(theme => {
-        const validStocks = getSortedPeerStocks(theme);
-        const numStocks = validStocks.length;
-
+    leftThemes.forEach((theme, idx) => {
+        const h = leftHeights[idx];
         const tx = cx - 220;
-        let ty = 0;
-        let startY = leftY;
-
-        if (numStocks === 0) {
-            ty = leftY;
-            leftY += slotHeight;
-        } else {
-            const endY = leftY + (numStocks - 1) * slotHeight;
-            ty = (startY + endY) / 2;
-            leftY += numStocks * slotHeight;
-        }
+        const ty = currentLeftY + h / 2;
+        currentLeftY += h;
 
         // Color connection lines based on theme avg_rate
         const rateVal = parseFloat(theme.avg_rate);
@@ -1380,35 +1356,40 @@ function renderNetworkMindmap(data) {
         // Link from center to theme
         drawBezierCurve(linksGroup, cx, cy, tx, ty, themeRateColor, 2, false);
 
-        // Render stocks and link from theme to stocks
-        const sx = cx - 420;
-        validStocks.forEach((stock, idx) => {
-            const sy = startY + idx * slotHeight;
-            renderStockNode(nodesGroup, sx, sy, stock);
-            drawBezierCurve(linksGroup, tx, ty, sx, sy, '#cbd5e1', 1.5, false);
-        });
+        // Render stocks in a compact local arc
+        const validStocks = getSortedPeerStocks(theme);
+        const N = validStocks.length;
+        if (N > 0) {
+            const R_local = 160;
+            const angleSpan = 1.8; // radians (about 100 degrees)
+            const startAngle = Math.PI + angleSpan / 2;
+            const angleStep = N > 1 ? angleSpan / (N - 1) : 0;
+
+            validStocks.forEach((stock, sIdx) => {
+                const phi = startAngle - sIdx * angleStep;
+                const sx = tx + R_local * Math.cos(phi);
+                const sy = ty + R_local * Math.sin(phi);
+
+                renderStockNode(nodesGroup, sx, sy, stock);
+                drawBezierCurve(linksGroup, tx, ty, sx, sy, '#cbd5e1', 1.5, false);
+            });
+        }
     });
 
-    // 2. Render Right Side
-    const rightTotalHeight = rightStockCount * slotHeight;
-    let rightY = cy - rightTotalHeight / 2 + slotHeight / 2;
+    // 3. Render Right Side Themes (spaced dynamically)
+    const rightHeights = rightThemes.map(t => {
+        const isCollapsed = collapsedThemesSet.has(t.theme_name);
+        const validStocks = getSortedPeerStocks(t);
+        return (isCollapsed || validStocks.length === 0) ? 65 : 160;
+    });
+    const rightTotalHeight = rightHeights.reduce((sum, h) => sum + h, 0);
+    let currentRightY = cy - rightTotalHeight / 2;
 
-    rightThemes.forEach(theme => {
-        const validStocks = getSortedPeerStocks(theme);
-        const numStocks = validStocks.length;
-
+    rightThemes.forEach((theme, idx) => {
+        const h = rightHeights[idx];
         const tx = cx + 220;
-        let ty = 0;
-        let startY = rightY;
-
-        if (numStocks === 0) {
-            ty = rightY;
-            rightY += slotHeight;
-        } else {
-            const endY = rightY + (numStocks - 1) * slotHeight;
-            ty = (startY + endY) / 2;
-            rightY += numStocks * slotHeight;
-        }
+        const ty = currentRightY + h / 2;
+        currentRightY += h;
 
         // Color connection lines based on theme avg_rate
         const rateVal = parseFloat(theme.avg_rate);
@@ -1419,13 +1400,24 @@ function renderNetworkMindmap(data) {
         // Link from center to theme
         drawBezierCurve(linksGroup, cx, cy, tx, ty, themeRateColor, 2, false);
 
-        // Render stocks and link from theme to stocks
-        const sx = cx + 420;
-        validStocks.forEach((stock, idx) => {
-            const sy = startY + idx * slotHeight;
-            renderStockNode(nodesGroup, sx, sy, stock);
-            drawBezierCurve(linksGroup, tx, ty, sx, sy, '#cbd5e1', 1.5, false);
-        });
+        // Render stocks in a compact local arc
+        const validStocks = getSortedPeerStocks(theme);
+        const N = validStocks.length;
+        if (N > 0) {
+            const R_local = 160;
+            const angleSpan = 1.8; // radians
+            const startAngle = - angleSpan / 2;
+            const angleStep = N > 1 ? angleSpan / (N - 1) : 0;
+
+            validStocks.forEach((stock, sIdx) => {
+                const phi = startAngle + sIdx * angleStep;
+                const sx = tx + R_local * Math.cos(phi);
+                const sy = ty + R_local * Math.sin(phi);
+
+                renderStockNode(nodesGroup, sx, sy, stock);
+                drawBezierCurve(linksGroup, tx, ty, sx, sy, '#cbd5e1', 1.5, false);
+            });
+        }
     });
 }
 
