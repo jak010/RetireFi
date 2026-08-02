@@ -1386,3 +1386,20 @@ function drawBezierCurve(parent, x1, y1, x2, y2, strokeColor, strokeWidth, dashe
     }
     parent.appendChild(path);
 }
+
+function createSVGNode(parent, x, y, width, height, htmlContent) {
+    const fo = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
+    fo.setAttribute('x', x - width / 2);
+    fo.setAttribute('y', y - height / 2);
+    fo.setAttribute('width', width);
+    fo.setAttribute('height', height);
+    fo.setAttribute('style', 'overflow: visible;');
+
+    const container = document.createElement('div');
+    container.style.width = '100%';
+    container.style.height = '100%';
+    container.innerHTML = htmlContent;
+
+    fo.appendChild(container);
+    parent.appendChild(fo);
+}
