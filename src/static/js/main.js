@@ -870,6 +870,19 @@ let currentNetworkStock = ''; // Track currently active network stock
 let panX = 0;
 let panY = 0;
 let zoomScale = 1;
+let collapsedThemesSet = new Set();
+let lastNetworkData = null;
+
+function toggleThemeCollapse(themeName) {
+    if (collapsedThemesSet.has(themeName)) {
+        collapsedThemesSet.delete(themeName);
+    } else {
+        collapsedThemesSet.add(themeName);
+    }
+    if (lastNetworkData) {
+        renderNetworkMindmap(lastNetworkData);
+    }
+}
 
 function switchMainView(viewType) {
     activeMainView = viewType;
@@ -1101,6 +1114,11 @@ function renderConsolidatedStocks() {
 
 async function fetchAndRenderNetwork(stockName) {
     if (!stockName) return;
+    
+    // Clear collapse states and cache when searching/loading a new stock
+    if (currentNetworkStock !== stockName) {
+        collapsedThemesSet.clear();
+    }
     currentNetworkStock = stockName;
     
     const loader = document.getElementById('network-loader');
@@ -1120,6 +1138,7 @@ async function fetchAndRenderNetwork(stockName) {
         }
         
         if (result.status === 'success') {
+            lastNetworkData = result;
             renderNetworkMindmap(result);
         } else {
             alert(result.message || '네트워크 조회 실패');
@@ -1237,12 +1256,60 @@ function renderNetworkMindmap(data) {
     const themes = (data.themes || []).sort((a, b) => (parseFloat(b.avg_rate) || 0) - (parseFloat(a.avg_rate) || 0));
     const mainStock = data.stock;
 
-    // Create main stock node
+    // 1. Draw Columns Grid Lines and Labels (Visual Hierarchy Lanes)
+    const minGridY = cy - 400;
+    const maxGridY = cy + 400;
+    const columns = [
+        { x: cx - 420, label: "연관 보통주 (L)" },
+        { x: cx - 220, label: "소속 테마 (L)" },
+        { x: cx,       label: "기준 종목 (Root)" },
+        { x: cx + 220, label: "소속 테마 (R)" },
+        { x: cx + 420, label: "연관 보통주 (R)" }
+    ];
+
+    columns.forEach(col => {
+        // Draw dashed grid line
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', col.x);
+        line.setAttribute('y1', minGridY);
+        line.setAttribute('x2', col.x);
+        line.setAttribute('y2', maxGridY);
+        line.setAttribute('stroke', 'rgba(226, 232, 240, 0.85)');
+        line.setAttribute('stroke-width', '1.5');
+        line.setAttribute('stroke-dasharray', '4,4');
+        linksGroup.appendChild(line);
+
+        // Draw header background pill (rounded rect)
+        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rect.setAttribute('x', col.x - 65);
+        rect.setAttribute('y', cy - 350);
+        rect.setAttribute('width', 130);
+        rect.setAttribute('height', 24);
+        rect.setAttribute('rx', 12);
+        rect.setAttribute('fill', '#f8fafc');
+        rect.setAttribute('stroke', '#e2e8f0');
+        rect.setAttribute('stroke-width', '1');
+        linksGroup.appendChild(rect);
+
+        // Draw column label text
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('x', col.x);
+        text.setAttribute('y', cy - 334);
+        text.setAttribute('text-anchor', 'middle');
+        text.setAttribute('fill', 'var(--text-muted)');
+        text.setAttribute('font-size', '10px');
+        text.setAttribute('font-weight', '700');
+        text.setAttribute('style', 'font-family: inherit;');
+        text.textContent = col.label;
+        linksGroup.appendChild(text);
+    });
+
+    // Create main stock node (vibrant blue-indigo gradient card)
     createSVGNode(nodesGroup, cx, cy, 185, 75, `
-        <div class="network-node-html main-node" style="width: 100%; height: 100%; background: #ffffff; border: 3px solid var(--accent-blue); border-radius: 12px; box-shadow: 0 10px 15px -3px rgba(29, 78, 216, 0.15); display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 0.5rem; text-align: center; cursor: default; user-select: none;">
-            <div style="font-size: 0.85rem; font-weight: 800; color: var(--text-primary); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${mainStock.name}</div>
-            <div style="font-size: 0.65rem; color: var(--text-muted); font-weight: 600; margin-top: 0.1rem;">${mainStock.code}</div>
-            <div style="font-size: 0.75rem; font-weight: 700; color: var(--accent-blue); margin-top: 0.15rem;">${mainStock.price_str} (${mainStock.rate_str})</div>
+        <div class="network-node-html main-node" style="width: 100%; height: 100%; background: linear-gradient(135deg, #1e40af, #3b82f6); border: 2.5px solid #ffffff; border-radius: 12px; box-shadow: 0 10px 20px rgba(30, 64, 175, 0.25); display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 0.5rem; text-align: center; cursor: default; user-select: none;">
+            <div style="font-size: 0.85rem; font-weight: 800; color: #ffffff; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${mainStock.name}</div>
+            <div style="font-size: 0.65rem; color: rgba(255, 255, 255, 0.75); font-weight: 600; margin-top: 0.1rem;">${mainStock.code}</div>
+            <div style="font-size: 0.78rem; font-weight: 700; color: #fef08a; margin-top: 0.15rem;">${mainStock.price_str} (${mainStock.rate_str})</div>
         </div>
     `);
 
@@ -1255,6 +1322,9 @@ function renderNetworkMindmap(data) {
 
     // Helper to get filtered and sorted peer stocks for a theme
     const getSortedPeerStocks = (theme) => {
+        if (collapsedThemesSet.has(theme.theme_name)) {
+            return [];
+        }
         return (theme.stocks || [])
             .filter(s => s.stock_code !== mainStock.code)
             .sort((a, b) => {
@@ -1301,10 +1371,14 @@ function renderNetworkMindmap(data) {
             leftY += numStocks * slotHeight;
         }
 
+        // Color connection lines based on theme avg_rate
+        const rateVal = parseFloat(theme.avg_rate);
+        const themeRateColor = rateVal > 0 ? 'rgba(239, 68, 68, 0.65)' : (rateVal < 0 ? 'rgba(59, 130, 246, 0.65)' : '#cbd5e1');
+
         // Render theme node
-        renderThemeNode(nodesGroup, tx, ty, theme);
+        renderThemeNode(nodesGroup, tx, ty, theme, true, mainStock.code);
         // Link from center to theme
-        drawBezierCurve(linksGroup, cx, cy, tx, ty, 'var(--accent-blue)', 2, true);
+        drawBezierCurve(linksGroup, cx, cy, tx, ty, themeRateColor, 2, false);
 
         // Render stocks and link from theme to stocks
         const sx = cx - 420;
@@ -1336,10 +1410,14 @@ function renderNetworkMindmap(data) {
             rightY += numStocks * slotHeight;
         }
 
+        // Color connection lines based on theme avg_rate
+        const rateVal = parseFloat(theme.avg_rate);
+        const themeRateColor = rateVal > 0 ? 'rgba(239, 68, 68, 0.65)' : (rateVal < 0 ? 'rgba(59, 130, 246, 0.65)' : '#cbd5e1');
+
         // Render theme node
-        renderThemeNode(nodesGroup, tx, ty, theme);
+        renderThemeNode(nodesGroup, tx, ty, theme, false, mainStock.code);
         // Link from center to theme
-        drawBezierCurve(linksGroup, cx, cy, tx, ty, 'var(--accent-blue)', 2, true);
+        drawBezierCurve(linksGroup, cx, cy, tx, ty, themeRateColor, 2, false);
 
         // Render stocks and link from theme to stocks
         const sx = cx + 420;
@@ -1351,15 +1429,31 @@ function renderNetworkMindmap(data) {
     });
 }
 
-function renderThemeNode(parent, x, y, theme) {
+function renderThemeNode(parent, x, y, theme, isLeft, mainStockCode) {
     const rateVal = parseFloat(theme.avg_rate);
     const rateColor = rateVal > 0 ? 'var(--accent-red)' : (rateVal < 0 ? 'var(--accent-blue)' : 'var(--text-muted)');
     const rateSign = rateVal > 0 ? '+' : '';
     
+    // Check collapse state
+    const isCollapsed = collapsedThemesSet.has(theme.theme_name);
+    const peerStocksCount = (theme.stocks || []).filter(s => s.stock_code !== mainStockCode).length;
+    
+    // Position toggle button on Left edge or Right edge
+    const toggleStyle = isLeft ? 'left: -10px;' : 'right: -10px;';
+    const toggleHtml = peerStocksCount > 0
+        ? `<button onclick="event.stopPropagation(); toggleThemeCollapse('${theme.theme_name}')" style="position: absolute; ${toggleStyle} top: 50%; transform: translateY(-50%); width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--border-color); background: #ffffff; color: var(--text-secondary); font-size: 0.65rem; font-weight: 800; cursor: pointer; display: flex; justify-content: center; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: all 0.2s; outline: none; z-index: 20;" onmouseover="this.style.borderColor='var(--accent-blue)'; this.style.color='var(--accent-blue)';" onmouseout="this.style.borderColor='var(--border-color)'; this.style.color='var(--text-secondary)';">${isCollapsed ? `+${peerStocksCount}` : '-'}</button>`
+        : '';
+
+    // Style card based on positive/negative rate
+    let cardBorderColor = 'var(--border-color)';
+    if (rateVal > 3.0) cardBorderColor = 'rgba(239, 68, 68, 0.4)'; // Red outline for strong themes
+    else if (rateVal < -3.0) cardBorderColor = 'rgba(59, 130, 246, 0.4)'; // Blue outline for weak themes
+
     createSVGNode(parent, x, y, 150, 50, `
-        <div class="network-node-html theme-node" style="width: 100%; height: 100%; background: #f8fafc; border: 2px solid var(--border-color); border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 0.4rem; text-align: center; cursor: default; user-select: none;">
-            <div style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${theme.theme_name}">${theme.theme_name}</div>
-            <div style="font-size: 0.7rem; font-weight: 700; color: ${rateColor}; margin-top: 0.1rem;">평균 ${rateSign}${theme.avg_rate}%</div>
+        <div class="network-node-html theme-node" style="width: 100%; height: 100%; background: #f8fafc; border: 2px solid ${cardBorderColor}; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 0.4rem; text-align: center; cursor: default; user-select: none; position: relative;">
+            <div style="font-size: 0.72rem; font-weight: 700; color: var(--text-secondary); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${theme.theme_name}">${theme.theme_name}</div>
+            <div style="font-size: 0.65rem; font-weight: 700; color: ${rateColor}; margin-top: 0.1rem;">평균 ${rateSign}${theme.avg_rate}%</div>
+            ${toggleHtml}
         </div>
     `);
 }
