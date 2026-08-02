@@ -415,7 +415,7 @@ header {
 .dashboard-layout {
     display: grid;
     grid-template-columns: 320px 1fr;
-    height: calc(100vh - 210px); /* Fill the screen down to the fixed bottom ticker bar */
+    height: calc(100vh - 198px); /* Fill the screen perfectly down to the fixed bottom ticker bar */
     overflow: hidden;
     background: rgba(0, 0, 0, 0.01);
 }
