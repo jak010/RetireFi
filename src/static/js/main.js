@@ -1270,22 +1270,38 @@ function renderNetworkMindmap(data) {
             });
     };
 
-    // Calculate vertical heights for each theme branch
+    // Split themes into Left and Right lists alternatingly to balance height
+    const leftThemes = themes.filter((_, idx) => idx % 2 === 0);
+    const rightThemes = themes.filter((_, idx) => idx % 2 !== 0);
+
     const slotHeight = 65; // vertical height per slot
-    const themeHeights = themes.map(theme => {
+
+    // Calculate vertical heights for Left side
+    const leftHeights = leftThemes.map(theme => {
         const validStocks = getSortedPeerStocks(theme);
         return Math.max(1, validStocks.length) * slotHeight;
     });
+    const leftTotalHeight = leftHeights.reduce((sum, h) => sum + h, 0);
 
-    const totalHeight = themeHeights.reduce((sum, h) => sum + h, 0);
-    
+    // Calculate vertical heights for Right side
+    const rightHeights = rightThemes.map(theme => {
+        const validStocks = getSortedPeerStocks(theme);
+        return Math.max(1, validStocks.length) * slotHeight;
+    });
+    const rightTotalHeight = rightHeights.reduce((sum, h) => sum + h, 0);
+
+    const maxBranchHeight = Math.max(leftTotalHeight, rightTotalHeight);
+
     // 1. Draw Columns Grid Lines and Labels (Visual Hierarchy Lanes)
-    const minGridY = cy - Math.max(400, totalHeight / 2 + 50);
-    const maxGridY = cy + Math.max(400, totalHeight / 2 + 50);
+    // 5 vertical columns: Peers (L) -> Themes (L) -> Root Stock -> Themes (R) -> Peers (R)
+    const minGridY = cy - Math.max(400, maxBranchHeight / 2 + 50);
+    const maxGridY = cy + Math.max(400, maxBranchHeight / 2 + 50);
     const columns = [
-        { x: cx - 280, label: "기준 종목 (Root)" },
-        { x: cx,       label: "소속 테마 (Themes)" },
-        { x: cx + 280, label: "연관 보통주 (Peers)" }
+        { x: cx - 360, label: "연관 보통주 (L)" },
+        { x: cx - 180, label: "소속 테마 (L)" },
+        { x: cx,       label: "기준 종목 (Root)" },
+        { x: cx + 180, label: "소속 테마 (R)" },
+        { x: cx + 360, label: "연관 보통주 (R)" }
     ];
 
     columns.forEach(col => {
@@ -1303,7 +1319,7 @@ function renderNetworkMindmap(data) {
         // Draw header background pill (rounded rect)
         const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
         rect.setAttribute('x', col.x - 65);
-        rect.setAttribute('y', cy - Math.max(350, totalHeight / 2 + 30));
+        rect.setAttribute('y', cy - Math.max(350, maxBranchHeight / 2 + 30));
         rect.setAttribute('width', 130);
         rect.setAttribute('height', 24);
         rect.setAttribute('rx', 12);
@@ -1315,7 +1331,7 @@ function renderNetworkMindmap(data) {
         // Draw column label text
         const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         text.setAttribute('x', col.x);
-        text.setAttribute('y', cy - Math.max(334, totalHeight / 2 + 14));
+        text.setAttribute('y', cy - Math.max(334, maxBranchHeight / 2 + 14));
         text.setAttribute('text-anchor', 'middle');
         text.setAttribute('fill', 'var(--text-muted)');
         text.setAttribute('font-size', '10px');
@@ -1325,8 +1341,8 @@ function renderNetworkMindmap(data) {
         linksGroup.appendChild(text);
     });
 
-    // Create main stock node (vibrant blue-indigo gradient card) on the left-most column
-    createSVGNode(nodesGroup, cx - 280, cy, 185, 75, `
+    // Create main stock node (vibrant blue-indigo gradient card) in the exact center
+    createSVGNode(nodesGroup, cx, cy, 185, 75, `
         <div class="network-node-html main-node" style="width: 100%; height: 100%; background: linear-gradient(135deg, #1e40af, #3b82f6); border: 2.5px solid #ffffff; border-radius: 12px; box-shadow: 0 10px 20px rgba(30, 64, 175, 0.25); display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 0.5rem; text-align: center; cursor: default; user-select: none;">
             <div style="font-size: 0.85rem; font-weight: 800; color: #ffffff; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${mainStock.name}</div>
             <div style="font-size: 0.65rem; color: rgba(255, 255, 255, 0.75); font-weight: 600; margin-top: 0.1rem;">${mainStock.code}</div>
@@ -1334,35 +1350,64 @@ function renderNetworkMindmap(data) {
         </div>
     `);
 
-    // Render themes and stocks in Left-to-Right vertical cascade tree (Mermaid LR style)
-    let currentY = cy - totalHeight / 2;
-
-    themes.forEach((theme, idx) => {
-        const themeHeight = themeHeights[idx];
-        const tx = cx;
-        const ty = currentY + themeHeight / 2;
+    // 2. Render Left Side Themes & Stocks
+    let currentLeftY = cy - leftTotalHeight / 2;
+    leftThemes.forEach((theme, idx) => {
+        const themeHeight = leftHeights[idx];
+        const tx = cx - 180;
+        const ty = currentLeftY + themeHeight / 2;
 
         // Color connection lines based on theme avg_rate
         const rateVal = parseFloat(theme.avg_rate);
         const themeRateColor = rateVal > 0 ? 'rgba(239, 68, 68, 0.65)' : (rateVal < 0 ? 'rgba(59, 130, 246, 0.65)' : '#cbd5e1');
 
-        // Render theme node (always isLeft = false, so collapse button is on the right)
-        renderThemeNode(nodesGroup, tx, ty, theme, false, mainStock.code);
+        // Render theme node (isLeft = true, collapse button is on the left edge)
+        renderThemeNode(nodesGroup, tx, ty, theme, true, mainStock.code);
         
         // Link from center root stock to theme
-        drawBezierCurve(linksGroup, cx - 280, cy, tx, ty, themeRateColor, 2, false);
+        drawBezierCurve(linksGroup, cx, cy, tx, ty, themeRateColor, 2, false);
 
         // Render stocks and link from theme to stocks
         const validStocks = getSortedPeerStocks(theme);
-        const sx = cx + 280;
+        const sx = cx - 360;
         
         validStocks.forEach((stock, sIdx) => {
-            const sy = currentY + sIdx * slotHeight + slotHeight / 2;
+            const sy = currentLeftY + sIdx * slotHeight + slotHeight / 2;
             renderStockNode(nodesGroup, sx, sy, stock);
             drawBezierCurve(linksGroup, tx, ty, sx, sy, '#cbd5e1', 1.5, false);
         });
 
-        currentY += themeHeight;
+        currentLeftY += themeHeight;
+    });
+
+    // 3. Render Right Side Themes & Stocks
+    let currentRightY = cy - rightTotalHeight / 2;
+    rightThemes.forEach((theme, idx) => {
+        const themeHeight = rightHeights[idx];
+        const tx = cx + 180;
+        const ty = currentRightY + themeHeight / 2;
+
+        // Color connection lines based on theme avg_rate
+        const rateVal = parseFloat(theme.avg_rate);
+        const themeRateColor = rateVal > 0 ? 'rgba(239, 68, 68, 0.65)' : (rateVal < 0 ? 'rgba(59, 130, 246, 0.65)' : '#cbd5e1');
+
+        // Render theme node (isLeft = false, collapse button is on the right edge)
+        renderThemeNode(nodesGroup, tx, ty, theme, false, mainStock.code);
+        
+        // Link from center root stock to theme
+        drawBezierCurve(linksGroup, cx, cy, tx, ty, themeRateColor, 2, false);
+
+        // Render stocks and link from theme to stocks
+        const validStocks = getSortedPeerStocks(theme);
+        const sx = cx + 360;
+        
+        validStocks.forEach((stock, sIdx) => {
+            const sy = currentRightY + sIdx * slotHeight + slotHeight / 2;
+            renderStockNode(nodesGroup, sx, sy, stock);
+            drawBezierCurve(linksGroup, tx, ty, sx, sy, '#cbd5e1', 1.5, false);
+        });
+
+        currentRightY += themeHeight;
     });
 }
 
