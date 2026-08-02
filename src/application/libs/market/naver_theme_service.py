@@ -2,8 +2,10 @@ import os
 import time
 import logging
 import requests
+import xml.etree.ElementTree as ET
 from typing import List, Dict, Any, Optional
 import pandas as pd
+from bs4 import BeautifulSoup
 
 from adapter.thema.royalroader import load_realtime_theme_data
 from adapter.thema.dto.ranking_dto import ThemeResponseDTO
@@ -44,14 +46,98 @@ class NaverThemeService:
         self.indices_cache_time = 0.0
         self.indices_cache_ttl = 5.0 # 지수 데이터 TTL: 5초
 
+        # 종목 통계 데이터 (종목별 3개월 최고가, 20일 평균 거래량) 캐시
+        self.stock_stats_cache = {}
+        self.stock_stats_ttl = 3600.0 # 1시간 캐시
+
+        # 키움 0181 등락률 상위 캐시
+        self.kiwoom_0181_cache = None
+        self.kiwoom_0181_cache_time = 0.0
+        self.kiwoom_0181_cache_ttl = 15.0 # 15초 캐시
+
+        # 네이버 테마 요약 결과 캐시 (서버 사이드 글로벌 캐시)
+        self.naver_themes_summary_cache = None
+        self.naver_themes_summary_cache_time = 0.0
+        self.naver_themes_summary_cache_ttl = 15.0 # 15초 캐시
+
+        # 실시간 데이터 로딩 진행률 (0~100)
+        self.load_status = {"step": "idle", "progress": 0}
+
+        # 백그라운드 갱신 진행 여부 플래그
+        self.is_updating = False
+
+    def get_stock_stats(self, code: str) -> Dict[str, Any]:
+        """
+        네이버 fchart API를 이용해 최근 60영업일(대략 3개월) 데이터를 가져와서
+        3개월 최고가, 20일 평균 거래량 및 10/20일 이평선 정배열(골든) 여부를 연산한 후 캐싱하여 반환합니다.
+        """
+        current_time = time.time()
+        if code in self.stock_stats_cache:
+            ts, stats = self.stock_stats_cache[code]
+            if current_time - ts < self.stock_stats_ttl:
+                return stats
+
+        stats = {"three_month_high": 0, "avg_vol_20": 0, "ma10_above_ma20": False}
+        try:
+            # count=60 영업일 (대략 3개월)
+            url = f"https://fchart.stock.naver.com/sise.nhn?symbol={code}&timeframe=day&count=60&requestType=0"
+            r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=3.0)
+            if r.status_code == 200:
+                root = ET.fromstring(r.text.strip())
+                items = root.findall('.//item')
+                if items:
+                    volumes = []
+                    high_prices = []
+                    close_prices = []
+                    
+                    for item in items:
+                        data = item.attrib.get('data', '')
+                        parts = data.split('|')
+                        if len(parts) >= 6:
+                            try:
+                                high_prices.append(int(parts[2]))
+                                close_prices.append(int(parts[4]))
+                            except ValueError:
+                                pass
+                                
+                    # 최근 20영업일 거래량 추출
+                    for item in items[-20:]:
+                        data = item.attrib.get('data', '')
+                        parts = data.split('|')
+                        if len(parts) >= 6:
+                            try:
+                                volumes.append(int(parts[5]))
+                            except ValueError:
+                                pass
+                    
+                    stats["three_month_high"] = max(high_prices) if high_prices else 0
+                    stats["avg_vol_20"] = sum(volumes) / len(volumes) if volumes else 0
+                    
+                    # 10일 vs 20일 이평선 연산
+                    if len(close_prices) >= 20:
+                        ma10 = sum(close_prices[-10:]) / 10
+                        ma20 = sum(close_prices[-20:]) / 20
+                        stats["ma10_above_ma20"] = ma10 > ma20
+                    elif len(close_prices) >= 10:
+                        ma10 = sum(close_prices[-10:]) / 10
+                        ma_all = sum(close_prices) / len(close_prices)
+                        stats["ma10_above_ma20"] = ma10 > ma_all
+        except Exception as e:
+            logger.error(f"주식 통계 데이터 수집 실패 ({code}): {e}")
+
+        self.stock_stats_cache[code] = (current_time, stats)
+        return stats
+
     def ensure_mapping_data(self):
         """인메모리에 테마 매핑 데이터가 없는 경우, 실시간 크롤러를 작동시켜 메모리에 캐싱합니다. (파일 I/O 없음)"""
         if self.mapping_df.empty:
             logger.info("⚠️ 인메모리 테마 매핑 정보가 비어있습니다. 실시간 크롤링을 개시합니다...")
             try:
                 mapper = ThemeStockMapper()
+                def progress_cb(step, val):
+                    self.load_status = {"step": step, "progress": val}
                 # 1페이지 분량의 네이버 금융 테마 전체(약 40여개)를 메모리로 긁어옵니다.
-                self.mapping_df = mapper.build_mapping_data(max_pages=1)
+                self.mapping_df = mapper.build_mapping_data(max_pages=1, progress_callback=progress_cb)
                 self.mapping_df['stock_code'] = self.mapping_df['stock_code'].astype(str).str.zfill(6)
                 logger.info(f"✅ 네이버 테마 실시간 수집 완료 및 인메모리 적재 성공 (총 {len(self.mapping_df)}개 레코드)")
             except Exception as e:
@@ -63,11 +149,54 @@ class NaverThemeService:
         """
         로얄로더 실시간 활성 종목 시세를 네이버 세부 테마에 매핑하여 테마별 요약 정보 및 Top 5 종목 상세 정보를 연산하고,
         거래대금 기준 정렬 테마 목록, 대금 상위 5대 테마, 통합 주도섹터 3대 테마를 산출합니다.
+        (비블로킹 백그라운드 스레드 업데이트 및 Stale-While-Revalidate 패턴 적용)
         """
+        if os.getenv("USE_DUMMY", "false").lower() == "true":
+            return self.get_dummy_themes_data()
+
+        current_time = time.time()
+
+        # 1. 캐시가 존재하고 신선한(Fresh) 경우 즉시 리턴
+        if self.naver_themes_summary_cache and (current_time - self.naver_themes_summary_cache_time < self.naver_themes_summary_cache_ttl):
+            return self.naver_themes_summary_cache
+
+        # 2. 캐시가 존재하지만 오래된(Stale) 경우, 백그라운드에서 갱신하고 기존 캐시 즉시 리턴 (Stale-While-Revalidate)
+        if self.naver_themes_summary_cache:
+            if not self.is_updating:
+                import threading
+                self.is_updating = True
+                threading.Thread(target=self._run_cache_update_bg, daemon=True).start()
+            return self.naver_themes_summary_cache
+
+        # 3. 최초 기동 등으로 캐시가 전혀 없는 경우: 백그라운드에서 갱신을 실행하고 loading 상태 즉시 반환
+        if not self.is_updating:
+            import threading
+            self.is_updating = True
+            self.load_status = {"step": "idle", "progress": 0}
+            threading.Thread(target=self._run_cache_update_bg, daemon=True).start()
+
+        return {
+            "status": "loading",
+            "step": self.load_status.get("step", "idle"),
+            "progress": self.load_status.get("progress", 0)
+        }
+
+    def _run_cache_update_bg(self):
+        try:
+            logger.info("⏳ [BG-UPDATE] 백그라운드 캐시 업데이트 스레드 작동 개시...")
+            data = self._calculate_themes_summary()
+            if data:
+                logger.info("✅ [BG-UPDATE] 백그라운드 캐시 업데이트 완료!")
+        except Exception as e:
+            logger.error(f"❌ [BG-UPDATE] 백그라운드 캐시 업데이트 에러: {e}")
+        finally:
+            self.is_updating = False
+
+    def _calculate_themes_summary(self) -> Dict[str, Any]:
+        """네이버 테마 요약 실시간 계산 (동기 처리 본문)"""
         self.ensure_mapping_data()
         if self.mapping_df.empty:
             return {"themes": [], "top_themes_5": [], "leader_sectors_3": []}
-
 
         # 1. 로얄로더 실시간 데이터 수집 (캐시 검사)
         current_time = time.time()
@@ -78,13 +207,54 @@ class NaverThemeService:
             self.rr_cache = rr_themes
             self.rr_cache_time = current_time
         
-        # 2. 로얄로더 종목 시세 정보를 dict 형태로 플래튼(Flatten)
+        # 2. 로얄로더 종목 시세 정보를 dict 형태로 플래튼(Flatten) 및 대상 코드 수집
         rr_stock_map = {}
+        all_active_codes = []
         for rt in rr_themes:
             for s in rt.stocks:
                 code_6d = s.stock_code[-6:]
                 if code_6d not in rr_stock_map or s.trade_volume_krw > rr_stock_map[code_6d].trade_volume_krw:
                     rr_stock_map[code_6d] = s
+                if code_6d not in all_active_codes:
+                    all_active_codes.append(code_6d)
+
+        # 2.1. 종목 통계 데이터 병렬 사전 수집 (ThreadPoolExecutor)
+        codes_to_fetch = []
+        for code in all_active_codes:
+            if code not in self.stock_stats_cache:
+                codes_to_fetch.append(code)
+            else:
+                ts, _ = self.stock_stats_cache[code]
+                if current_time - ts >= self.stock_stats_ttl:
+                    codes_to_fetch.append(code)
+
+        if codes_to_fetch:
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            logger.info(f"⚡ [STATS PRE-FETCH] {len(codes_to_fetch)}개 종목 통계 병렬 수집 시작...")
+            with ThreadPoolExecutor(max_workers=15) as executor:
+                futures = {executor.submit(self.get_stock_stats, code): code for code in codes_to_fetch}
+                
+                completed_count = 0
+                total_to_fetch = len(futures)
+                for future in as_completed(futures):
+                    completed_count += 1
+                    prog = 40 + int((completed_count / total_to_fetch) * 50)
+                    self.load_status = {"step": "stats", "progress": min(95, prog)}
+            logger.info("✅ [STATS PRE-FETCH] 병렬 수집 완료!")
+        else:
+            self.load_status = {"step": "stats", "progress": 90}
+
+        # 네이버 금융 실시간 데이터 일괄 조회 (예외 방어 및 차단 대비 Fallback)
+        naver_prices = {}
+        try:
+            naver_prices = self.fetch_naver_realtime_prices(all_active_codes)
+        except Exception as e:
+            logger.error(f"네이버 금융 실시간 시세 일괄 조회 예외 발생: {e}")
+
+        # 만약 네이버 시세 수집이 완전히 실패했고, Stale 캐시가 존재한다면 Stale 캐시를 강제 연장 서빙하여 복구!
+        if not naver_prices and self.naver_themes_summary_cache:
+            logger.warning("⚠️ 네이버 금융 시세 수집 실패로 인해 Stale 캐시(이전 캐시)를 강제 재활용하여 리턴합니다.")
+            return self.naver_themes_summary_cache
 
         # 3. 네이버 테마별 집계
         theme_groups = self.mapping_df.groupby('theme_name')
@@ -108,23 +278,47 @@ class NaverThemeService:
                 
                 if code in rr_stock_map:
                     s_data = rr_stock_map[code]
-                    total_rate += s_data.stock_rate
-                    total_volume += s_data.trade_volume_krw * 1000000 # 백만 원 -> 원 단위
+                    naver_data = naver_prices.get(code, {})
+                    
+                    price_won = naver_data.get("price") or s_data.current_price_krw
+                    rate_val = naver_data.get("rate") if naver_data.get("rate") is not None else s_data.stock_rate
+                    amount_won = naver_data.get("amount") or (s_data.trade_volume_krw * 1000000)
+                    volume_shares = naver_data.get("volume") or 0
+                    
+                    # 추가 통계 정보 (3개월 최고가, 20일 평균 거래량) 조회
+                    stats = self.get_stock_stats(code)
+                    
+                    three_month_high = stats.get("three_month_high", 0)
+                    avg_vol_20 = stats.get("avg_vol_20", 0)
+                    
+                    # 거래량 수급 비율 계산
+                    volume_ratio = (volume_shares / avg_vol_20 * 100) if avg_vol_20 > 0 else 0.0
+                    
+                    total_rate += rate_val
+                    total_volume += amount_won
                     mapped_count += 1
                     
-                    if s_data.stock_rate > max_rate:
-                        max_rate = s_data.stock_rate
-                        leader_stock = s_data.stock_name
+                    if rate_val > max_rate:
+                        max_rate = rate_val
+                        leader_stock = name
                         
                     theme_stocks.append({
                         "stock_code": code,
                         "stock_name": name,
                         "description": desc,
-                        "rate": s_data.stock_rate,
-                        "rate_str": f"{s_data.stock_rate:+.2f}%",
-                        "price": s_data.current_price_krw,
-                        "price_str": f"{s_data.current_price_krw:,}원",
-                        "volume": s_data.trade_volume_krw * 1000000,
+                        "rate": rate_val,
+                        "rate_str": f"{rate_val:+.2f}%",
+                        "price": price_won,
+                        "price_str": f"{price_won:,}원",
+                        "volume": amount_won, # 기존 대금 (원 단위)
+                        "volume_shares": volume_shares, # 누적거래량 (주 단위)
+                        "three_month_high": three_month_high,
+                        "three_month_high_str": f"{three_month_high:,}원" if three_month_high > 0 else "-",
+                        "ma10_above_ma20": stats.get("ma10_above_ma20", False),
+                        "avg_volume": avg_vol_20,
+                        "avg_volume_str": f"{int(avg_vol_20):,}주" if avg_vol_20 > 0 else "-",
+                        "volume_ratio": round(volume_ratio, 2),
+                        "volume_ratio_str": f"{volume_ratio:.1f}%" if avg_vol_20 > 0 else "-"
                     })
 
             # 시세가 수집되는 활성 종목이 1개라도 있는 테마만 필터링하여 노출
@@ -238,25 +432,18 @@ class NaverThemeService:
         if self.news_cache and (current_time - self.news_cache_time < self.news_cache_ttl):
             recent_news_data = self.news_cache
         else:
-            if self.save_ticker_service:
-                try:
-                    # 1페이지 분량의 속보를 가져옴 (page=2는 range(1, 2)이므로 1페이지만 조회)
-                    news_container = self.save_ticker_service.get_breaking_news(page=2)
-                    for news in news_container.news_list[:5]: # 최신 5개만 노출
-                        created_at_str = news.created_at.strftime("%H:%M")
-                        recent_news_data.append({
-                            "id": news.id,
-                            "title": news.title,
-                            "source": news.source or "속보",
-                            "time_str": created_at_str,
-                            "url": f"https://saveticker.com/news/{news.id}"
-                        })
+            try:
+                recent_news_data = self.fetch_naver_breaking_news()
+                if recent_news_data:
                     self.news_cache = recent_news_data
                     self.news_cache_time = current_time
-                except Exception as e:
-                    logger.error(f"속보 뉴스 조회 실패: {e}")
+                else:
                     if self.news_cache:
                         recent_news_data = self.news_cache
+            except Exception as e:
+                logger.error(f"네이버 속보 뉴스 수집 실패: {e}")
+                if self.news_cache:
+                    recent_news_data = self.news_cache
 
         # 9. 실시간 글로벌 지수 연동 (코스피, 나스닥 선물, 필라델피아 반도체)
         indices_data = {}
@@ -273,13 +460,17 @@ class NaverThemeService:
             self.indices_cache = indices_data
             self.indices_cache_time = current_time
 
-        return {
+        result = {
             "themes": sorted_by_volume,
             "top_themes_5": top_themes_5,
             "leader_sectors_3": leader_sectors_3,
             "recent_news": recent_news_data,
             "indices": indices_data
         }
+        self.naver_themes_summary_cache = result
+        self.naver_themes_summary_cache_time = current_time
+        self.load_status = {"step": "done", "progress": 100}
+        return result
 
     def fetch_yahoo_index(self, symbol: str) -> Dict[str, Any]:
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1m&range=1d"
@@ -306,39 +497,50 @@ class NaverThemeService:
 
     def fetch_naver_realtime_prices(self, codes: List[str]) -> Dict[str, Dict[str, Any]]:
         """
-        네이버 금융 실시간 시세 API를 사용하여 복수 종목의 현재가, 등락률, 거래대금을 일괄 스크래핑합니다.
+        네이버 금융 실시간 시세 API를 사용하여 복수 종목의 현재가, 등락률, 거래량, 거래대금을 일괄 스크래핑합니다.
+        (네이버 API 제한을 방지하기 위해 30개 단위로 청킹하여 조회합니다.)
         """
         if not codes:
             return {}
         
-        formatted_codes = [c.zfill(6) for c in codes]
-        query_str = ",".join([f"SERVICE_ITEM:{c}" for c in formatted_codes])
-        url = f"https://polling.finance.naver.com/api/realtime?query={query_str}"
+        # 중복 제거 및 zfill
+        unique_codes = list(set([c.zfill(6) for c in codes]))
         
+        chunk_size = 30
         result_map = {}
-        try:
-            r = requests.get(
-                url, 
-                headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}, 
-                timeout=4.0
-            )
-            if r.status_code == 200:
-                data = r.json()
-                areas = data.get("result", {}).get("areas", [])
-                for area in areas:
-                    for item in area.get("datas", []):
-                        code = item.get("cd")
-                        price = item.get("nv", 0)
-                        rate = item.get("cr", 0.0)
-                        volume = item.get("aa", 0) # 거래대금(원 단위)
-                        
-                        result_map[code] = {
-                            "price": price,
-                            "rate": rate,
-                            "volume": volume
-                        }
-        except Exception as e:
-            logger.error(f"네이버 금융 실시간 시세 일괄 조회 실패: {e}")
+        
+        for i in range(0, len(unique_codes), chunk_size):
+            chunk = unique_codes[i:i + chunk_size]
+            query_str = f"SERVICE_ITEM:{','.join(chunk)}"
+            url = f"https://polling.finance.naver.com/api/realtime?query={query_str}"
+            
+            try:
+                r = requests.get(
+                    url, 
+                    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}, 
+                    timeout=4.0
+                )
+                if r.status_code == 200:
+                    data = r.json()
+                    areas = data.get("result", {}).get("areas", [])
+                    for area in areas:
+                        for item in area.get("datas", []):
+                            code = item.get("cd")
+                            price = item.get("nv", 0)
+                            rate = item.get("cr", 0.0)
+                            amount = item.get("aa", 0) # 거래대금(원 단위)
+                            volume = item.get("aq", 0) # 누적거래량(주 단위)
+                            
+                            result_map[code] = {
+                                "price": price,
+                                "rate": rate,
+                                "amount": amount,
+                                "volume": volume
+                            }
+                time.sleep(0.05) # 미세한 딜레이 부여
+            except Exception as e:
+                logger.error(f"네이버 금융 실시간 시세 청크 조회 실패: {e}")
+                
         return result_map
 
     def get_theme_stocks_detail(self, theme_name: str) -> List[Dict[str, Any]]:
@@ -396,13 +598,26 @@ class NaverThemeService:
                 rr_rate = rr_data.stock_rate
 
             # 거래대금 결정 (네이버 시세 우선 ➡️ 로얄로더 ➡️ 0)
-            rr_volume = naver_data["volume"] if naver_data else 0
-            if not naver_data and rr_data:
-                rr_volume = rr_data.trade_volume_krw * 1000000
+            rr_amount = naver_data["amount"] if naver_data and "amount" in naver_data else 0
+            if not rr_amount and naver_data and "volume" in naver_data: # 하위 호환용
+                rr_amount = naver_data["volume"]
+            if not rr_amount and rr_data:
+                rr_amount = rr_data.trade_volume_krw * 1000000
+                
+            # 실제 주 단위 거래량
+            volume_shares = naver_data["volume"] if naver_data and "volume" in naver_data else 0
+
+            # 추가 통계 정보 (3개월 최고가, 20일 평균 거래량) 조회
+            stats = self.get_stock_stats(code)
+            three_month_high = stats.get("three_month_high", 0)
+            avg_vol_20 = stats.get("avg_vol_20", 0)
+            
+            # 거래량 수급 비율 계산
+            volume_ratio = (volume_shares / avg_vol_20 * 100) if avg_vol_20 > 0 else 0.0
 
             # 거래대금 포맷 변환
-            t_trillion = int(rr_volume // 1000000000000)
-            t_billion = int((rr_volume % 1000000000000) // 100000000)
+            t_trillion = int(rr_amount // 1000000000000)
+            t_billion = int((rr_amount % 1000000000000) // 100000000)
             volume_str = f"{t_trillion}조 {t_billion:,}억 원" if t_trillion > 0 else f"{t_billion:,}억 원"
 
             # 장중 고점 및 낙폭 계산 (Zero-Safe Guard)
@@ -436,8 +651,16 @@ class NaverThemeService:
                 "price_str": f"{price_won:,}원" if price_won > 0 else "-",
                 "rate": rr_rate,
                 "rate_str": f"{rr_rate:+.2f}%",
-                "volume": rr_volume,
-                "volume_str": volume_str if rr_volume > 0 else "-",
+                "volume": rr_amount,
+                "volume_str": volume_str if rr_amount > 0 else "-",
+                "volume_shares": volume_shares,
+                "three_month_high": three_month_high,
+                "three_month_high_str": f"{three_month_high:,}원" if three_month_high > 0 else "-",
+                "ma10_above_ma20": stats.get("ma10_above_ma20", False),
+                "avg_volume": avg_vol_20,
+                "avg_volume_str": f"{int(avg_vol_20):,}주" if avg_vol_20 > 0 else "-",
+                "volume_ratio": round(volume_ratio, 2),
+                "volume_ratio_str": f"{volume_ratio:.1f}%" if avg_vol_20 > 0 else "-",
                 "market_rank": None,
                 "day_high": day_high,
                 "day_high_str": f"{day_high:,}원" if price_won > 0 else "-",
@@ -548,3 +771,508 @@ class NaverThemeService:
             )
         except Exception as e:
             logger.error(f"Slack 발송 실패: {e}")
+
+    def get_kiwoom_0181_rise_ranking(self) -> List[Dict[str, Any]]:
+        """
+        네이버 증권 상승 종목 페이지(sise_rise.naver)를 크롤링하여
+        ETF, ETN, 스팩, 우선주 등을 제외하고 순수 주식 보통주들의 전일대비 등락률 상위 30개를 반환합니다.
+        (15초간 캐싱을 제공합니다.)
+        """
+        if os.getenv("USE_DUMMY", "false").lower() == "true":
+            return self.get_dummy_kiwoom_0181()
+
+        current_time = time.time()
+        if self.kiwoom_0181_cache and (current_time - self.kiwoom_0181_cache_time < self.kiwoom_0181_cache_ttl):
+            return self.kiwoom_0181_cache
+
+        url = "https://finance.naver.com/sise/sise_rise.naver"
+        HEADERS = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+        
+        results = []
+        try:
+            r = requests.get(url, headers=HEADERS, timeout=5.0)
+            if r.status_code == 200:
+                soup = BeautifulSoup(r.text, 'html.parser')
+                table = soup.find('table', class_='type_2')
+                if table:
+                    rows = table.find_all('tr')
+                    for row in rows:
+                        cols = row.find_all('td')
+                        if len(cols) >= 10:
+                            name_a = cols[1].find('a')
+                            if name_a:
+                                name = name_a.text.strip()
+                                code = name_a['href'].split('code=')[-1]
+                                
+                                # 필터링 규칙 적용: ETF, ETN, 스팩, 우선주 및 각종 자산운용사 상품 필터링
+                                if not code.isdigit(): # 알파벳 섞인 비정상 주식코드 필터링 (액티브 상품 등)
+                                    continue
+                                    
+                                exclude_keywords = [
+                                    "TIGER", "KODEX", "SOL", "ACE", "RISE", "KBSTAR", "HANARO", "KOSEF", "ETN", 
+                                    "레버리지", "인버스", "스팩", "SPAC", "우 ", "우선주", "액티브", "합성", "선물", 
+                                    "1Q", "UNICORN", "WON", "IBK", "PLUS", "FOCUS", "DS", "BNK", "DAISHIN", 
+                                    "KIWOOM", "ARIRANG", "TIMEFOLIO", "TRUSTON", "MASTER", "WOORI", "HI", "HANA", 
+                                    "DAOL", "SHINHAN", "CAPITAL", "MERITZ", "파워", "마이티", "POWER", "MIGHTY"
+                                ]
+                                if any(kw in name for kw in exclude_keywords) or name.endswith("우"):
+                                    continue
+                                if len(code) == 6 and not code.endswith("0"):
+                                    continue
+                                    
+                                price_str = cols[2].text.strip()
+                                # 등락률
+                                rate_str = cols[4].text.strip().replace('\n', '').replace('\t', '')
+                                # 거래량
+                                volume_str = cols[5].text.strip()
+                                
+                                results.append({
+                                    "code": code,
+                                    "name": name,
+                                    "price_str": f"{price_str}원",
+                                    "rate_str": rate_str,
+                                    "volume_str": f"{volume_str}주"
+                                })
+            
+            # 상위 30개 종목으로 자르기
+            results = results[:30]
+            
+            # 각 종목의 소속 테마 조회하여 매핑 추가
+            if not self.mapping_df.empty:
+                for stock_item in results:
+                    code = stock_item["code"]
+                    matched_themes = self.mapping_df[self.mapping_df['stock_code'] == code]['theme_name'].unique().tolist()
+                    stock_item["themes"] = matched_themes
+            else:
+                for stock_item in results:
+                    stock_item["themes"] = []
+
+            self.kiwoom_0181_cache = results
+            self.kiwoom_0181_cache_time = current_time
+            
+        except Exception as e:
+            logger.error(f"키움 0181 등락률 상위 데이터 수집 실패: {e}")
+            if self.kiwoom_0181_cache:
+                return self.kiwoom_0181_cache
+
+        return results
+
+    def get_dummy_kiwoom_0181(self) -> List[Dict[str, Any]]:
+        return [
+            {"code": "000660", "name": "SK하이닉스", "price_str": "185,000원", "rate_str": "+8.45%", "volume_str": "35,135,135주", "themes": ["반도체 대표주(생산)", "HBM(고대역폭메모리)"]},
+            {"code": "080220", "name": "제주반도체", "price_str": "24,500원", "rate_str": "+12.50%", "volume_str": "102,040,816주", "themes": ["온디바이스 AI", "시스템반도체"]},
+            {"code": "005930", "name": "삼성전자", "price_str": "75,800원", "rate_str": "+4.12%", "volume_str": "55,408,970주", "themes": ["반도체 대표주(생산)"]},
+            {"code": "042700", "name": "한미반도체", "price_str": "145,000원", "rate_str": "+9.80%", "volume_str": "12,410,294주", "themes": ["HBM(고대역폭메모리)", "반도체 장비"]},
+            {"code": "000150", "name": "두산", "price_str": "210,000원", "rate_str": "+29.95%", "volume_str": "850,210주", "themes": ["지주사"]},
+            {"code": "011090", "name": "에넥스", "price_str": "1,850원", "rate_str": "+30.00%", "volume_str": "4,210,950주", "themes": ["가구"]},
+            {"code": "071950", "name": "코아스", "price_str": "1,450원", "rate_str": "+15.20%", "volume_str": "1,550,290주", "themes": ["가구"]},
+            {"code": "353200", "name": "대덕전자", "price_str": "28,400원", "rate_str": "+6.50%", "volume_str": "2,415,093주", "themes": ["CXL(컴퓨트익스프레스링크)", "PCB(인쇄회로기판)"]},
+            {"code": "009150", "name": "삼성전기", "price_str": "158,000원", "rate_str": "+5.20%", "volume_str": "1,039,450주", "themes": ["MLCC(적층세라믹콘덴서)", "반도체 패키지기판"]},
+            {"code": "402340", "name": "SK스퀘어", "price_str": "85,400원", "rate_str": "+7.10%", "volume_str": "1,490,201주", "themes": ["지주사"]}
+        ]
+
+    def get_stock_network(self, stock_name_or_code: str) -> Dict[str, Any]:
+        """
+        특정 종목을 기준으로 소속된 테마들과 해당 테마에 수속된 타 종목들과의 관계(마인드맵용 데이터)를 반환합니다.
+        """
+        if os.getenv("USE_DUMMY", "false").lower() == "true":
+            return self.get_dummy_stock_network(stock_name_or_code)
+
+        self.ensure_mapping_data()
+        if self.mapping_df.empty:
+            return {"status": "error", "message": "테마 매핑 데이터를 확보하지 못했습니다."}
+
+        # 1. 종목 검색 (코드 검색 -> 정확한 이름 검색 -> 부분 일치 검색 순)
+        stock_name_or_code = stock_name_or_code.strip()
+        target_df = self.mapping_df[self.mapping_df['stock_code'] == stock_name_or_code]
+        if target_df.empty:
+            target_df = self.mapping_df[self.mapping_df['stock_name'].str.lower() == stock_name_or_code.lower()]
+        if target_df.empty:
+            target_df = self.mapping_df[self.mapping_df['stock_name'].str.lower().str.contains(stock_name_or_code.lower())]
+
+        if target_df.empty:
+            return {"status": "error", "message": f"'{stock_name_or_code}' 종목을 찾을 수 없습니다."}
+
+        stock_code = target_df.iloc[0]['stock_code']
+        stock_name = target_df.iloc[0]['stock_name']
+
+        # 2. 캐시 보증
+        if not self.naver_themes_summary_cache:
+            self._calculate_themes_summary()
+
+        if not self.naver_themes_summary_cache:
+            return {"status": "error", "message": "실시간 테마 분석 데이터가 없습니다."}
+
+        # 3. 해당 종목이 속한 전체 테마명 리스트업
+        mapped_theme_names = self.mapping_df[self.mapping_df['stock_code'] == stock_code]['theme_name'].unique().tolist()
+
+        # 4. 연관 테마 정보 추출
+        themes_list = []
+        for theme_item in self.naver_themes_summary_cache.get("themes", []):
+            t_name = theme_item["theme_name"]
+            if t_name in mapped_theme_names:
+                themes_list.append({
+                    "theme_name": t_name,
+                    "avg_rate": theme_item["avg_rate"],
+                    "total_volume_str": theme_item["total_volume_str"],
+                    "stocks": theme_item["top_stocks"]
+                })
+
+        # 5. 기준 종목의 단가 및 등락률 최신 정보 획득
+        stock_price_str = "-"
+        stock_rate_str = "0.00%"
+        found = False
+        for t in themes_list:
+            for s in t["stocks"]:
+                if s["stock_code"] == stock_code:
+                    stock_price_str = s["price_str"]
+                    stock_rate_str = s["rate_str"]
+                    found = True
+                    break
+            if found:
+                break
+
+        if not found:
+            try:
+                price_info = self.fetch_naver_realtime_prices([stock_code]).get(stock_code, {})
+                if price_info:
+                    p_won = price_info.get("price", 0)
+                    r_val = price_info.get("rate", 0.0)
+                    stock_price_str = f"{p_won:,}원" if p_won > 0 else "-"
+                    stock_rate_str = f"{r_val:+.2f}%" if r_val is not None else "0.00%"
+            except Exception as e:
+                logger.error(f"실시간 단가 Fallback 조회 에러 ({stock_code}): {e}")
+
+        return {
+            "status": "success",
+            "stock": {
+                "code": stock_code,
+                "name": stock_name,
+                "price_str": stock_price_str,
+                "rate_str": stock_rate_str
+            },
+            "themes": themes_list
+        }
+
+    def get_dummy_stock_network(self, stock_name_or_code: str) -> Dict[str, Any]:
+        stock_name_or_code = stock_name_or_code.strip()
+        code = "000660"
+        name = "SK하이닉스"
+        if "제주" in stock_name_or_code or "080220" in stock_name_or_code:
+            code = "080220"
+            name = "제주반도체"
+        elif "삼성" in stock_name_or_code or "005930" in stock_name_or_code:
+            code = "005930"
+            name = "삼성전자"
+
+        res_summary = self.get_dummy_themes_data()
+        themes_list = []
+        for t in res_summary["themes"]:
+            if code in ["000660", "005930"] and "삼성전자" in t["theme_name"]:
+                themes_list.append({
+                    "theme_name": t["theme_name"],
+                    "avg_rate": t["avg_rate"],
+                    "total_volume_str": t.get("total_volume_str", "12조 4,500억 원"),
+                    "stocks": t.get("top_stocks", [])
+                })
+            elif code == "080220" and "온디바이스" in t["theme_name"]:
+                themes_list.append({
+                    "theme_name": t["theme_name"],
+                    "avg_rate": t["avg_rate"],
+                    "total_volume_str": t.get("total_volume_str", "3,500억 원"),
+                    "stocks": t.get("top_stocks", [])
+                })
+
+        if not themes_list:
+            for t in res_summary["themes"][:2]:
+                themes_list.append({
+                    "theme_name": t["theme_name"],
+                    "avg_rate": t["avg_rate"],
+                    "total_volume_str": t.get("total_volume_str", ""),
+                    "stocks": t.get("top_stocks", [])
+                })
+
+        return {
+            "status": "success",
+            "stock": {
+                "code": code,
+                "name": name,
+                "price_str": "185,000원" if code == "000660" else ("24,500원" if code == "080220" else "75,800원"),
+                "rate_str": "+8.45%" if code == "000660" else ("+12.50%" if code == "080220" else "+4.12%")
+            },
+            "themes": themes_list
+        }
+
+    def get_dummy_themes_data(self) -> Dict[str, Any]:
+        dummy_data = [
+            {
+                "theme_name": "S7(삼성전자/SK하이닉스 등)",
+                "avg_rate": 5.82,
+                "total_volume": 12450000000000,
+                "total_volume_str": "12조 4,500억 원",
+                "mapped_count": 5,
+                "total_count": 5,
+                "leader_stock": "SK하이닉스",
+                "top_stocks": [
+                    {
+                        "stock_code": "000660",
+                        "stock_name": "SK하이닉스",
+                        "description": "반도체 대장주",
+                        "rate": 8.45,
+                        "rate_str": "+8.45%",
+                        "price": 185000,
+                        "price_str": "185,000원",
+                        "volume": 6500000000000,
+                        "volume_shares": 35135135,
+                        "three_month_high": 210000,
+                        "three_month_high_str": "210,000원",
+                        "avg_volume": 25000000,
+                        "avg_volume_str": "25,000,000주",
+                        "volume_ratio": 140.54,
+                        "volume_ratio_str": "140.5%",
+                        "ma10_above_ma20": True,
+                        "role": "👑 대장주",
+                        "volume_str": "6조 5,000억",
+                        "drop": -11.90,
+                        "drop_str": "-11.90%",
+                        "buy_zone_1": "173,900 ~ 177,600원",
+                        "buy_zone_2": "166,500 ~ 173,900원"
+                    },
+                    {
+                        "stock_code": "005930",
+                        "stock_name": "삼성전자",
+                        "description": "메모리 반도체 1위",
+                        "rate": 4.12,
+                        "rate_str": "+4.12%",
+                        "price": 75800,
+                        "price_str": "75,800원",
+                        "volume": 4200000000000,
+                        "volume_shares": 55408970,
+                        "three_month_high": 88000,
+                        "three_month_high_str": "88,000원",
+                        "ma10_above_ma20": False,
+                        "avg_volume": 45000000,
+                        "avg_volume_str": "45,000,000주",
+                        "volume_ratio": 123.13,
+                        "volume_ratio_str": "123.1%",
+                        "role": "🥇 1등주",
+                        "volume_str": "4조 2,000억",
+                        "drop": -13.86,
+                        "drop_str": "-13.86%",
+                        "buy_zone_1": "71,200 ~ 72,700원",
+                        "buy_zone_2": "68,200 ~ 71,200원"
+                    }
+                ],
+                "volume_share": 35.4,
+                "rate_rank": 1,
+                "vol_rank": 1,
+                "composite_rank": 1
+            },
+            {
+                "theme_name": "온디바이스 AI",
+                "avg_rate": 3.75,
+                "total_volume": 4200000000000,
+                "total_volume_str": "4조 2,000억 원",
+                "mapped_count": 3,
+                "total_count": 3,
+                "leader_stock": "제주반도체",
+                "top_stocks": [
+                    {
+                        "stock_code": "080220",
+                        "stock_name": "제주반도체",
+                        "description": "모바일/저전력 반도체 설계 전문",
+                        "rate": 12.50,
+                        "rate_str": "+12.50%",
+                        "price": 24500,
+                        "price_str": "24,500원",
+                        "volume": 2500000000000,
+                        "volume_shares": 102040816,
+                        "three_month_high": 32000,
+                        "three_month_high_str": "32,000원",
+                        "ma10_above_ma20": True,
+                        "avg_volume": 85000000,
+                        "avg_volume_str": "85,000,000주",
+                        "volume_ratio": 120.05,
+                        "volume_ratio_str": "120.1%",
+                        "role": "👑 대장주",
+                        "volume_str": "2조 5,000억",
+                        "drop": -23.44,
+                        "drop_str": "-23.44%",
+                        "buy_zone_1": "23,000 ~ 23,500원",
+                        "buy_zone_2": "22,000 ~ 23,000원"
+                    }
+                ],
+                "volume_share": 12.0,
+                "rate_rank": 2,
+                "vol_rank": 2,
+                "composite_rank": 2
+            }
+        ]
+        
+        dummy_indices = {
+            "kospi": {
+                "price": "2,652.12",
+                "price_str": "2,652.12",
+                "rate_str": "+1.24%"
+            },
+            "nasdaq_futures": {
+                "price": "19,250.50",
+                "price_str": "19,250.50",
+                "rate_str": "+0.85%"
+            },
+            "philadelphia_semiconductor": {
+                "price": "4,950.20",
+                "price_str": "4,950.20",
+                "rate_str": "+2.15%"
+            }
+        }
+        
+        dummy_news = [
+            {"title": "[특징주] SK하이닉스, 실시간 외국인 대규모 매수세에 급등세", "source": "뉴스원", "url": "https://naver.com", "time_str": "5분 전"},
+            {"title": "[특징주] 제주반도체, 온디바이스 AI 시장 개화로 수급 대거 유입", "source": "이데일리", "url": "https://naver.com", "time_str": "12분 전"},
+            {"title": "반도체 지수 폭발, 대형 보통주 중심 강력한 수급 확인", "source": "한국경제", "url": "https://naver.com", "time_str": "20분 전"}
+        ]
+        
+        return {
+            "themes": dummy_data,
+            "top_themes_5": dummy_data[:5],
+            "indices": dummy_indices,
+            "recent_news": dummy_news,
+            "leader_sectors_3": dummy_data[:3]
+        }
+
+    def fetch_naver_breaking_news(self) -> List[Dict[str, Any]]:
+        """
+        네이버 증권 실시간 시황 속보 뉴스(LSS3D, 101/258/401)를 크롤링하여 최신 5개 뉴스를 반환합니다.
+        """
+        import requests
+        from bs4 import BeautifulSoup
+        from urllib.parse import urlparse, parse_qs
+
+        url = "https://finance.naver.com/news/news_list.naver?mode=LSS3D&section_id=101&section_id2=258&section_id3=401"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+
+        def reformat_naver_link(href: str) -> str:
+            try:
+                parsed_url = urlparse(href)
+                query_params = parse_qs(parsed_url.query)
+                article_id_list = query_params.get("article_id")
+                office_id_list = query_params.get("office_id")
+                if article_id_list and office_id_list:
+                    return f"https://n.news.naver.com/mnews/article/{office_id_list[0]}/{article_id_list[0]}"
+            except Exception:
+                pass
+            if href.startswith("/"):
+                return f"https://finance.naver.com{href}"
+            return href
+
+        news_data = []
+        try:
+            res = requests.get(url, headers=headers, timeout=5)
+            if res.status_code != 200:
+                return []
+
+            # EUC-KR 디코딩 처리
+            soup = BeautifulSoup(res.content, "html.parser", from_encoding="euc-kr")
+
+            # 1. 다양한 셀렉터 시도 (시황/전망 속보는 dl.newsList 혹은 ul.new_list 형식을 가집니다)
+            news_items = soup.select("dl.newsList dd, dl.newsList dt, .newsList li, .realtimeNewsList li, div.newsList_area li")
+
+            # 2. 범용적인 a 태그 직접 서치 fallback (구조가 틀어지거나 완전히 다를 경우)
+            if not news_items:
+                a_tags = []
+                for a in soup.find_all("a"):
+                    href = a.get("href", "")
+                    if "news_read.naver" in href and a.text.strip():
+                        a_tags.append(a)
+
+                for a_tag in a_tags:
+                    if len(news_data) >= 5:
+                        break
+                    title = a_tag.text.strip()
+                    href = a_tag.get("href", "")
+                    link = reformat_naver_link(href)
+
+                    if any(x["url"] == link for x in news_data):
+                        continue
+
+                    # 언론사명과 시간은 부모 노드 상향 서치
+                    press = "네이버금융"
+                    time_str = "방금 전"
+
+                    parent = a_tag.parent
+                    for _ in range(3):
+                        if not parent:
+                            break
+                        press_el = parent.select_one(".press, .source")
+                        if press_el:
+                            press = press_el.text.strip()
+                        wdate_el = parent.select_one(".wdate, .date")
+                        if wdate_el:
+                            raw_date = wdate_el.text.strip()
+                            time_str = raw_date[11:16] if len(raw_date) >= 16 else raw_date
+                        if press_el or wdate_el:
+                            break
+                        parent = parent.parent
+
+                    news_data.append({
+                        "id": len(news_data) + 1,
+                        "title": title,
+                        "source": press,
+                        "time_str": time_str,
+                        "url": link
+                    })
+                return news_data
+
+            # 3. 셀렉터 매칭 성공 시 정상 파싱
+            for item in news_items:
+                if len(news_data) >= 5:
+                    break
+
+                a_tag = item.select_one("a")
+                if not a_tag:
+                    continue
+
+                title = a_tag.text.strip()
+                href = a_tag.get("href", "")
+                if not href or not title:
+                    continue
+
+                link = reformat_naver_link(href)
+
+                # 중복 뉴스 방지
+                if any(x["url"] == link for x in news_data):
+                    continue
+
+                # 언론사와 시간 정보 추출
+                summary_dd = item.find_next_sibling("dd") if item.name == "dt" else item
+                press = "네이버금융"
+                time_str = "방금 전"
+
+                if summary_dd:
+                    press_span = summary_dd.select_one("span.press")
+                    if press_span:
+                        press = press_span.text.strip()
+                    wdate_span = summary_dd.select_one("span.wdate")
+                    if wdate_span:
+                        raw_date = wdate_span.text.strip()
+                        if len(raw_date) >= 16:
+                            time_str = raw_date[11:16] # 시:분만 추출
+                        else:
+                            time_str = raw_date
+
+                news_data.append({
+                    "id": len(news_data) + 1,
+                    "title": title,
+                    "source": press,
+                    "time_str": time_str,
+                    "url": link
+                })
+        except Exception as e:
+            logger.error(f"네이버 속보 뉴스 크롤링 중 오류: {e}")
+
+        return news_data

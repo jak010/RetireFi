@@ -80,9 +80,16 @@ class Application:
                 )
                 return
 
-            asyncio.create_task(
-                self.schedule_news_summary_loop()
-            )
+            # 서버 시작 시 비동기로 첫 캐시 수집 작동 (웜업)
+            import threading
+            from src.application.api.market_router import naver_theme_service
+            
+            def warm_cache():
+                print("[INFO] Background cache warming started...")
+                naver_theme_service.get_naver_themes_summary()
+                print("[INFO] Background cache warming finished!")
+
+            threading.Thread(target=warm_cache, daemon=True).start()
 
     async def schedule_news_summary_loop(self):
 
@@ -110,16 +117,17 @@ class Application:
 
             now = datetime.now()
 
-            next_hour = (
-                    now + timedelta(hours=1)
+            # 10분 단위 정시 구하기 (예: 10분, 20분, 30분 ...)
+            minutes_to_add = 10 - (now.minute % 10)
+            next_run = (
+                    now + timedelta(minutes=minutes_to_add)
             ).replace(
-                minute=0,
                 second=0,
                 microsecond=0
             )
 
             sleep_seconds = (
-                    next_hour - now
+                    next_run - now
             ).total_seconds()
 
             await asyncio.sleep(

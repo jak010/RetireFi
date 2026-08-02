@@ -48,42 +48,9 @@
         </div>
     </header>
 
-    <!-- Top Summary Dashboard Banner -->
-    <div class="summary-dashboard">
-        <!-- Left: Leader Sectors Chip Panel -->
-        <div class="summary-panel leader-sectors">
-            <h3 class="summary-panel-title">
-                🔥 실시간 주도 업종 TOP 3
-                <span class="info-tooltip-trigger">
-                    ℹ️
-                    <span class="info-tooltip">
-                        <h4>실시간 주도 업종</h4>
-                        평균 등락률이 가장 높은 상위 3개 테마군입니다. 시장을 주도하고 있는 핵심 섹터를 파악하는 데 용이합니다.
-                    </span>
-                </span>
-            </h3>
-            <div class="summary-chips-container" id="leader-sectors-chips">
-                <!-- Injected via JS -->
-            </div>
-        </div>
 
-        <!-- Right: Recent Breaking News Feed Panel -->
-        <div class="summary-panel recent-news">
-            <h3 class="summary-panel-title">
-                📰 실시간 주요 속보 뉴스
-                <span class="info-tooltip-trigger">
-                    ℹ️
-                    <span class="info-tooltip">
-                        <h4>실시간 속보 뉴스</h4>
-                        시장에 실시간으로 생성되는 특징주 및 주요 공시 속보 뉴스 피드입니다. 뉴스를 클릭하면 해당 기사 원문으로 바로 이동합니다.
-                    </span>
-                </span>
-            </h3>
-            <div class="summary-chips-container" id="recent-news-chips">
-                <!-- Injected via JS -->
-            </div>
-        </div>
-    </div>
+
+
 
     <!-- Upgraded Control & Search Filter Bar -->
     <div class="control-bar">
@@ -112,8 +79,16 @@
 
             <!-- Sorting Option -->
             <select class="filter-select" id="filter-sort" onchange="onFilterChange()">
-                <option value="volume">💎 정렬: 거래대금 순</option>
-                <option value="rate">📈 정렬: 평균 등락률 순</option>
+                <option value="volume">정렬: 거래대금</option>
+                <option value="rate">정렬: 평균 등락률</option>
+                <option value="composite">정렬: 종합 순위</option>
+                <option value="mapped_count">정렬: 매핑 종목수</option>
+            </select>
+
+            <!-- Sort Order Option -->
+            <select class="filter-select" id="filter-sort-order" onchange="onFilterChange()">
+                <option value="desc">내림차순</option>
+                <option value="asc">오름차순</option>
             </select>
 
             <div class="search-wrapper">
@@ -135,23 +110,154 @@
 
     <!-- Main Split Layout -->
     <div class="dashboard-layout">
-        <!-- Left Side: Total Themes Ranking List -->
+        <!-- Left Side: Total Themes & Leader Sectors Split View -->
         <div class="ranking-sidebar">
-            <div class="ranking-sidebar-header">
-                <span>📊 전체 테마 수급 랭킹</span>
+            <div class="sidebar-tabs">
+                <button class="sidebar-tab active" id="tab-theme-ranking" onclick="switchSidebarTab('theme')">테마 랭킹</button>
+                <button class="sidebar-tab" id="tab-leader-ranking" onclick="switchSidebarTab('leader')">주도 업종</button>
+            </div>
+            <div class="ranking-sidebar-header" id="theme-ranking-header">
+                <span>전체 테마 수급 랭킹</span>
                 <span style="font-size:0.65rem; color:var(--text-muted);" id="ranking-sort-label">거래대금 순</span>
+            </div>
+            <div class="ranking-table-header" id="theme-table-header" style="display: grid; grid-template-columns: 28px 1fr 55px 42px; gap: 0.5rem; padding: 0.4rem 0.75rem; font-size: 0.65rem; color: var(--text-muted); border-bottom: 1px solid var(--border-color); font-weight: 700; background: rgba(0, 0, 0, 0.02); user-select: none;">
+                <span style="cursor: pointer; text-align: center;" onclick="setSidebarSort('composite')" title="종합 순위 정렬">순위</span>
+                <span style="cursor: pointer; text-align: left;" onclick="setSidebarSort('mapped_count')" title="매핑 종목수 정렬">테마군 (종목수)</span>
+                <span style="cursor: pointer; text-align: right;" onclick="setSidebarSort('rate')" title="평균 등락률 정렬">등락률</span>
+                <span style="cursor: pointer; text-align: right;" onclick="setSidebarSort('volume')" title="거래대금 점유율 정렬">점유율</span>
+            </div>
+            <div class="ranking-sidebar-header" id="leader-ranking-header" style="display: none;">
+                <span>실시간 주도 업종 TOP 3</span>
+                <span style="font-size:0.65rem; color:var(--text-muted);">평균 등락률 순</span>
             </div>
             <div class="ranking-list-container" id="ranking-list-container">
                 <!-- Injected via JS -->
             </div>
+            <div class="ranking-list-container" id="leader-list-container" style="display: none;">
+                <!-- Injected via JS -->
+            </div>
         </div>
 
-        <!-- Right Side: Top 9 Dashboard Grid -->
-        <div class="dashboard-grid" id="dashboard-grid-container">
-            <div class="no-data-msg">
-                <div class="no-data-icon">⏳</div>
-                <h3>실시간 시장 데이터를 로딩하고 있습니다...</h3>
-                <p>테마별 5대 주도 종목의 실시간 호가 및 장중 낙폭 밴드를 연산 중입니다.</p>
+        <!-- Right Side: Tabbed Container -->
+        <div class="main-content-area" style="flex: 1; display: flex; flex-direction: column; min-width: 0;">
+            <!-- Tabs Navigation -->
+            <div class="main-tabs" style="display: flex; gap: 0.5rem; border-bottom: 2px solid var(--border-color); padding: 0.5rem 1.5rem; margin-bottom: 0.5rem; user-select: none;">
+                <button class="main-tab active" id="tab-grid-view" onclick="switchMainView('grid')" style="background: none; border: none; font-size: 0.85rem; font-weight: 700; color: var(--accent-blue); cursor: pointer; padding: 0.4rem 1rem; border-radius: 6px; transition: all 0.2s;">전광판 매트릭스</button>
+                <button class="main-tab" id="tab-network-view" onclick="switchMainView('network')" style="background: none; border: none; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); cursor: pointer; padding: 0.4rem 1rem; border-radius: 6px; transition: all 0.2s;">연관 테마 네트워크 (마인드맵)</button>
+                <button class="main-tab" id="tab-stock-view" onclick="switchMainView('stock')" style="background: none; border: none; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); cursor: pointer; padding: 0.4rem 1rem; border-radius: 6px; transition: all 0.2s;">종목 압축 관찰판</button>
+            </div>
+            
+            <!-- Tab Content 1: Grid View -->
+            <div id="grid-view-container" style="display: block; width: 100%;">
+                <div class="dashboard-grid" id="dashboard-grid-container">
+                    <div class="no-data-msg">
+                        <div class="no-data-icon">⏳</div>
+                        <h3>실시간 시장 데이터를 로딩하고 있습니다...</h3>
+                        <p>테마별 5대 주도 종목의 실시간 호가 및 장중 낙폭 밴드를 연산 중입니다.</p>
+                        <div class="loading-progress-container">
+                            <div class="loading-progress-bar" id="loading-progress-bar"></div>
+                        </div>
+                        <div class="loading-progress-text" id="loading-progress-text">준비 중... (0%)</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content 2: Network Mindmap View -->
+            <div id="network-view-container" style="display: none; flex: 1; min-height: 600px; background: #ffffff; border-radius: 12px; border: 1px solid var(--border-color); position: relative; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); margin: 0.5rem 1.5rem 1.5rem 1.5rem;">
+                <!-- Dedicated Search Bar on SVG -->
+                <div class="network-search-bar" style="position: absolute; top: 1rem; left: 1rem; z-index: 10; display: flex; gap: 0.4rem; background: rgba(255,255,255,0.9); padding: 0.4rem; border-radius: 8px; border: 1px solid var(--border-color); box-shadow: 0 4px 6px rgba(0,0,0,0.05); backdrop-filter: blur(4px);">
+                    <input type="text" id="network-search-input" placeholder="종목명 또는 코드 입력..." style="padding: 0.45rem 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); font-size: 0.75rem; width: 180px; outline: none;" onkeydown="if(event.key==='Enter') searchNetworkStock()">
+                    <button onclick="searchNetworkStock()" style="padding: 0.45rem 1rem; background: var(--accent-blue); color: white; border: none; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: all 0.2s;">조회</button>
+                </div>
+                
+                <!-- Mindmap Zoom & Reset buttons -->
+                <div class="network-controls" style="position: absolute; bottom: 1rem; right: 1rem; z-index: 10; display: flex; flex-direction: column; gap: 0.3rem; user-select: none;">
+                    <button onclick="zoomNetwork(1.2)" style="width: 32px; height: 32px; border-radius: 6px; border: 1px solid var(--border-color); background: white; font-size: 1.1rem; font-weight: bold; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; justify-content: center; align-items: center;">+</button>
+                    <button onclick="zoomNetwork(0.8)" style="width: 32px; height: 32px; border-radius: 6px; border: 1px solid var(--border-color); background: white; font-size: 1.1rem; font-weight: bold; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; justify-content: center; align-items: center;">-</button>
+                    <button onclick="resetNetworkTransform()" style="width: 32px; height: 32px; border-radius: 6px; border: 1px solid var(--border-color); background: white; font-size: 0.7rem; font-weight: 600; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; justify-content: center; align-items: center;">리셋</button>
+                </div>
+
+                <!-- Interactive SVG Mindmap Canvas -->
+                <svg id="network-svg" style="width: 100%; height: 100%; cursor: grab; background: radial-gradient(circle, #f8fafc 15%, #ffffff 90%); user-select: none;">
+                    <!-- Zoom & Pan group -->
+                    <g id="network-g">
+                        <g id="network-links"></g>
+                        <g id="network-nodes"></g>
+                    </g>
+                </svg>
+                
+                <!-- Loader inside mindmap -->
+                <div id="network-loader" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.7); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 5;">
+                    <div style="font-size: 1.5rem; margin-bottom: 0.5rem; animation: spin 1.5s linear infinite;">⏳</div>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 600;">연관 테마 네트워크 분석 중...</div>
+                </div>
+            </div>
+
+            <!-- Tab Content 3: Consolidated Stock View -->
+            <div id="stock-view-container" style="display: none; flex-direction: column; flex: 1; min-height: 600px; background: #ffffff; border-radius: 12px; border: 1px solid var(--border-color); position: relative; overflow-y: auto; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); margin: 0.5rem 1.5rem 1.5rem 1.5rem; padding: 1.25rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1rem; user-select: none;">
+                    <div style="font-family: var(--font-outfit); font-size: 0.85rem; font-weight: 700; color: var(--accent-blue); text-transform: uppercase; letter-spacing: 0.05em;">종목 중심 압축 관찰판</div>
+                    <div style="font-size: 0.7rem; color: var(--text-muted); font-weight: 600;">중복이 제거된 고유 종목 목록입니다.</div>
+                </div>
+                <div style="overflow-x: auto; width: 100%;">
+                    <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.75rem; min-width: 700px;">
+                        <thead>
+                            <tr style="border-bottom: 2px solid var(--border-color); color: var(--text-secondary); font-weight: 700; font-family: var(--font-outfit); background: rgba(0, 0, 0, 0.01); user-select: none;">
+                                <th style="padding: 0.75rem 0.5rem; width: 130px;">종목명</th>
+                                <th style="padding: 0.75rem 0.5rem; width: 110px; text-align: right;">현재가 (등락률)</th>
+                                <th style="padding: 0.75rem 0.5rem; width: 85px; text-align: right;">고점대비 낙폭</th>
+                                <th style="padding: 0.75rem 0.5rem; text-align: left; padding-left: 1.5rem;">연계 테마 목록</th>
+                                <th style="padding: 0.75rem 0.5rem; width: 90px; text-align: center;">타점 신호</th>
+                                <th style="padding: 0.75rem 0.5rem; width: 100px; text-align: center;">바로가기</th>
+                            </tr>
+                        </thead>
+                        <tbody id="consolidated-stock-tbody">
+                            <!-- Injected via JS -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="stock-view-empty-msg" style="display: none; text-align: center; padding: 3rem; color: var(--text-muted); font-weight: 600; user-select: none;">
+                    조건에 맞는 종목이 없습니다.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Tabbed Ticker Bar (Located at the bottom of the page flow) -->
+    <div class="bottom-ticker-bar" id="bottom-ticker-bar">
+        <!-- Ticker Contents Area (Left side preview text) -->
+        <div class="ticker-contents" onclick="toggleTickerPopup()" style="cursor: pointer;">
+            <div class="ticker-preview-text" id="ticker-preview-text">
+                📢 실시간 상승 종목 및 주요 속보를 탭하여 확인하세요.
+            </div>
+        </div>
+
+        <!-- Ticker Tabs Area (Right side) -->
+        <div class="ticker-tabs">
+            <span class="info-tooltip-trigger" style="margin-right: 0.35rem; order: -1;">
+                ℹ️
+                <span class="info-tooltip" style="right: 0; left: auto; bottom: 100%; top: auto;">
+                    <h4>하단 정보 전광판</h4>
+                    국내 증시 실시간 상승률 상위 10개 종목(0181)과 마켓의 실시간 속보 뉴스를 전환하며 팝업으로 조회할 수 있는 통합 Ticker Bar입니다.
+                </span>
+            </span>
+            <button class="ticker-tab-btn" id="ticker-tab-kiwoom" onclick="onTickerTabClick('kiwoom')">🎯 0181 상위</button>
+            <button class="ticker-tab-btn" id="ticker-tab-news" onclick="onTickerTabClick('news')">📰 주요 속보</button>
+        </div>
+
+        <!-- Slide-up Popup Panel -->
+        <div class="ticker-popup-panel" id="ticker-popup-panel">
+            <div class="popup-header">
+                <span class="popup-title" id="popup-title">🎯 0181 등락률 상위</span>
+                <button class="popup-close-btn" onclick="closeTickerPopup()">✕</button>
+            </div>
+            <div class="popup-body">
+                <div class="popup-list-wrapper" id="kiwoom-0181-chips">
+                    <!-- Injected via JS -->
+                </div>
+                <div class="popup-list-wrapper" id="recent-news-chips" style="display: none;">
+                    <!-- Injected via JS -->
+                </div>
             </div>
         </div>
     </div>

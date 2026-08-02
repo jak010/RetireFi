@@ -63,7 +63,7 @@ class ThemeStockMapper:
                 })
         return stocks
 
-    def build_mapping_data(self, max_pages=1, limit_themes=None):
+    def build_mapping_data(self, max_pages=1, limit_themes=None, progress_callback=None):
         """전체 테마-종목 매핑 데이터 생성 및 병합"""
         themes = self.get_theme_list(max_pages=max_pages)
         if limit_themes:
@@ -79,6 +79,11 @@ class ThemeStockMapper:
             stocks = self.get_stocks_in_theme(t_no, t_name)
             all_records.extend(stocks)
             print(f"[{idx}/{len(themes)}] '{t_name}' ({len(stocks)}개 종목 수집)")
+            
+            if progress_callback:
+                # 테마 매핑 수집 단계는 최대 40% 진행률 부여
+                progress_callback("mapping", int((idx / len(themes)) * 40))
+                
             time.sleep(0.1)  # 서버 과부하 방지
 
         self.mapping_df = pd.DataFrame(all_records)
