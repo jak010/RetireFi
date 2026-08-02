@@ -415,7 +415,7 @@ header {
 .dashboard-layout {
     display: grid;
     grid-template-columns: 320px 1fr;
-    height: calc(100vh - 255px);
+    height: calc(100vh - 303px); /* Offset by header (255px) + bottom ticker bar (48px) */
     overflow: hidden;
     background: rgba(0, 0, 0, 0.01);
 }
@@ -1050,4 +1050,150 @@ header {
         padding: 1rem;
         gap: 1rem;
     }
+}
+
+/* Bottom Tabbed Ticker Bar */
+.bottom-ticker-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 48px;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 1.5rem;
+    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.05);
+    z-index: 1000;
+}
+
+.ticker-contents {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+}
+
+.ticker-preview-text {
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ticker-preview-text .preview-highlight {
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.ticker-tabs {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.ticker-tab-btn {
+    background: #f1f5f9;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 0.35rem 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+}
+
+.ticker-tab-btn:hover {
+    color: var(--accent-blue);
+    border-color: var(--accent-blue);
+    background: var(--accent-blue-glow);
+}
+
+.ticker-tab-btn.active {
+    background: var(--accent-blue);
+    color: #ffffff;
+    border-color: var(--accent-blue);
+    box-shadow: 0 2px 4px rgba(29, 78, 216, 0.2);
+}
+
+/* Slide-up Popup Panel */
+.ticker-popup-panel {
+    position: fixed;
+    bottom: 48px; /* Appears right above the ticker bar */
+    left: 0;
+    right: 0;
+    height: 320px;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-top: 1px solid var(--border-color);
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -10px 25px rgba(0, 0, 0, 0.08);
+    z-index: 999;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transform: translateY(100%);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+}
+
+.ticker-popup-panel.show {
+    transform: translateY(0);
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.popup-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.85rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+    background: rgba(0, 0, 0, 0.01);
+}
+
+.popup-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-family: var(--font-outfit);
+}
+
+.popup-close-btn {
+    background: none;
+    border: none;
+    font-size: 1rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color 0.2s;
+    padding: 0.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.popup-close-btn:hover {
+    color: var(--text-primary);
+}
+
+.popup-body {
+    flex: 1;
+    padding: 1.25rem 1.5rem;
+    overflow-y: auto;
+}
+
+.popup-list-wrapper {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    align-items: flex-start;
 }
