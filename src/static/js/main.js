@@ -1233,7 +1233,8 @@ function renderNetworkMindmap(data) {
 
     resetNetworkTransform();
 
-    const themes = data.themes || [];
+    // Sort themes by avg_rate in descending order (strongest first)
+    const themes = (data.themes || []).sort((a, b) => (parseFloat(b.avg_rate) || 0) - (parseFloat(a.avg_rate) || 0));
     const mainStock = data.stock;
 
     // Create main stock node
@@ -1248,21 +1249,32 @@ function renderNetworkMindmap(data) {
     const numThemes = themes.length;
     if (numThemes === 0) return;
 
-    // Split themes into Left and Right lists
+    // Split themes into Left and Right lists alternatingly
     const leftThemes = themes.filter((_, idx) => idx % 2 === 0);
     const rightThemes = themes.filter((_, idx) => idx % 2 !== 0);
+
+    // Helper to get filtered and sorted peer stocks for a theme
+    const getSortedPeerStocks = (theme) => {
+        return (theme.stocks || [])
+            .filter(s => s.stock_code !== mainStock.code)
+            .sort((a, b) => {
+                const valA = parseFloat(a.rate_str.replace('%', '').replace('+', '')) || 0;
+                const valB = parseFloat(b.rate_str.replace('%', '').replace('+', '')) || 0;
+                return valB - valA;
+            });
+    };
 
     // Count stock slots on left
     let leftStockCount = 0;
     leftThemes.forEach(t => {
-        const validStocks = (t.stocks || []).filter(s => s.stock_code !== mainStock.code);
+        const validStocks = getSortedPeerStocks(t);
         leftStockCount += Math.max(1, validStocks.length);
     });
 
     // Count stock slots on right
     let rightStockCount = 0;
     rightThemes.forEach(t => {
-        const validStocks = (t.stocks || []).filter(s => s.stock_code !== mainStock.code);
+        const validStocks = getSortedPeerStocks(t);
         rightStockCount += Math.max(1, validStocks.length);
     });
 
@@ -1273,7 +1285,7 @@ function renderNetworkMindmap(data) {
     let leftY = cy - leftTotalHeight / 2 + slotHeight / 2;
 
     leftThemes.forEach(theme => {
-        const validStocks = (theme.stocks || []).filter(s => s.stock_code !== mainStock.code);
+        const validStocks = getSortedPeerStocks(theme);
         const numStocks = validStocks.length;
 
         const tx = cx - 220;
@@ -1308,7 +1320,7 @@ function renderNetworkMindmap(data) {
     let rightY = cy - rightTotalHeight / 2 + slotHeight / 2;
 
     rightThemes.forEach(theme => {
-        const validStocks = (theme.stocks || []).filter(s => s.stock_code !== mainStock.code);
+        const validStocks = getSortedPeerStocks(theme);
         const numStocks = validStocks.length;
 
         const tx = cx + 220;
