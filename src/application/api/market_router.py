@@ -23,7 +23,8 @@ class MarketController:
             "top_themes_5": res.get("top_themes_5", []),
             "leader_sectors_3": res.get("leader_sectors_3", []),
             "recent_news": res.get("recent_news", []),
-            "indices": res.get("indices", {})
+            "indices": res.get("indices", {}),
+            "royal_themes": res.get("royal_themes", [])
         }
 
     @staticmethod

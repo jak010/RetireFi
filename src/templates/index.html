@@ -43,7 +43,7 @@
                 🕒 &nbsp;<span id="current-time-display">00:00:00</span>
             </div>
             <div class="refresh-badge" id="refresh-indicator">
-                🔄 업데이트&nbsp;<span id="countdown">3</span>초 전
+                🔄 업데이트&nbsp;<span id="countdown">5</span>초 전
             </div>
         </div>
     </header>
@@ -101,6 +101,14 @@
         </div>
         
         <div class="control-actions">
+            <!-- 실시간 변동 하이라이트 토글 -->
+            <label class="toggle-highlight-container" title="실시간 시세 업데이트 시 변동이 있는 종목을 강조 표시합니다.">
+                <span class="toggle-switch">
+                    <input type="checkbox" id="toggle-highlight" onchange="toggleHighlightFeature(this.checked)">
+                    <span class="toggle-slider"></span>
+                </span>
+                <span>⚡ 변동 종목 강조</span>
+            </label>
             <button class="btn-toggle" id="btn-toggle-all" onclick="toggleAllCards()">📁 모두 접기</button>
             <div class="stats-summary" id="stats-summary-info">
                 수집 테마: <span id="themes-count">0</span>개 | 매수 진입 타점: <span id="buying-targets-count" style="color:var(--accent-green)">0</span>개

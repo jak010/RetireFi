@@ -40,7 +40,7 @@ class NaverThemeService:
 
         self.rr_cache = None
         self.rr_cache_time = 0.0
-        self.rr_cache_ttl = 3.0 # 로얄로더 시세 TTL: 3초
+        self.rr_cache_ttl = 5.0 # 로얄로더 시세 TTL: 5초
 
         self.indices_cache = None
         self.indices_cache_time = 0.0
@@ -207,9 +207,17 @@ class NaverThemeService:
             self.rr_cache = rr_themes
             self.rr_cache_time = current_time
         
-        # 2. 로얄로더 종목 시세 정보를 dict 형태로 플래튼(Flatten) 및 대상 코드 수집
+        # 2. 로얄로더 및 네이버 종목 코드 통합 수집
         rr_stock_map = {}
         all_active_codes = []
+        
+        # 2.1. 네이버 매핑 DB 종목 코드 수집
+        if not self.mapping_df.empty:
+            for code in self.mapping_df['stock_code'].unique():
+                if code not in all_active_codes:
+                    all_active_codes.append(code)
+
+        # 2.2. 로얄로더 종목 정보 수집
         for rt in rr_themes:
             for s in rt.stocks:
                 code_6d = s.stock_code[-6:]
@@ -268,7 +276,7 @@ class NaverThemeService:
             max_rate = -999.0
             theme_stocks = []
             
-            # 테마에 속한 종목 중 로얄로더 실시간 시세가 존재하는 종목 매핑
+            # 테마에 속한 모든 종목 집계 (로얄로더 제한 해제)
             for _, row in group.iterrows():
                 code = row['stock_code']
                 name = row['stock_name']
@@ -276,15 +284,32 @@ class NaverThemeService:
                 if not isinstance(desc, str):
                     desc = ""
                 
-                if code in rr_stock_map:
-                    s_data = rr_stock_map[code]
-                    naver_data = naver_prices.get(code, {})
+                naver_data = naver_prices.get(code)
+                s_data = rr_stock_map.get(code)
+                
+                if naver_data or s_data:
+                    price_won = 0
+                    rate_val = 0.0
+                    amount_won = 0
+                    volume_shares = 0
                     
-                    price_won = naver_data.get("price") or s_data.current_price_krw
-                    rate_val = naver_data.get("rate") if naver_data.get("rate") is not None else s_data.stock_rate
-                    amount_won = naver_data.get("amount") or (s_data.trade_volume_krw * 1000000)
-                    volume_shares = naver_data.get("volume") or 0
+                    if naver_data:
+                        price_won = naver_data.get("price") or 0
+                        rate_val = naver_data.get("rate") or 0.0
+                        amount_won = naver_data.get("amount") or 0
+                        volume_shares = naver_data.get("volume") or 0
                     
+                    if s_data:
+                        if not price_won:
+                            price_won = s_data.current_price_krw
+                        if rate_val == 0.0 and s_data.stock_rate != 0.0:
+                            rate_val = s_data.stock_rate
+                        if not amount_won:
+                            amount_won = int(s_data.trade_volume_krw * 1000000)
+                    
+                    if not price_won:
+                        continue
+                        
                     # 추가 통계 정보 (3개월 최고가, 20일 평균 거래량) 조회
                     stats = self.get_stock_stats(code)
                     
@@ -386,6 +411,10 @@ class NaverThemeService:
                     # 실시간 매수타점 Slack 알림 발송 체크
                     self.trigger_slack_alerts_if_needed(s, theme_name)
 
+                up_count = sum(1 for s in theme_stocks if s["rate"] > 0)
+                down_count = sum(1 for s in theme_stocks if s["rate"] < 0)
+                flat_count = sum(1 for s in theme_stocks if s["rate"] == 0)
+
                 summary_list.append({
                     "theme_name": theme_name,
                     "avg_rate": round(avg_rate, 2),
@@ -394,38 +423,12 @@ class NaverThemeService:
                     "mapped_count": mapped_count,
                     "total_count": len(group),
                     "leader_stock": leader_stock or "N/A",
-                    "top_stocks": top_5_stocks
+                    "top_stocks": top_5_stocks,
+                    "source": "naver",
+                    "up_count": up_count,
+                    "down_count": down_count,
+                    "flat_count": flat_count
                 })
-
-        if not summary_list:
-            return {"themes": [], "top_themes_5": [], "leader_sectors_3": []}
-
-        # 전체 활성 테마 거래대금 총합 계산
-        total_market_volume = sum(item['total_volume'] for item in summary_list)
-        if total_market_volume <= 0:
-            total_market_volume = 1
-
-        # 테마별 점유율(%) 산출
-        for item in summary_list:
-            item['volume_share'] = round((item['total_volume'] / total_market_volume) * 100, 1)
-
-        # 4. 순위별 가공 연산 (거래대금 순 정렬)
-        sorted_by_volume = sorted(summary_list, key=lambda x: x['total_volume'], reverse=True)
-        top_themes_5 = sorted_by_volume[:5]
-
-        # 5. 등락률 순위 매기기
-        sorted_by_rate = sorted(summary_list, key=lambda x: x['avg_rate'], reverse=True)
-        for rank, item in enumerate(sorted_by_rate, 1):
-            item['rate_rank'] = rank
-
-        # 6. 거래대금 순위 및 통합 점수 산출
-        for rank, item in enumerate(sorted_by_volume, 1):
-            item['vol_rank'] = rank
-            item['composite_rank'] = item['rate_rank'] + rank
-
-        # 7. 통합 순위(composite_rank) 기준 정렬하여 주도섹터 TOP 3 산출
-        sorted_by_composite = sorted(summary_list, key=lambda x: (x['composite_rank'], -x['total_volume']))
-        leader_sectors_3 = sorted_by_composite[:3]
 
         # 8. 실시간 속보 뉴스 연동 (인메모리 캐싱 검사)
         recent_news_data = []
@@ -460,12 +463,213 @@ class NaverThemeService:
             self.indices_cache = indices_data
             self.indices_cache_time = current_time
 
+        # 9.1. 로얄로더 테마 가공 및 집계
+        royal_themes_list = []
+        for rt in rr_themes:
+            total_rate = 0.0
+            total_volume = 0
+            mapped_count = 0
+            theme_stocks = []
+            
+            for s in rt.stocks:
+                code = s.stock_code[-6:]
+                name = s.stock_name
+                
+                naver_data = naver_prices.get(code, {})
+                price_won = naver_data.get("price") or s.current_price_krw
+                rate_val = naver_data.get("rate") if naver_data.get("rate") is not None else s.stock_rate
+                amount_won = naver_data.get("amount") or (s.trade_volume_krw * 1000000)
+                volume_shares = naver_data.get("volume") or 0
+                
+                stats = self.get_stock_stats(code)
+                three_month_high = stats.get("three_month_high", 0)
+                avg_vol_20 = stats.get("avg_vol_20", 0)
+                volume_ratio = (volume_shares / avg_vol_20 * 100) if avg_vol_20 > 0 else 0.0
+                
+                total_rate += rate_val
+                total_volume += amount_won
+                mapped_count += 1
+                
+                drop = 0.0
+                if three_month_high > 0:
+                    drop = ((price_won - three_month_high) / three_month_high) * 100
+                
+                buy_zone_1 = "-"
+                buy_zone_2 = "-"
+                if three_month_high > 0:
+                    bz1_low = int(three_month_high * 0.96)
+                    bz1_high = int(three_month_high * 0.97)
+                    bz2_low = int(three_month_high * 0.92)
+                    bz2_high = int(three_month_high * 0.96)
+                    buy_zone_1 = f"{bz1_low:,} ~ {bz1_high:,}원"
+                    buy_zone_2 = f"{bz2_low:,} ~ {bz2_high:,}원"
+                
+                s_trillion = int(amount_won // 1000000000000)
+                s_billion = int((amount_won % 1000000000000) // 100000000)
+                s_volume_str = f"{s_trillion}조 {s_billion:,}억" if s_trillion > 0 else f"{s_billion:,}억"
+                if s_trillion == 0 and s_billion == 0:
+                    s_million = int((amount_won % 100000000) // 1000000)
+                    s_volume_str = f"{s_million}백만" if s_million > 0 else "0억"
+
+                theme_stocks.append({
+                    "stock_code": code,
+                    "stock_name": name,
+                    "description": "",
+                    "rate": rate_val,
+                    "rate_str": f"{rate_val:+.2f}%",
+                    "price": price_won,
+                    "price_str": f"{price_won:,}원",
+                    "volume": amount_won,
+                    "volume_shares": volume_shares,
+                    "three_month_high": three_month_high,
+                    "three_month_high_str": f"{three_month_high:,}원" if three_month_high > 0 else "-",
+                    "ma10_above_ma20": stats.get("ma10_above_ma20", False),
+                    "avg_volume": avg_vol_20,
+                    "avg_volume_str": f"{int(avg_vol_20):,}주" if avg_vol_20 > 0 else "-",
+                    "volume_ratio": round(volume_ratio, 2),
+                    "volume_ratio_str": f"{volume_ratio:.1f}%" if avg_vol_20 > 0 else "-",
+                    "drop": drop,
+                    "drop_str": f"{drop:+.2f}%",
+                    "buy_zone_1": buy_zone_1,
+                    "buy_zone_2": buy_zone_2,
+                    "volume_str": s_volume_str
+                })
+            
+            if mapped_count > 0:
+                avg_rate = total_rate / mapped_count
+                
+                t_trillion = int(total_volume // 1000000000000)
+                t_billion = int((total_volume % 1000000000000) // 100000000)
+                vol_str = f"{t_trillion}조 {t_billion:,}억 원" if t_trillion > 0 else f"{t_billion:,}억 원"
+                
+                theme_stocks = sorted(theme_stocks, key=lambda x: x['rate'], reverse=True)
+                top_5_stocks = theme_stocks[:5]
+                
+                for idx, s in enumerate(top_5_stocks):
+                    if idx == 0:
+                        s["role"] = "👑 대장주"
+                    elif idx == 1:
+                        s["role"] = "🥇 1등주"
+                    elif idx == 2:
+                        s["role"] = "🥈 2등주"
+                    else:
+                        s["role"] = "후발주"
+                
+                up_count = sum(1 for s in theme_stocks if s["rate"] > 0)
+                down_count = sum(1 for s in theme_stocks if s["rate"] < 0)
+                flat_count = sum(1 for s in theme_stocks if s["rate"] == 0)
+
+                royal_themes_list.append({
+                    "theme_name": rt.name,
+                    "avg_rate": round(avg_rate, 2),
+                    "total_volume": total_volume,
+                    "total_volume_str": vol_str,
+                    "mapped_count": mapped_count,
+                    "total_count": len(rt.stocks),
+                    "leader_stock": rt.leader_stock or "N/A",
+                    "top_stocks": top_5_stocks,
+                    "source": "royal",
+                    "up_count": up_count,
+                    "down_count": down_count,
+                    "flat_count": flat_count
+                })
+
+        # 테마명 기준 병합 처리
+        merged_themes_map = {}
+        for nt in summary_list:
+            name = nt["theme_name"]
+            merged_themes_map[name] = nt
+
+        for rt in royal_themes_list:
+            name = rt["theme_name"]
+            if name in merged_themes_map:
+                existing = merged_themes_map[name]
+                existing["source"] = "both"
+                
+                # Combine stocks and deduplicate by stock_code
+                stock_dict = {}
+                for s in existing["top_stocks"]:
+                    stock_dict[s["stock_code"]] = s
+                    
+                for s in rt["top_stocks"]:
+                    code = s["stock_code"]
+                    if code in stock_dict:
+                        existing_stock = stock_dict[code]
+                        if not existing_stock.get("description") and s.get("description"):
+                            existing_stock["description"] = s["description"]
+                        if "대장주" in s.get("role", "") or "1등주" in s.get("role", ""):
+                            existing_stock["role"] = s["role"]
+                    else:
+                        stock_dict[code] = s
+                
+                merged_stocks = sorted(stock_dict.values(), key=lambda x: x['rate'], reverse=True)
+                existing["top_stocks"] = merged_stocks[:5]
+                
+                unique_stocks = list(stock_dict.values())
+                existing["mapped_count"] = len(unique_stocks)
+                existing["total_count"] = max(existing["total_count"], rt["total_count"])
+                
+                total_rate = sum(s["rate"] for s in unique_stocks)
+                existing["avg_rate"] = round(total_rate / len(unique_stocks), 2) if unique_stocks else 0.0
+                
+                total_vol = sum(s["volume"] for s in unique_stocks)
+                existing["total_volume"] = total_vol
+                
+                t_trillion = int(total_vol // 1000000000000)
+                t_billion = int((total_vol % 1000000000000) // 100000000)
+                vol_str = f"{t_trillion}조 {t_billion:,}억 원" if t_trillion > 0 else f"{t_billion:,}억 원"
+                existing["total_volume_str"] = vol_str
+                
+                if unique_stocks:
+                    existing["leader_stock"] = max(unique_stocks, key=lambda x: x["rate"])["stock_name"]
+                    
+                existing["up_count"] = sum(1 for s in unique_stocks if s["rate"] > 0)
+                existing["down_count"] = sum(1 for s in unique_stocks if s["rate"] < 0)
+                existing["flat_count"] = sum(1 for s in unique_stocks if s["rate"] == 0)
+            else:
+                merged_themes_map[name] = rt
+                
+        combined_themes = list(merged_themes_map.values())
+
+        if not combined_themes:
+            return {"themes": [], "top_themes_5": [], "leader_sectors_3": []}
+
+        # 전체 활성 테마 거래대금 총합 계산
+        total_market_volume = sum(item['total_volume'] for item in combined_themes)
+        if total_market_volume <= 0:
+            total_market_volume = 1
+
+        # 테마별 점유율(%) 산출
+        for item in combined_themes:
+            item['volume_share'] = round((item['total_volume'] / total_market_volume) * 100, 1)
+
+        # 순위별 가공 연산 (거래대금 순 정렬 및 볼륨 랭크 부여)
+        sorted_by_volume = sorted(combined_themes, key=lambda x: x['total_volume'], reverse=True)
+        for rank, item in enumerate(sorted_by_volume, 1):
+            item['vol_rank'] = rank
+
+        # 등락률 순위 매기기
+        sorted_by_rate = sorted(combined_themes, key=lambda x: x['avg_rate'], reverse=True)
+        for rank, item in enumerate(sorted_by_rate, 1):
+            item['rate_rank'] = rank
+
+        # 종합 점수 산출
+        for item in combined_themes:
+            item['composite_rank'] = item['rate_rank'] + item['vol_rank']
+
+        top_themes_5 = sorted_by_volume[:5]
+
+        # 통합 순위(composite_rank) 기준 정렬하여 주도섹터 TOP 3 산출
+        sorted_by_composite = sorted(combined_themes, key=lambda x: (x['composite_rank'], -x['total_volume']))
+        leader_sectors_3 = sorted_by_composite[:3]
+
         result = {
             "themes": sorted_by_volume,
             "top_themes_5": top_themes_5,
             "leader_sectors_3": leader_sectors_3,
             "recent_news": recent_news_data,
-            "indices": indices_data
+            "indices": indices_data,
+            "royal_themes": []
         }
         self.naver_themes_summary_cache = result
         self.naver_themes_summary_cache_time = current_time
@@ -994,18 +1198,39 @@ class NaverThemeService:
                     "stocks": t.get("top_stocks", [])
                 })
 
+        p_hynix = getattr(self, "dummy_prices", {}).get("000660", 185000)
+        p_jeju = getattr(self, "dummy_prices", {}).get("080220", 24500)
+        p_samsung = getattr(self, "dummy_prices", {}).get("005930", 75800)
+        price_val = p_hynix if code == "000660" else (p_jeju if code == "080220" else p_samsung)
+
         return {
             "status": "success",
             "stock": {
                 "code": code,
                 "name": name,
-                "price_str": "185,000원" if code == "000660" else ("24,500원" if code == "080220" else "75,800원"),
+                "price_str": f"{price_val:,}원",
                 "rate_str": "+8.45%" if code == "000660" else ("+12.50%" if code == "080220" else "+4.12%")
             },
             "themes": themes_list
         }
 
     def get_dummy_themes_data(self) -> Dict[str, Any]:
+        import random
+        if not hasattr(self, "dummy_prices"):
+            self.dummy_prices = {
+                "000660": 185000,
+                "005930": 75800,
+                "080220": 24500
+            }
+        else:
+            for code in self.dummy_prices:
+                change = random.choice([-1, 0, 1]) * random.randint(100, 500)
+                self.dummy_prices[code] = max(1000, self.dummy_prices[code] + change)
+
+        p_hynix = self.dummy_prices["000660"]
+        p_samsung = self.dummy_prices["005930"]
+        p_jeju = self.dummy_prices["080220"]
+
         dummy_data = [
             {
                 "theme_name": "S7(삼성전자/SK하이닉스 등)",
@@ -1022,8 +1247,8 @@ class NaverThemeService:
                         "description": "반도체 대장주",
                         "rate": 8.45,
                         "rate_str": "+8.45%",
-                        "price": 185000,
-                        "price_str": "185,000원",
+                        "price": p_hynix,
+                        "price_str": f"{p_hynix:,}원",
                         "volume": 6500000000000,
                         "volume_shares": 35135135,
                         "three_month_high": 210000,
@@ -1046,8 +1271,8 @@ class NaverThemeService:
                         "description": "메모리 반도체 1위",
                         "rate": 4.12,
                         "rate_str": "+4.12%",
-                        "price": 75800,
-                        "price_str": "75,800원",
+                        "price": p_samsung,
+                        "price_str": f"{p_samsung:,}원",
                         "volume": 4200000000000,
                         "volume_shares": 55408970,
                         "three_month_high": 88000,
@@ -1085,8 +1310,8 @@ class NaverThemeService:
                         "description": "모바일/저전력 반도체 설계 전문",
                         "rate": 12.50,
                         "rate_str": "+12.50%",
-                        "price": 24500,
-                        "price_str": "24,500원",
+                        "price": p_jeju,
+                        "price_str": f"{p_jeju:,}원",
                         "volume": 2500000000000,
                         "volume_shares": 102040816,
                         "three_month_high": 32000,
@@ -1135,12 +1360,78 @@ class NaverThemeService:
             {"title": "반도체 지수 폭발, 대형 보통주 중심 강력한 수급 확인", "source": "한국경제", "url": "https://naver.com", "time_str": "20분 전"}
         ]
         
+        # 로얄로더 더미 테마 데이터 복사 및 프리픽스 변경
+        for d in dummy_data:
+            d["source"] = "naver"
+            d["up_count"] = sum(1 for s in d.get("top_stocks", []) if s.get("rate", 0) > 0)
+            d["down_count"] = sum(1 for s in d.get("top_stocks", []) if s.get("rate", 0) < 0)
+            d["flat_count"] = sum(1 for s in d.get("top_stocks", []) if s.get("rate", 0) == 0)
+
+        dummy_royal_data = []
+        for d in dummy_data:
+            rd = d.copy()
+            if "온디바이스 AI" in d["theme_name"]:
+                rd["theme_name"] = "온디바이스 AI"
+            else:
+                rd["theme_name"] = "👑 로얄 - " + d["theme_name"].replace("S7", "반도체 대장")
+            rd["source"] = "royal"
+            rd["up_count"] = sum(1 for s in rd.get("top_stocks", []) if s.get("rate", 0) > 0)
+            rd["down_count"] = sum(1 for s in rd.get("top_stocks", []) if s.get("rate", 0) < 0)
+            rd["flat_count"] = sum(1 for s in rd.get("top_stocks", []) if s.get("rate", 0) == 0)
+            dummy_royal_data.append(rd)
+
+        # Merge dummy themes using same logic as production
+        merged_dummy_map = {}
+        for nt in dummy_data:
+            name = nt["theme_name"]
+            merged_dummy_map[name] = nt.copy()
+
+        for rt in dummy_royal_data:
+            name = rt["theme_name"]
+            if name in merged_dummy_map:
+                existing = merged_dummy_map[name]
+                existing["source"] = "both"
+                # Combine stocks and deduplicate by stock_code
+                stock_dict = {}
+                for s in existing["top_stocks"]:
+                    stock_dict[s["stock_code"]] = s
+                    
+                for s in rt["top_stocks"]:
+                    code = s["stock_code"]
+                    if code in stock_dict:
+                        existing_stock = stock_dict[code]
+                        if not existing_stock.get("description") and s.get("description"):
+                            existing_stock["description"] = s["description"]
+                        if "대장주" in s.get("role", "") or "1등주" in s.get("role", ""):
+                            existing_stock["role"] = s["role"]
+                    else:
+                        stock_dict[code] = s
+                
+                merged_stocks = sorted(stock_dict.values(), key=lambda x: x.get('rate', 0), reverse=True)
+                existing["top_stocks"] = merged_stocks[:5]
+                
+                unique_stocks = list(stock_dict.values())
+                existing["mapped_count"] = len(unique_stocks)
+                
+                total_rate = sum(s.get("rate", 0) for s in unique_stocks)
+                existing["avg_rate"] = round(total_rate / len(unique_stocks), 2) if unique_stocks else 0.0
+                
+                existing["up_count"] = sum(1 for s in unique_stocks if s.get("rate", 0) > 0)
+                existing["down_count"] = sum(1 for s in unique_stocks if s.get("rate", 0) < 0)
+                existing["flat_count"] = sum(1 for s in unique_stocks if s.get("rate", 0) == 0)
+            else:
+                merged_dummy_map[name] = rt
+
+        combined_dummy = list(merged_dummy_map.values())
+        combined_dummy = sorted(combined_dummy, key=lambda x: x['total_volume'], reverse=True)
+
         return {
-            "themes": dummy_data,
-            "top_themes_5": dummy_data[:5],
+            "themes": combined_dummy,
+            "top_themes_5": combined_dummy[:5],
             "indices": dummy_indices,
             "recent_news": dummy_news,
-            "leader_sectors_3": dummy_data[:3]
+            "leader_sectors_3": combined_dummy[:3],
+            "royal_themes": []
         }
 
     def fetch_naver_breaking_news(self) -> List[Dict[str, Any]]:

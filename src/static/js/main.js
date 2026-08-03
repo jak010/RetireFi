@@ -1,4 +1,4 @@
-let countdownValue = 3;
+let countdownValue = 5;
 let countdownTimer = null;
 let themesData = [];
 let recentNews = [];
@@ -13,6 +13,7 @@ let kiwoomData = []; // Kiwoom 0181 list
 let prevPricesMap = {};
 let prevIndicesMap = {};
 let prevThemeRatesMap = {};
+let enableHighlighting = localStorage.getItem('enableHighlighting') !== 'false';
 
 // Fetch all themes and summary details from backend API
 let progressInterval = null;
@@ -463,8 +464,15 @@ function renderDashboard() {
                 // Highlighting check on price change
                 const oldPrice = prevPricesMap[stock.stock_code];
                 let flashClass = '';
+                let changeIndicatorHtml = '';
                 if (oldPrice !== undefined && oldPrice !== stock.price && stock.price > 0) {
-                    flashClass = stock.price > oldPrice ? 'flash-up-active' : 'flash-down-active';
+                    const priceDiff = stock.price - oldPrice;
+                    if (enableHighlighting) {
+                        flashClass = priceDiff > 0 ? 'flash-up-active' : 'flash-down-active';
+                        const diffColor = priceDiff > 0 ? 'var(--accent-red)' : 'var(--accent-blue)';
+                        const diffSign = priceDiff > 0 ? '▲' : '▼';
+                        changeIndicatorHtml = `<span class="price-diff-badge" style="font-size: 0.62rem; line-height: 1; color: ${diffColor}; font-weight: 700; background: ${priceDiff > 0 ? 'rgba(239, 68, 68, 0.08)' : 'rgba(29, 78, 216, 0.08)'}; padding: 0.1rem 0.2rem; border-radius: 3px; border: 1px solid ${priceDiff > 0 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(29, 78, 216, 0.15)'}; display: inline-flex; align-items: center; align-self: center;">${diffSign}${Math.abs(priceDiff).toLocaleString()}</span>`;
+                    }
                 }
                 prevPricesMap[stock.stock_code] = stock.price;
 
@@ -512,7 +520,10 @@ function renderDashboard() {
                             </div>
                         </div>
                         <div class="stock-price-block">
-                            <div class="stock-price">${stock.price_str}</div>
+                            <div class="stock-price" style="display: flex; align-items: center; justify-content: flex-end; gap: 0.25rem;">
+                                ${changeIndicatorHtml}
+                                <span>${stock.price_str}</span>
+                            </div>
                             <div class="stock-rate ${stockRateClass}">${stockRateSign}${stock.rate_str}</div>
                         </div>
                         <div class="stock-drop-block">
@@ -552,6 +563,19 @@ function renderDashboard() {
 
         const isExpanded = expandedStateMap[theme.theme_name];
 
+        // Generate source badge if present
+        let sourceBadgeHtml = '';
+        if (theme.source === 'royal') {
+            sourceBadgeHtml = `<span class="theme-source-badge royal" style="font-size: 0.65rem; background: var(--accent-blue-glow); color: var(--accent-blue); padding: 0.15rem 0.35rem; border-radius: 4px; font-weight: 700; border: 1px solid rgba(29, 78, 216, 0.2);">로얄</span>`;
+        } else if (theme.source === 'naver') {
+            sourceBadgeHtml = `<span class="theme-source-badge naver" style="font-size: 0.65rem; background: rgba(16, 185, 129, 0.08); color: var(--accent-green); padding: 0.15rem 0.35rem; border-radius: 4px; font-weight: 700; border: 1px solid rgba(16, 185, 129, 0.2);">네이버</span>`;
+        } else if (theme.source === 'both') {
+            sourceBadgeHtml = `
+                <span class="theme-source-badge naver" style="font-size: 0.65rem; background: rgba(16, 185, 129, 0.08); color: var(--accent-green); padding: 0.15rem 0.35rem; border-radius: 4px; font-weight: 700; border: 1px solid rgba(16, 185, 129, 0.2); margin-right: 0.25rem;">네이버</span>
+                <span class="theme-source-badge royal" style="font-size: 0.65rem; background: var(--accent-blue-glow); color: var(--accent-blue); padding: 0.15rem 0.35rem; border-radius: 4px; font-weight: 700; border: 1px solid rgba(29, 78, 216, 0.2);">로얄</span>
+            `;
+        }
+
         // Create Card element
         const card = document.createElement('div');
         card.className = `theme-card ${isExpanded ? 'expanded' : ''} ${hasAlert1 ? 'has-alert-1' : ''} ${hasAlert2 ? 'has-alert-2' : ''}`;
@@ -559,8 +583,18 @@ function renderDashboard() {
         card.innerHTML = `
             <div class="theme-card-header" onclick="toggleCard('${theme.theme_name}')">
                 <div class="theme-title-block">
-                    <span class="theme-card-title">${theme.theme_name}</span>
-                    <span class="theme-card-subtitle">매핑 종목 수: ${theme.mapped_count} / ${theme.total_count}</span>
+                    <div style="display: flex; align-items: center; gap: 0.35rem;">
+                        <span class="theme-card-title">${theme.theme_name}</span>
+                        ${sourceBadgeHtml}
+                    </div>
+                    <span class="theme-card-subtitle" style="display: flex; flex-direction: column; gap: 0.15rem; margin-top: 0.15rem;">
+                        <span>매핑 종목 수: ${theme.mapped_count} / ${theme.total_count}</span>
+                        <span style="font-size: 0.72rem; color: var(--text-muted);">
+                            상승 <span style="color: var(--accent-red); font-weight: 600;">▲${theme.up_count || 0}</span> | 
+                            하락 <span style="color: var(--accent-blue); font-weight: 600;">▼${theme.down_count || 0}</span>
+                            ${theme.flat_count ? ` | 보합 ${theme.flat_count}` : ''}
+                        </span>
+                    </span>
                 </div>
                 <div class="theme-card-metrics">
                     <span class="theme-card-rate ${rateClass}">${rateSign}${theme.avg_rate}%</span>
@@ -585,6 +619,13 @@ function renderDashboard() {
     }
 
     updateSummary(processedThemes.length, totalBuyingTargets);
+}
+
+// Toggle highlighting feature
+function toggleHighlightFeature(checked) {
+    enableHighlighting = checked;
+    localStorage.setItem('enableHighlighting', checked);
+    renderDashboard();
 }
 
 // Reset all search inputs and select filters
@@ -625,13 +666,13 @@ function updateClock() {
 // Live Auto-Refresh system
 function startCountdown() {
     clearInterval(countdownTimer);
-    countdownValue = 3;
+    countdownValue = 5;
     document.getElementById('countdown').innerText = countdownValue;
     
     countdownTimer = setInterval(() => {
         countdownValue--;
         if (countdownValue <= 0) {
-            countdownValue = 3;
+            countdownValue = 5;
             fetchThemes();
         }
         document.getElementById('countdown').innerText = countdownValue;
@@ -646,6 +687,11 @@ document.getElementById('search-box').addEventListener('input', () => {
 
 // Initialize App
 window.onload = () => {
+    // Bind toggle highlight state on load
+    const toggleEl = document.getElementById('toggle-highlight');
+    if (toggleEl) {
+        toggleEl.checked = enableHighlighting;
+    }
     fetchThemes();
     updateClock();
     setInterval(updateClock, 1000);
