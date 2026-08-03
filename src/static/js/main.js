@@ -7,7 +7,8 @@ let indicesData = {}; // Global store for index data
 let expandedStateMap = {}; // Cache cards expanded state by theme name
 let isAllExpanded = true; // Track global expansion state
 let currentSidebarTab = 'theme'; // Sidebar active tab
-let kiwoomData = []; // Kiwoom 0181 list
+let tossData = []; // Toss ranking list
+let currentTossFilter = 'all'; // Toss filters: 'all', 'strong-theme', 'high-rate', 'high-vol-rate'
 
 // Track previous values for visual highlighting
 let prevPricesMap = {};
@@ -89,7 +90,7 @@ async function fetchThemes() {
                 renderLeaderSectorsList();
             }
 
-            fetchKiwoom0181();
+            fetchTossRanking();
         } else if (result.status === 'loading') {
             // 백엔드의 실제 연산 진행 상태 표시
             const progress = result.progress || 0;
@@ -698,25 +699,32 @@ window.onload = () => {
     initNetworkSVGEvents();
 };
 
-// Switch between Ticker Tabs (Kiwoom 0181 vs Breaking News)
-let currentTickerTab = 'kiwoom';
+// Switch between Ticker Tabs (Breaking News vs Toss)
+let currentTickerTab = 'toss';
 function switchTickerTab(tabName) {
     currentTickerTab = tabName;
-    const tabKiwoom = document.getElementById('ticker-tab-kiwoom');
     const tabNews = document.getElementById('ticker-tab-news');
-    const wrapperKiwoom = document.getElementById('kiwoom-0181-chips');
+    const tabToss = document.getElementById('ticker-tab-toss');
     const wrapperNews = document.getElementById('recent-news-chips');
+    const wrapperToss = document.getElementById('toss-ranking-chips');
+    const filterPills = document.getElementById('toss-filter-pills');
     
-    if (tabName === 'kiwoom') {
-        if (tabKiwoom) tabKiwoom.classList.add('active');
-        if (tabNews) tabNews.classList.remove('active');
-        if (wrapperKiwoom) wrapperKiwoom.style.display = 'flex';
-        if (wrapperNews) wrapperNews.style.display = 'none';
-    } else {
-        if (tabKiwoom) tabKiwoom.classList.remove('active');
+    [tabNews, tabToss].forEach(tab => {
+        if (tab) tab.classList.remove('active');
+    });
+    [wrapperNews, wrapperToss].forEach(wrap => {
+        if (wrap) wrap.style.display = 'none';
+    });
+    if (filterPills) filterPills.style.display = 'none';
+    
+    if (tabName === 'news') {
         if (tabNews) tabNews.classList.add('active');
-        if (wrapperKiwoom) wrapperKiwoom.style.display = 'none';
         if (wrapperNews) wrapperNews.style.display = 'flex';
+    } else if (tabName === 'toss') {
+        if (tabToss) tabToss.classList.add('active');
+        if (wrapperToss) wrapperToss.style.display = 'flex';
+        if (filterPills) filterPills.style.display = 'flex';
+        fetchTossRanking();
     }
     updateTickerPreview();
 }
@@ -731,7 +739,11 @@ function toggleTickerPopup() {
             switchTickerTab(currentTickerTab);
             const titleEl = document.getElementById('popup-title');
             if (titleEl) {
-                titleEl.innerText = currentTickerTab === 'kiwoom' ? '🎯 0181 등락률 상위' : '📰 실시간 주요 속보';
+                if (currentTickerTab === 'news') {
+                    titleEl.innerText = '📰 실시간 주요 속보';
+                } else if (currentTickerTab === 'toss') {
+                    titleEl.innerText = '💙 Toss 실시간 거래대금 상위';
+                }
             }
         }
     }
@@ -742,6 +754,15 @@ function closeTickerPopup() {
     const popup = document.getElementById('ticker-popup-panel');
     if (popup) {
         popup.classList.remove('show');
+        popup.classList.remove('pinned');
+    }
+}
+
+// Toggle Pin state of the popup panel
+function togglePinTickerPopup() {
+    const popup = document.getElementById('ticker-popup-panel');
+    if (popup) {
+        popup.classList.toggle('pinned');
     }
 }
 
@@ -749,10 +770,13 @@ function closeTickerPopup() {
 function onTickerTabClick(tabName) {
     const popup = document.getElementById('ticker-popup-panel');
     const isShowing = popup ? popup.classList.contains('show') : false;
+    const isPinned = popup ? popup.classList.contains('pinned') : false;
 
     if (isShowing && currentTickerTab === tabName) {
-        // Close if clicking the already active tab button while drawer is open
-        closeTickerPopup();
+        // Close if clicking the already active tab button while drawer is open (unless pinned)
+        if (!isPinned) {
+            closeTickerPopup();
+        }
     } else {
         // Switch tab content and slide up
         switchTickerTab(tabName);
@@ -761,7 +785,11 @@ function onTickerTabClick(tabName) {
         // Update popup title
         const titleEl = document.getElementById('popup-title');
         if (titleEl) {
-            titleEl.innerText = tabName === 'kiwoom' ? '🎯 0181 등락률 상위' : '📰 실시간 주요 속보';
+            if (tabName === 'news') {
+                titleEl.innerText = '📰 실시간 주요 속보';
+            } else if (tabName === 'toss') {
+                titleEl.innerText = '💙 Toss 실시간 거래대금 상위';
+            }
         }
     }
 }
@@ -771,17 +799,17 @@ function updateTickerPreview() {
     const previewEl = document.getElementById('ticker-preview-text');
     if (!previewEl) return;
 
-    if (currentTickerTab === 'kiwoom' && Array.isArray(kiwoomData) && kiwoomData.length > 0) {
-        const topStock = kiwoomData[0];
+    if (currentTickerTab === 'news' && Array.isArray(recentNews) && recentNews.length > 0) {
+        const topNews = recentNews[0];
+        previewEl.innerHTML = `📰 <span class="preview-highlight">최신 속보:</span> ${topNews.title} (${topNews.time_str}) &nbsp;&nbsp;|&nbsp;&nbsp; 💡 탭하여 속보 피드 전체 보기`;
+    } else if (currentTickerTab === 'toss' && Array.isArray(tossData) && tossData.length > 0) {
+        const topStock = tossData[0];
         const themeText = Array.isArray(topStock.themes) && topStock.themes.length > 0
             ? ` [${topStock.themes[0]}]`
             : '';
-        previewEl.innerHTML = `🔥 <span class="preview-highlight">상승률 1위 보통주:</span> ${topStock.name} (${topStock.rate_str})${themeText} &nbsp;&nbsp;|&nbsp;&nbsp; 💡 탭하여 10대 주도 종목 보기`;
-    } else if (currentTickerTab === 'news' && Array.isArray(recentNews) && recentNews.length > 0) {
-        const topNews = recentNews[0];
-        previewEl.innerHTML = `📰 <span class="preview-highlight">최신 속보:</span> ${topNews.title} (${topNews.time_str}) &nbsp;&nbsp;|&nbsp;&nbsp; 💡 탭하여 속보 피드 전체 보기`;
+        previewEl.innerHTML = `💙 <span class="preview-highlight">Toss 대금 1위:</span> ${topStock.name} (${topStock.price_str}, ${topStock.rate_str})${themeText} &nbsp;&nbsp;|&nbsp;&nbsp; 💡 탭하여 실시간 거래 순위 보기`;
     } else {
-        previewEl.innerHTML = `📢 실시간 상승 종목 및 주요 속보를 탭하여 확인하세요.`;
+        previewEl.innerHTML = `📢 실시간 주요 속보 및 Toss 인기 거래 순위를 확인하세요.`;
     }
 }
 
@@ -817,55 +845,130 @@ function switchSidebarTab(tabName) {
     }
 }
 
-// Fetch Kiwoom 0181 ranking data
-async function fetchKiwoom0181() {
+// Fetch Toss trading volume ranking data
+async function fetchTossRanking() {
     try {
-        const response = await fetch('/api/v1/market/kiwoom-0181');
+        const response = await fetch('/api/v1/market/toss-ranking');
         const result = await response.json();
         if (result.status === 'success') {
-            kiwoomData = result.data || [];
-            renderKiwoomList();
+            tossData = result.data || [];
+            renderTossRankingList();
         }
     } catch (error) {
-        console.error("키움 0181 데이터 로드 중 에러 발생:", error);
+        console.error("Toss 랭킹 데이터 로드 중 에러 발생:", error);
     }
 }
 
-// Render Kiwoom 0181 stock ranking items in top banner
-function renderKiwoomList() {
-    const container = document.getElementById('kiwoom-0181-chips');
+// Set active Toss filter and re-render
+function setTossFilter(filterName) {
+    currentTossFilter = filterName;
+    
+    // Update active class on filter buttons
+    const buttons = document.querySelectorAll('.toss-filter-btn');
+    buttons.forEach(btn => {
+        if (btn.getAttribute('onclick').includes(filterName)) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+    
+    renderTossRankingList();
+}
+
+// Render Toss ranking stock list in slide-up popup
+function renderTossRankingList() {
+    const container = document.getElementById('toss-ranking-chips');
     if (!container) return;
     
     container.innerHTML = '';
-    if (!Array.isArray(kiwoomData) || kiwoomData.length === 0) {
-        container.innerHTML = `<span style="font-size:0.75rem; color:var(--text-muted); padding:0.35rem 0.5rem;">상승 종목 정보가 없습니다.</span>`;
+    if (!Array.isArray(tossData) || tossData.length === 0) {
+        container.innerHTML = `<span style="font-size:0.75rem; color:var(--text-muted); padding:0.35rem 0.5rem;">Toss 거래 순위 정보가 없습니다.</span>`;
         return;
     }
     
-    kiwoomData.slice(0, 10).forEach((stock, index) => {
+    // Apply filters
+    let filtered = tossData;
+    if (currentTossFilter === 'strong-theme') {
+        // Get top 5 themes by total_volume from themesData
+        const topThemeNames = themesData.slice(0, 5).map(t => t.theme_name);
+        filtered = tossData.filter(stock => 
+            Array.isArray(stock.themes) && stock.themes.some(name => topThemeNames.includes(name))
+        );
+        // Sort by rate descending (highest rate first)
+        filtered.sort((a, b) => b.rate - a.rate);
+    } else if (currentTossFilter === 'high-rate') {
+        // Sort by rate descending
+        let sorted = [...tossData].sort((a, b) => b.rate - a.rate);
+        filtered = sorted.filter(stock => stock.rate >= 3.0);
+        // Fallback to lower thresholds if too few items match (e.g. on down market days)
+        if (filtered.length < 5) {
+            filtered = sorted.filter(stock => stock.rate >= 1.0);
+        }
+        if (filtered.length < 5) {
+            filtered = sorted.filter(stock => stock.rate >= 0.0);
+        }
+        if (filtered.length < 5) {
+            filtered = sorted.slice(0, 15);
+        }
+    } else if (currentTossFilter === 'high-vol-rate') {
+        // Sort by volume descending
+        let sorted = [...tossData].sort((a, b) => b.volume - a.volume);
+        filtered = sorted.filter(stock => stock.volume >= 30000000000 && stock.rate >= 2.0);
+        // Fallback to lower thresholds if too few items match
+        if (filtered.length < 5) {
+            filtered = sorted.filter(stock => stock.volume >= 10000000000 && stock.rate >= 0.5);
+        }
+        if (filtered.length < 5) {
+            filtered = sorted.filter(stock => stock.volume >= 5000000000 && stock.rate >= 0.0);
+        }
+        if (filtered.length < 5) {
+            filtered = sorted.slice(0, 15);
+        }
+    }
+    
+    if (filtered.length === 0) {
+        container.innerHTML = `<span style="font-size:0.75rem; color:var(--text-muted); padding:1rem 0.5rem; text-align:center; width:100%;">조건에 일치하는 종목이 없습니다.</span>`;
+        return;
+    }
+    
+    filtered.slice(0, 30).forEach((stock) => {
         const chip = document.createElement('div');
-        chip.className = 'summary-chip';
-        chip.onclick = () => { triggerSearch(stock.name); };
+        chip.className = 'summary-chip toss-chip';
+        chip.onclick = () => { window.open(stock.toss_url, '_blank'); };
         
-        const rateVal = parseFloat(stock.rate_str.replace('%', '').replace('+', ''));
+        const rateVal = parseFloat(stock.rate);
         const rateClass = rateVal > 0 ? 'up' : (rateVal < 0 ? 'down' : 'flat');
+        const rateSign = rateVal > 0 ? '+' : '';
 
-        const themeText = Array.isArray(stock.themes) && stock.themes.length > 0 
-            ? `소속 테마: ${stock.themes.join(', ')}` 
-            : '소속 테마 없음';
+        const hasTheme = Array.isArray(stock.themes) && stock.themes.length > 0;
+        const themeTextHtml = hasTheme
+            ? `<div style="font-size: 0.68rem; color: var(--accent-blue); font-weight: 500; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 200px;">🏷️ ${stock.themes.join(', ')}</div>`
+            : `<div style="font-size: 0.68rem; color: var(--text-muted);">소속 테마 없음</div>`;
 
-        chip.title = `${stock.name} | ${themeText}`;
+        chip.title = `${stock.name} | 대금: ${stock.volume_str} | ${hasTheme ? stock.themes.join(', ') : '소속 테마 없음'}`;
 
         chip.innerHTML = `
-            <span class="chip-rank">${index + 1}</span>
-            <span class="chip-name" style="max-width: 140px; font-weight: 600; cursor: pointer; text-decoration: underline;" onclick="event.stopPropagation(); showStockNetworkMap('${stock.name}')" title="클릭 시 연관 테마 네트워크(마인드맵) 탐색">${stock.name}</span>
-            <span class="chip-val ${rateClass}">${stock.price_str} (${stock.rate_str})</span>
+            <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 0.5rem;">
+                <div style="display: flex; align-items: center; gap: 0.35rem;">
+                    <span class="chip-rank" style="background: rgba(0, 102, 255, 0.1); color: #0066ff;">${stock.rank}</span>
+                    <span style="font-weight: 700; color: var(--text-primary);">${stock.name}</span>
+                </div>
+                <span class="chip-val ${rateClass}" style="font-weight: 600;">${stock.price_str} (${rateSign}${stock.rate_str})</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; width: 100%; font-size: 0.68rem; color: var(--text-secondary); margin-top: 0.1rem;">
+                <span>대금: <strong style="color: var(--text-primary);">${stock.volume_str}</strong></span>
+                ${hasTheme ? `<span style="color: var(--accent-green); font-weight: 600;">테마 매핑</span>` : ''}
+            </div>
+            ${themeTextHtml}
         `;
         
         container.appendChild(chip);
     });
     updateTickerPreview();
 }
+
+
 
 // Render Leader Sectors Top 3 List in sidebar container
 function renderLeaderSectorsList() {

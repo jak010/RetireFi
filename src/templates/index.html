@@ -246,24 +246,34 @@
                 ℹ️
                 <span class="info-tooltip" style="right: 0; left: auto; bottom: 100%; top: auto;">
                     <h4>하단 정보 전광판</h4>
-                    국내 증시 실시간 상승률 상위 10개 종목(0181)과 마켓의 실시간 속보 뉴스를 전환하며 팝업으로 조회할 수 있는 통합 Ticker Bar입니다.
+                    실시간 속보 뉴스와 토스증권 인기 거래 목록을 전환하며 팝업으로 조회할 수 있는 통합 Ticker Bar입니다.
                 </span>
             </span>
-            <button class="ticker-tab-btn" id="ticker-tab-kiwoom" onclick="onTickerTabClick('kiwoom')">🎯 0181 상위</button>
             <button class="ticker-tab-btn" id="ticker-tab-news" onclick="onTickerTabClick('news')">📰 주요 속보</button>
+            <button class="ticker-tab-btn" id="ticker-tab-toss" onclick="onTickerTabClick('toss')">💙 Toss 인기 거래</button>
         </div>
 
         <!-- Slide-up Popup Panel -->
         <div class="ticker-popup-panel" id="ticker-popup-panel">
             <div class="popup-header">
-                <span class="popup-title" id="popup-title">🎯 0181 등락률 상위</span>
-                <button class="popup-close-btn" onclick="closeTickerPopup()">✕</button>
+                <span class="popup-title" id="popup-title">💙 Toss 실시간 거래대금 상위</span>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <button class="popup-pin-btn" id="popup-pin-btn" onclick="togglePinTickerPopup()" title="화면 핀 고정">📌</button>
+                    <button class="popup-close-btn" onclick="closeTickerPopup()">✕</button>
+                </div>
             </div>
             <div class="popup-body">
-                <div class="popup-list-wrapper" id="kiwoom-0181-chips">
-                    <!-- Injected via JS -->
+                <!-- Toss Ticker Filters (only shown when toss tab is active) -->
+                <div class="toss-filter-pills" id="toss-filter-pills" style="display: none;">
+                    <button class="toss-filter-btn active" onclick="setTossFilter('all')">전체</button>
+                    <button class="toss-filter-btn" onclick="setTossFilter('strong-theme')">🔥 수급테마</button>
+                    <button class="toss-filter-btn" onclick="setTossFilter('high-rate')">📈 고등락</button>
+                    <button class="toss-filter-btn" onclick="setTossFilter('high-vol-rate')">💎 대금+고등락</button>
                 </div>
                 <div class="popup-list-wrapper" id="recent-news-chips" style="display: none;">
+                    <!-- Injected via JS -->
+                </div>
+                <div class="popup-list-wrapper" id="toss-ranking-chips" style="display: none;">
                     <!-- Injected via JS -->
                 </div>
             </div>
