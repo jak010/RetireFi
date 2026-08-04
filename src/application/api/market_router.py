@@ -224,6 +224,12 @@ class MarketController:
         return naver_theme_service.fetch_stock_chart_data(stock_code)
 
     @staticmethod
+    @market_entrypoint.get(path="/stocks/{stock_code}/stats-3m",
+                           summary="[MARKET] : 특정 종목의 최근 3개월 수급 구간(머리/어깨/무릎) 가격대 조회 (야후 파이낸스)")
+    def get_stock_3month_stats(stock_code: str):
+        return naver_theme_service.fetch_stock_3month_stats(stock_code)
+
+    @staticmethod
     @market_entrypoint.get(path="/loading-progress",
                            summary="[MARKET] : 실시간 연산 데이터 로딩 진행률 조회")
     def get_loading_progress():

@@ -1608,13 +1608,22 @@ header {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 0.5rem;
     font-size: 0.72rem;
     color: var(--text-secondary);
+}
+
+.chart-card-footer .chart-day-info {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
 }
 
 .chart-target-bands {
     display: flex;
     gap: 0.4rem;
+    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 .chart-target-bands .band-pill {
@@ -1622,6 +1631,7 @@ header {
     font-weight: 600;
     padding: 0.1rem 0.35rem;
     border-radius: 4px;
+    white-space: nowrap;
 }
 
 .chart-target-bands .band-pill.zone-1 {

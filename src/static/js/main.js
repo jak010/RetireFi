@@ -1082,6 +1082,9 @@ function renderConsolidatedStocks() {
             theme.top_stocks.forEach(stock => {
                 const code = stock.stock_code;
                 const isLeader = stock.role.includes("대장주") || stock.role.includes("1등주");
+
+                // 압축 관찰판에는 대장주만 표기합니다.
+                if (!isLeader) return;
                 
                 if (!stockMap.has(code)) {
                     stockMap.set(code, {
@@ -1324,15 +1327,29 @@ function renderLeaderCharts() {
         return;
     }
 
-    // Filter themes containing stock data, limit to top 8
-    const targetThemes = themesData.slice(0, 8);
+    // Filter themes containing stock data, limit to top 8, then sort by 등락률 desc
+    // 동일 종목이 여러 테마의 대장주로 잡힌 경우 중복 카드 대신 테마명을 통합
+    const leaderMap = new Map();
+    themesData.slice(0, 8)
+        .map(theme => {
+            if (!theme.top_stocks || theme.top_stocks.length === 0) return null;
+            const stock = theme.top_stocks.find(s => s.role.includes("대장주") || s.role.includes("1등주")) || theme.top_stocks[0];
+            return { theme, stock };
+        })
+        .filter(Boolean)
+        .sort((a, b) => (parseFloat(b.stock.rate) || 0) - (parseFloat(a.stock.rate) || 0))
+        .forEach(entry => {
+            const key = entry.stock.stock_code;
+            const existing = leaderMap.get(key);
+            if (existing) {
+                if (existing.themes.indexOf(entry.theme.theme_name) === -1) existing.themes.push(entry.theme.theme_name);
+                return;
+            }
+            leaderMap.set(key, { theme: entry.theme, stock: entry.stock, themes: [entry.theme.theme_name] });
+        });
+    const leaders = [...leaderMap.values()];
 
-    targetThemes.forEach(theme => {
-        if (!theme.top_stocks || theme.top_stocks.length === 0) return;
-
-        // Find leader stock
-        const stock = theme.top_stocks.find(s => s.role.includes("대장주") || s.role.includes("1등주")) || theme.top_stocks[0];
-        
+    leaders.forEach(({ theme, stock, themes }) => {
         // Decide colors
         const rateVal = parseFloat(stock.rate);
         let rateColor = 'var(--text-muted)';
@@ -1349,6 +1366,21 @@ function renderLeaderCharts() {
         if (drop < -8.0) dropColor = 'var(--accent-orange)';
         else if (drop < -4.0) dropColor = 'var(--accent-green)';
 
+        // 3개월 수급 위치 (머리/어깨/무릎)
+        const level = stock.price_level || '-';
+        let levelColor = 'var(--text-muted)';
+        let levelBg = 'rgba(100, 116, 139, 0.08)';
+        if (level === '머리') { levelColor = '#ef4444'; levelBg = 'rgba(239, 68, 68, 0.08)'; }
+        else if (level === '어깨') { levelColor = '#d97706'; levelBg = 'rgba(245, 158, 11, 0.08)'; }
+        else if (level === '무릎') { levelColor = '#10b981'; levelBg = 'rgba(16, 185, 129, 0.08)'; }
+        const levelPos = stock.price_position_ratio !== undefined ? `${stock.price_position_ratio}%` : '';
+
+        // 10일/20일 이평선 정배열 여부
+        const maGood = !!stock.ma10_above_ma20;
+        const maColor = maGood ? '#10b981' : 'var(--text-muted)';
+        const maBg = maGood ? 'rgba(16, 185, 129, 0.08)' : 'rgba(100, 116, 139, 0.08)';
+        const maLabel = maGood ? '10MA ≥ 20MA' : '10MA < 20MA';
+
         // Create card element
         const card = document.createElement('div');
         card.className = 'chart-card';
@@ -1356,8 +1388,12 @@ function renderLeaderCharts() {
         card.innerHTML = `
             <div class="chart-card-header">
                 <div>
-                    <span class="chart-theme-badge">${theme.theme_name}</span>
+                    <span class="chart-theme-badge" title="${themes.join(' · ')}">${themes.join(' · ')}</span>
                     <div class="chart-stock-title">${stock.stock_name} <span class="chart-stock-code">${stock.stock_code}</span></div>
+                    <div style="display: flex; gap: 0.3rem; margin-top: 0.35rem; flex-wrap: wrap;">
+                        <span id="level-badge-${stock.stock_code}" style="font-size: 0.6rem; font-weight: 700; padding: 0.1rem 0.4rem; border-radius: 4px; color: ${levelColor}; background: ${levelBg}; border: 1px solid ${levelColor};" title="최근 3개월 수급 위치: ${levelPos} (${stock.price_level_desc || ''})">${level} ${levelPos}</span>
+                        <span id="ma-badge-${stock.stock_code}" style="font-size: 0.6rem; font-weight: 700; padding: 0.1rem 0.4rem; border-radius: 4px; color: ${maColor}; background: ${maBg}; border: 1px solid ${maColor};" title="10일 vs 20일 이평선 정배열 여부">${maLabel}</span>
+                    </div>
                 </div>
                 <div style="text-align: right;">
                     <div style="font-size: 0.95rem; font-weight: 700; color: ${rateColor};">${stock.price_str}</div>
@@ -1371,10 +1407,13 @@ function renderLeaderCharts() {
                 </div>
             </div>
             <div class="chart-card-footer">
-                <div>당일 낙폭: <span style="font-weight: 700; color: ${dropColor};">${stock.drop_str}</span></div>
+                <div class="chart-day-info">
+                    <div>당일 고점: <span id="day-high-${stock.stock_code}" style="font-weight: 700;">${stock.day_high_str || '-'}</span></div>
+                    <div>당일 낙폭: <span id="day-drop-${stock.stock_code}" style="font-weight: 700; color: ${dropColor};">${stock.drop_str}</span></div>
+                </div>
                 <div class="chart-target-bands">
-                    <span class="band-pill zone-1">1차: ${stock.buy_zone_1}</span>
-                    <span class="band-pill zone-2">2차: ${stock.buy_zone_2}</span>
+                    <span id="zone-1-${stock.stock_code}" class="band-pill zone-1">1차: ${stock.buy_zone_1}</span>
+                    <span id="zone-2-${stock.stock_code}" class="band-pill zone-2">2차: ${stock.buy_zone_2}</span>
                 </div>
             </div>
         `;
@@ -1382,6 +1421,8 @@ function renderLeaderCharts() {
 
         // Load chart asynchronously
         fetchAndDrawChart(stock.stock_code);
+        // 3개월 수급 구간 가격대는 야후 파이낸스 기준으로 보정 표시
+        fetchAndRenderPriceBands(stock.stock_code);
     });
 }
 
@@ -1391,8 +1432,11 @@ async function fetchAndDrawChart(stockCode) {
     if (!canvas) return;
 
     try {
-        const response = await fetch(`/api/v1/market/stocks/${stockCode}/chart`);
-        const result = await response.json();
+        const [chartRes, stats] = await Promise.all([
+            fetch(`/api/v1/market/stocks/${stockCode}/chart`),
+            loadStock3mStats(stockCode)
+        ]);
+        const result = await chartRes.json();
 
         if (spinner) spinner.style.display = 'none';
 
@@ -1408,23 +1452,25 @@ async function fetchAndDrawChart(stockCode) {
             const lineColor = isPositive ? 'rgba(239, 68, 68, 1)' : 'rgba(59, 130, 246, 1)';
             const fillColor = isPositive ? 'rgba(239, 68, 68, 0.05)' : 'rgba(59, 130, 246, 0.05)';
 
+            // 머리/어깨/무릎 구간 오버레이 (가능할 때만, 뒤에 깔림)
+            const band = compute3mBand(stats);
+            const bandDatasets = buildBandDatasets(band, prices.length);
+            const datasets = bandDatasets.concat({
+                label: '주가',
+                data: prices,
+                borderColor: lineColor,
+                borderWidth: 2,
+                backgroundColor: fillColor,
+                fill: true,
+                pointRadius: 0,
+                pointHoverRadius: 4,
+                tension: 0.15
+            });
+
             // Draw line chart
             const chart = new Chart(ctx, {
                 type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: '주가',
-                        data: prices,
-                        borderColor: lineColor,
-                        borderWidth: 2,
-                        backgroundColor: fillColor,
-                        fill: true,
-                        pointRadius: 0,
-                        pointHoverRadius: 4,
-                        tension: 0.15
-                    }]
-                },
+                data: { labels: labels, datasets: datasets },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
@@ -1436,9 +1482,22 @@ async function fetchAndDrawChart(stockCode) {
                             backgroundColor: 'rgba(15, 23, 42, 0.85)',
                             titleFont: { size: 10, weight: 'bold' },
                             bodyFont: { size: 10 },
+                            filter: function(item) { return item.datasetIndex === datasets.length - 1; },
                             callbacks: {
                                 label: function(context) {
                                     return ` ${context.parsed.y.toLocaleString()}원`;
+                                },
+                                afterLabel: function() {
+                                    if (!band) return '';
+                                    const fmt = n => n.toLocaleString();
+                                    const current = stats && stats.price_level ? stats.price_level : '—';
+                                    return [
+                                        '',
+                                        `머리: ${fmt(band.headLow)} ~ ${fmt(band.high)}원`,
+                                        `어깨: ${fmt(band.shoulderLow)} ~ ${fmt(band.headLow)}원`,
+                                        `무릎: ${fmt(band.low)} ~ ${fmt(band.shoulderLow)}원`,
+                                        `현재 수급: ${current}`
+                                    ].join('\n');
                                 }
                             }
                         }
@@ -1455,9 +1514,24 @@ async function fetchAndDrawChart(stockCode) {
                         },
                         y: {
                             grid: { color: 'rgba(0, 0, 0, 0.03)' },
+                            afterBuildTicks: function(axis) {
+                                // 머리/어깨 경계를 y축 눈금으로 주입
+                                if (band) {
+                                    axis.ticks.push({ value: band.headLow });
+                                    axis.ticks.push({ value: band.shoulderLow });
+                                }
+                            },
                             ticks: {
                                 font: { size: 8 },
+                                color: function(context) {
+                                    const v = context.tick.value;
+                                    if (band && v === band.headLow) return '#ef4444';
+                                    if (band && v === band.shoulderLow) return '#d97706';
+                                    return undefined;
+                                },
                                 callback: function(value) {
+                                    if (band && value === band.headLow) return `머리 ${value.toLocaleString()}`;
+                                    if (band && value === band.shoulderLow) return `어깨 ${value.toLocaleString()}`;
                                     return value.toLocaleString();
                                 }
                             }
@@ -1467,6 +1541,28 @@ async function fetchAndDrawChart(stockCode) {
             });
 
             chartInstances[stockCode] = chart;
+
+            // 당일 고점/낙폭 및 1차·2차 매수 구간을 차트(장중 5분봉) 데이터로 갱신
+            if (result.dayHigh > 0) {
+                const highSpan = document.getElementById(`day-high-${stockCode}`);
+                if (highSpan) highSpan.textContent = `${result.dayHigh.toLocaleString()}원`;
+                const dropSpan = document.getElementById(`day-drop-${stockCode}`);
+                if (dropSpan && result.drop !== undefined) {
+                    dropSpan.textContent = `${result.drop.toFixed(2)}%`;
+                    let dropColor = 'var(--text-muted)';
+                    if (result.drop < -8.0) dropColor = 'var(--accent-orange)';
+                    else if (result.drop < -4.0) dropColor = 'var(--accent-green)';
+                    dropSpan.style.color = dropColor;
+                }
+                // 매수 구간은 당일 고점 기준 1차(-4~-8%) / 2차(-8~-12%)
+                const fmtWon = n => `${n.toLocaleString()}원`;
+                const z1Low = Math.floor(result.dayHigh * 0.92), z1High = Math.floor(result.dayHigh * 0.96);
+                const z2Low = Math.floor(result.dayHigh * 0.88), z2High = Math.floor(result.dayHigh * 0.92);
+                const zone1Span = document.getElementById(`zone-1-${stockCode}`);
+                if (zone1Span) zone1Span.textContent = `1차: ${fmtWon(z1Low)} ~ ${fmtWon(z1High)}`;
+                const zone2Span = document.getElementById(`zone-2-${stockCode}`);
+                if (zone2Span) zone2Span.textContent = `2차: ${fmtWon(z2Low)} ~ ${fmtWon(z2High)}`;
+            }
         } else {
             drawEmptyChartMsg(canvas, '차트 데이터 없음');
         }
@@ -1484,4 +1580,73 @@ function drawEmptyChartMsg(canvas, msg) {
     ctx.fillStyle = 'var(--text-muted)';
     ctx.textAlign = 'center';
     ctx.fillText(msg, canvas.width / 2, canvas.height / 2);
+}
+
+const stock3mCache = new Map();
+
+async function loadStock3mStats(stockCode) {
+    if (stock3mCache.has(stockCode)) return stock3mCache.get(stockCode);
+    try {
+        const response = await fetch(`/api/v1/market/stocks/${stockCode}/stats-3m`);
+        const result = await response.json();
+        stock3mCache.set(stockCode, result.status === 'success' ? result : null);
+    } catch (e) {
+        console.error(`Error loading 3-month stats for ${stockCode}:`, e);
+        stock3mCache.set(stockCode, null);
+    }
+    return stock3mCache.get(stockCode);
+}
+
+// 3개월 고가/저가로 머리·어깨 구간 경계(70%/35%)를 계산합니다. 데이터가 없으면 null.
+function compute3mBand(stats) {
+    if (!stats || !(stats.three_month_high > 0) || !(stats.three_month_low > 0)) return null;
+    const high = stats.three_month_high;
+    const low = stats.three_month_low;
+    return {
+        high: high,
+        low: low,
+        headLow: low + (high - low) * 0.7,
+        shoulderLow: low + (high - low) * 0.35,
+    };
+}
+
+// 차트 위에 머리/어깨/무릎 구간을 상수 라인 데이터셋(배경 채움 + 경계 점선)으로 그립니다.
+function buildBandDatasets(band, n) {
+    if (!band) return [];
+    const base = { pointRadius: 0, pointHoverRadius: 0, borderWidth: 0, _isBand: true, fill: false };
+    const fillArr = new Array(n).fill(null);
+    return [
+        { ...base, label: '3M 구간', data: fillArr.map(() => band.low), backgroundColor: 'rgba(148, 163, 184, 0.07)', fill: { target: 1 } },
+        { ...base, label: '3M 상한', data: fillArr.map(() => band.high) },
+        { ...base, label: '머리 하한', data: fillArr.map(() => band.headLow), borderColor: 'rgba(239, 68, 68, 0.65)', borderWidth: 1, borderDash: [4, 4] },
+        { ...base, label: '어깨 하한', data: fillArr.map(() => band.shoulderLow), borderColor: 'rgba(217, 119, 6, 0.65)', borderWidth: 1, borderDash: [4, 4] },
+    ];
+}
+
+async function fetchAndRenderPriceBands(stockCode) {
+    const result = await loadStock3mStats(stockCode);
+    if (!result) return;
+
+    // 헤더의 수급 위치 뱃지 및 이평 뱃지 갱신
+    const levelBadge = document.getElementById(`level-badge-${stockCode}`);
+    if (levelBadge) {
+        const lvl = result.price_level || '-';
+        let lc = 'var(--text-muted)', lbg = 'rgba(100, 116, 139, 0.08)';
+        if (lvl === '머리') { lc = '#ef4444'; lbg = 'rgba(239, 68, 68, 0.08)'; }
+        else if (lvl === '어깨') { lc = '#d97706'; lbg = 'rgba(245, 158, 11, 0.08)'; }
+        else if (lvl === '무릎') { lc = '#10b981'; lbg = 'rgba(16, 185, 129, 0.08)'; }
+        levelBadge.style.color = lc;
+        levelBadge.style.background = lbg;
+        levelBadge.style.border = `1px solid ${lc}`;
+        levelBadge.textContent = `${lvl} ${result.price_position_ratio !== undefined ? result.price_position_ratio + '%' : ''}`;
+        levelBadge.title = `최근 3개월 수급 위치 (야후 파이낸스): ${result.price_position_ratio}% (${result.price_level_desc || ''})`;
+    }
+    const maBadge = document.getElementById(`ma-badge-${stockCode}`);
+    if (maBadge) {
+        const good = !!result.ma10_above_ma20;
+        maBadge.style.color = good ? '#10b981' : 'var(--text-muted)';
+        maBadge.style.background = good ? 'rgba(16, 185, 129, 0.08)' : 'rgba(100, 116, 139, 0.08)';
+        maBadge.style.border = `1px solid ${good ? '#10b981' : 'var(--text-muted)'}`;
+        maBadge.textContent = good ? '10MA ≥ 20MA' : '10MA < 20MA';
+    }
 }
