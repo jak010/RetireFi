@@ -90,6 +90,38 @@ class Application:
                 print("[INFO] Background cache warming finished!")
 
             threading.Thread(target=warm_cache, daemon=True).start()
+            asyncio.create_task(self.schedule_theme_leaders_summary_loop())
+
+    async def schedule_theme_leaders_summary_loop(self):
+        from src.application.api.market_router import naver_theme_service
+
+        # 초기 기동 후 첫 매핑 및 통계 수집(웜업) 대기
+        await asyncio.sleep(20)
+
+        while True:
+            try:
+                loop = asyncio.get_event_loop()
+                await loop.run_in_executor(
+                    None,
+                    naver_theme_service.send_theme_leaders_summary_to_slack
+                )
+            except Exception as e:
+                print(f"[BACKGROUND THEME LEADER SUMMARY ERROR] {e}")
+
+            now = datetime.now()
+            # 30분 단위 정시 구하기 (예: 매 시간 0분, 30분)
+            minutes_to_add = 30 - (now.minute % 30)
+            next_run = (
+                now + timedelta(minutes=minutes_to_add)
+            ).replace(
+                second=0,
+                microsecond=0
+            )
+            sleep_seconds = (next_run - datetime.now()).total_seconds()
+            if sleep_seconds <= 0:
+                sleep_seconds = 1800.0
+
+            await asyncio.sleep(max(1.0, sleep_seconds))
 
     async def schedule_news_summary_loop(self):
 

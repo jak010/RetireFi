@@ -382,8 +382,8 @@ function renderDashboard() {
     const rateFilter = document.getElementById('filter-rate').value;
     const volFilter = document.getElementById('filter-volume').value;
     const targetFilter = document.getElementById('filter-target').value;
-    
-    const processedThemes = getProcessedThemes();
+    // 카드 UI에서는 매핑 종목 수가 2개 이하인 테마 제외 (3개 이상인 테마만 표출)
+    const processedThemes = getProcessedThemes().filter(t => (t.mapped_count !== undefined ? t.mapped_count : (t.top_stocks ? t.top_stocks.length : 0)) > 2);
 
     if (processedThemes.length === 0) {
         container.innerHTML = `
@@ -430,7 +430,7 @@ function renderDashboard() {
 
     let totalBuyingTargets = 0;
 
-    displayThemes.forEach(theme => {
+    const appendThemeCard = (theme) => {
         // Card header styling based on avg_rate
         const rateVal = parseFloat(theme.avg_rate);
         let rateClass = 'flat';
@@ -448,7 +448,7 @@ function renderDashboard() {
         let stocksHtml = '';
 
         if (theme.top_stocks && theme.top_stocks.length > 0) {
-            theme.top_stocks.forEach(stock => {
+            theme.top_stocks.slice(0, 3).forEach(stock => { // 대장주/1등주/2등주 까지만 표시
                 const isLeader = stock.role.includes("대장주");
                 const is1st = stock.role === "🥇 1등주";
                 
@@ -611,7 +611,44 @@ function renderDashboard() {
         `;
 
         container.appendChild(card);
-    });
+    };
+
+    if (!hasActiveFilters) {
+        // 네이버 데이터 상단 배치 (TOP 9)
+        const naverThemes = processedThemes.filter(t => t.source === 'naver' || t.source === 'both').slice(0, 9);
+        const royalThemes = processedThemes.filter(t => t.source === 'royal' || t.source === 'both').slice(0, 9);
+
+        const naverSectionHeader = document.createElement('div');
+        naverSectionHeader.style.cssText = "grid-column: 1 / -1; font-size: 0.95rem; font-weight: 700; color: var(--accent-green); padding: 0.5rem 0 0.4rem 0; border-bottom: 2px solid rgba(16, 185, 129, 0.35); margin-top: 0.25rem; display: flex; align-items: center; gap: 0.5rem; letter-spacing: -0.02em;";
+        naverSectionHeader.innerHTML = `🟢 네이버 실시간 거래대금 상위 테마 (상단 TOP 9)`;
+        container.appendChild(naverSectionHeader);
+
+        if (naverThemes.length > 0) {
+            naverThemes.forEach(appendThemeCard);
+        } else {
+            const emptyNaver = document.createElement('div');
+            emptyNaver.style.cssText = "grid-column: 1 / -1; text-align: center; padding: 1.5rem; color: var(--text-muted); font-size: 0.85rem; background: var(--bg-card); border-radius: 8px; border: 1px dashed var(--border-color);";
+            emptyNaver.innerHTML = "수집된 네이버 테마 데이터가 없습니다.";
+            container.appendChild(emptyNaver);
+        }
+
+        // 로얄로더 데이터 하단 배치 (TOP 9)
+        const royalSectionHeader = document.createElement('div');
+        royalSectionHeader.style.cssText = "grid-column: 1 / -1; font-size: 0.95rem; font-weight: 700; color: var(--accent-blue); padding: 0.5rem 0 0.4rem 0; border-bottom: 2px solid rgba(29, 78, 216, 0.35); margin-top: 1.5rem; display: flex; align-items: center; gap: 0.5rem; letter-spacing: -0.02em;";
+        royalSectionHeader.innerHTML = `🔵 로얄로더 실시간 거래대금 상위 테마 (하단 TOP 9)`;
+        container.appendChild(royalSectionHeader);
+
+        if (royalThemes.length > 0) {
+            royalThemes.forEach(appendThemeCard);
+        } else {
+            const emptyRoyal = document.createElement('div');
+            emptyRoyal.style.cssText = "grid-column: 1 / -1; text-align: center; padding: 1.5rem; color: var(--text-muted); font-size: 0.85rem; background: var(--bg-card); border-radius: 8px; border: 1px dashed var(--border-color);";
+            emptyRoyal.innerHTML = "현재 수집된 로얄로더 테마 데이터가 없습니다.";
+            container.appendChild(emptyRoyal);
+        }
+    } else {
+        displayThemes.forEach(appendThemeCard);
+    }
 
     // Sync toggle all button state
     const toggleAllBtn = document.getElementById('btn-toggle-all');
@@ -1419,24 +1456,24 @@ function renderNetworkMindmap(data) {
             });
     };
 
-    // Split themes into Left and Right lists alternatingly to balance height
-    const leftThemes = themes.filter((_, idx) => idx % 2 === 0);
-    const rightThemes = themes.filter((_, idx) => idx % 2 !== 0);
+    // Split themes by source: Left (Naver or Both) vs Right (Royal Roader or Both)
+    const leftThemes = themes.filter(t => t.source === 'naver' || t.source === 'both');
+    const rightThemes = themes.filter(t => t.source === 'royal' || t.source === 'both');
 
     const slotHeight = 65; // vertical height per slot
 
     // Calculate vertical heights for Left side
-    const leftHeights = leftThemes.map(theme => {
+    const leftHeights = leftThemes.length > 0 ? leftThemes.map(theme => {
         const validStocks = getSortedPeerStocks(theme);
         return Math.max(1, validStocks.length) * slotHeight;
-    });
+    }) : [slotHeight * 2];
     const leftTotalHeight = leftHeights.reduce((sum, h) => sum + h, 0);
 
     // Calculate vertical heights for Right side
-    const rightHeights = rightThemes.map(theme => {
+    const rightHeights = rightThemes.length > 0 ? rightThemes.map(theme => {
         const validStocks = getSortedPeerStocks(theme);
         return Math.max(1, validStocks.length) * slotHeight;
-    });
+    }) : [slotHeight * 2];
     const rightTotalHeight = rightHeights.reduce((sum, h) => sum + h, 0);
 
     const maxBranchHeight = Math.max(leftTotalHeight, rightTotalHeight);
@@ -1446,11 +1483,11 @@ function renderNetworkMindmap(data) {
     const minGridY = cy - Math.max(400, maxBranchHeight / 2 + 50);
     const maxGridY = cy + Math.max(400, maxBranchHeight / 2 + 50);
     const columns = [
-        { x: cx - 360, label: "연관 보통주 (L)" },
-        { x: cx - 180, label: "소속 테마 (L)" },
+        { x: cx - 360, label: "🟢 네이버 연관종목" },
+        { x: cx - 180, label: "🟢 네이버 소속테마" },
         { x: cx,       label: "기준 종목 (Root)" },
-        { x: cx + 180, label: "소속 테마 (R)" },
-        { x: cx + 360, label: "연관 보통주 (R)" }
+        { x: cx + 180, label: "🔵 로얄 소속테마" },
+        { x: cx + 360, label: "🔵 로얄 연관종목" }
     ];
 
     columns.forEach(col => {
@@ -1467,9 +1504,9 @@ function renderNetworkMindmap(data) {
 
         // Draw header background pill (rounded rect)
         const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-        rect.setAttribute('x', col.x - 65);
+        rect.setAttribute('x', col.x - 70);
         rect.setAttribute('y', cy - Math.max(350, maxBranchHeight / 2 + 30));
-        rect.setAttribute('width', 130);
+        rect.setAttribute('width', 140);
         rect.setAttribute('height', 24);
         rect.setAttribute('rx', 12);
         rect.setAttribute('fill', '#f8fafc');
@@ -1482,9 +1519,9 @@ function renderNetworkMindmap(data) {
         text.setAttribute('x', col.x);
         text.setAttribute('y', cy - Math.max(334, maxBranchHeight / 2 + 14));
         text.setAttribute('text-anchor', 'middle');
-        text.setAttribute('fill', 'var(--text-muted)');
+        text.setAttribute('fill', 'var(--text-secondary)');
         text.setAttribute('font-size', '10px');
-        text.setAttribute('font-weight', '700');
+        text.setAttribute('font-weight', '800');
         text.setAttribute('style', 'font-family: inherit;');
         text.textContent = col.label;
         linksGroup.appendChild(text);
@@ -1499,65 +1536,87 @@ function renderNetworkMindmap(data) {
         </div>
     `);
 
-    // 2. Render Left Side Themes & Stocks
-    let currentLeftY = cy - leftTotalHeight / 2;
-    leftThemes.forEach((theme, idx) => {
-        const themeHeight = leftHeights[idx];
+    // 2. Render Left Side Themes & Stocks (Naver Data)
+    if (leftThemes.length > 0) {
+        let currentLeftY = cy - leftTotalHeight / 2;
+        leftThemes.forEach((theme, idx) => {
+            const themeHeight = leftHeights[idx];
+            const tx = cx - 180;
+            const ty = currentLeftY + themeHeight / 2;
+
+            // Color connection lines based on theme avg_rate
+            const rateVal = parseFloat(theme.avg_rate);
+            const themeRateColor = rateVal > 0 ? 'rgba(239, 68, 68, 0.65)' : (rateVal < 0 ? 'rgba(59, 130, 246, 0.65)' : '#cbd5e1');
+
+            // Render theme node (isLeft = true, collapse button is on the left edge)
+            renderThemeNode(nodesGroup, tx, ty, theme, true, mainStock.code);
+            
+            // Link from center root stock to theme
+            drawBezierCurve(linksGroup, cx, cy, tx, ty, themeRateColor, 2, false);
+
+            // Render stocks and link from theme to stocks
+            const validStocks = getSortedPeerStocks(theme);
+            const sx = cx - 360;
+            
+            validStocks.forEach((stock, sIdx) => {
+                const sy = currentLeftY + sIdx * slotHeight + slotHeight / 2;
+                renderStockNode(nodesGroup, sx, sy, stock);
+                drawBezierCurve(linksGroup, tx, ty, sx, sy, '#cbd5e1', 1.5, false);
+            });
+
+            currentLeftY += themeHeight;
+        });
+    } else {
         const tx = cx - 180;
-        const ty = currentLeftY + themeHeight / 2;
+        const ty = cy;
+        createSVGNode(nodesGroup, tx, ty, 150, 48, `
+            <div class="network-node-html" style="width: 100%; height: 100%; background: #f8fafc; border: 1.5px dashed var(--border-color); border-radius: 8px; display: flex; justify-content: center; align-items: center; color: var(--text-muted); font-size: 0.75rem; font-weight: 600; text-align: center; user-select: none;">
+                🟢 네이버 테마 없음
+            </div>
+        `);
+        drawBezierCurve(linksGroup, cx, cy, tx, ty, '#e2e8f0', 1.5, true);
+    }
 
-        // Color connection lines based on theme avg_rate
-        const rateVal = parseFloat(theme.avg_rate);
-        const themeRateColor = rateVal > 0 ? 'rgba(239, 68, 68, 0.65)' : (rateVal < 0 ? 'rgba(59, 130, 246, 0.65)' : '#cbd5e1');
+    // 3. Render Right Side Themes & Stocks (Royal Roader Data)
+    if (rightThemes.length > 0) {
+        let currentRightY = cy - rightTotalHeight / 2;
+        rightThemes.forEach((theme, idx) => {
+            const themeHeight = rightHeights[idx];
+            const tx = cx + 180;
+            const ty = currentRightY + themeHeight / 2;
 
-        // Render theme node (isLeft = true, collapse button is on the left edge)
-        renderThemeNode(nodesGroup, tx, ty, theme, true, mainStock.code);
-        
-        // Link from center root stock to theme
-        drawBezierCurve(linksGroup, cx, cy, tx, ty, themeRateColor, 2, false);
+            // Color connection lines based on theme avg_rate
+            const rateVal = parseFloat(theme.avg_rate);
+            const themeRateColor = rateVal > 0 ? 'rgba(239, 68, 68, 0.65)' : (rateVal < 0 ? 'rgba(59, 130, 246, 0.65)' : '#cbd5e1');
 
-        // Render stocks and link from theme to stocks
-        const validStocks = getSortedPeerStocks(theme);
-        const sx = cx - 360;
-        
-        validStocks.forEach((stock, sIdx) => {
-            const sy = currentLeftY + sIdx * slotHeight + slotHeight / 2;
-            renderStockNode(nodesGroup, sx, sy, stock);
-            drawBezierCurve(linksGroup, tx, ty, sx, sy, '#cbd5e1', 1.5, false);
+            // Render theme node (isLeft = false, collapse button is on the right edge)
+            renderThemeNode(nodesGroup, tx, ty, theme, false, mainStock.code);
+            
+            // Link from center root stock to theme
+            drawBezierCurve(linksGroup, cx, cy, tx, ty, themeRateColor, 2, false);
+
+            // Render stocks and link from theme to stocks
+            const validStocks = getSortedPeerStocks(theme);
+            const sx = cx + 360;
+            
+            validStocks.forEach((stock, sIdx) => {
+                const sy = currentRightY + sIdx * slotHeight + slotHeight / 2;
+                renderStockNode(nodesGroup, sx, sy, stock);
+                drawBezierCurve(linksGroup, tx, ty, sx, sy, '#cbd5e1', 1.5, false);
+            });
+
+            currentRightY += themeHeight;
         });
-
-        currentLeftY += themeHeight;
-    });
-
-    // 3. Render Right Side Themes & Stocks
-    let currentRightY = cy - rightTotalHeight / 2;
-    rightThemes.forEach((theme, idx) => {
-        const themeHeight = rightHeights[idx];
+    } else {
         const tx = cx + 180;
-        const ty = currentRightY + themeHeight / 2;
-
-        // Color connection lines based on theme avg_rate
-        const rateVal = parseFloat(theme.avg_rate);
-        const themeRateColor = rateVal > 0 ? 'rgba(239, 68, 68, 0.65)' : (rateVal < 0 ? 'rgba(59, 130, 246, 0.65)' : '#cbd5e1');
-
-        // Render theme node (isLeft = false, collapse button is on the right edge)
-        renderThemeNode(nodesGroup, tx, ty, theme, false, mainStock.code);
-        
-        // Link from center root stock to theme
-        drawBezierCurve(linksGroup, cx, cy, tx, ty, themeRateColor, 2, false);
-
-        // Render stocks and link from theme to stocks
-        const validStocks = getSortedPeerStocks(theme);
-        const sx = cx + 360;
-        
-        validStocks.forEach((stock, sIdx) => {
-            const sy = currentRightY + sIdx * slotHeight + slotHeight / 2;
-            renderStockNode(nodesGroup, sx, sy, stock);
-            drawBezierCurve(linksGroup, tx, ty, sx, sy, '#cbd5e1', 1.5, false);
-        });
-
-        currentRightY += themeHeight;
-    });
+        const ty = cy;
+        createSVGNode(nodesGroup, tx, ty, 150, 48, `
+            <div class="network-node-html" style="width: 100%; height: 100%; background: #f8fafc; border: 1.5px dashed var(--border-color); border-radius: 8px; display: flex; justify-content: center; align-items: center; color: var(--text-muted); font-size: 0.75rem; font-weight: 600; text-align: center; user-select: none;">
+                🔵 로얄로더 테마 없음
+            </div>
+        `);
+        drawBezierCurve(linksGroup, cx, cy, tx, ty, '#e2e8f0', 1.5, true);
+    }
 }
 
 function renderThemeNode(parent, x, y, theme, isLeft, mainStockCode) {
@@ -1580,10 +1639,20 @@ function renderThemeNode(parent, x, y, theme, isLeft, mainStockCode) {
     if (rateVal > 3.0) cardBorderColor = 'rgba(239, 68, 68, 0.4)'; // Red outline for strong themes
     else if (rateVal < -3.0) cardBorderColor = 'rgba(59, 130, 246, 0.4)'; // Blue outline for weak themes
 
-    createSVGNode(parent, x, y, 150, 50, `
-        <div class="network-node-html theme-node" style="width: 100%; height: 100%; background: #f8fafc; border: 2px solid ${cardBorderColor}; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 0.4rem; text-align: center; cursor: default; user-select: none; position: relative;">
+    let badgeHtml = '';
+    if (theme.source === 'both') {
+        badgeHtml = `<div style="font-size: 0.58rem; color: #7c3aed; font-weight: 800; margin-bottom: 0.1rem;">⚡ 네이버·로얄</div>`;
+    } else if (theme.source === 'royal') {
+        badgeHtml = `<div style="font-size: 0.58rem; color: var(--accent-blue); font-weight: 800; margin-bottom: 0.1rem;">🔵 로얄로더</div>`;
+    } else {
+        badgeHtml = `<div style="font-size: 0.58rem; color: var(--accent-green); font-weight: 800; margin-bottom: 0.1rem;">🟢 네이버</div>`;
+    }
+
+    createSVGNode(parent, x, y, 155, 60, `
+        <div class="network-node-html theme-node" style="width: 100%; height: 100%; background: #f8fafc; border: 2px solid ${cardBorderColor}; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 0.35rem; text-align: center; cursor: default; user-select: none; position: relative;">
+            ${badgeHtml}
             <div style="font-size: 0.72rem; font-weight: 700; color: var(--text-secondary); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${theme.theme_name}">${theme.theme_name}</div>
-            <div style="font-size: 0.65rem; font-weight: 700; color: ${rateColor}; margin-top: 0.1rem;">평균 ${rateSign}${theme.avg_rate}%</div>
+            <div style="font-size: 0.65rem; font-weight: 700; color: ${rateColor}; margin-top: 0.05rem;">평균 ${rateSign}${theme.avg_rate}%</div>
             ${toggleHtml}
         </div>
     `);

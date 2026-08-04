@@ -17,6 +17,21 @@ from adapter.save.save_tickers import SaveTickerService
 logger = logging.getLogger(__name__)
 
 
+def sort_stocks_composite(stocks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """거래대금이 높으면서 등락률이 높은 종목 우선 정렬 (거래대금 순위 + 등락률 순위 복합 산출)"""
+    if not stocks or len(stocks) <= 1:
+        return stocks
+    by_vol = sorted(stocks, key=lambda x: x.get("volume", 0), reverse=True)
+    vol_rank = {s.get("stock_code"): r for r, s in enumerate(by_vol, 1)}
+    by_rate = sorted(stocks, key=lambda x: x.get("rate", 0.0), reverse=True)
+    rate_rank = {s.get("stock_code"): r for r, s in enumerate(by_rate, 1)}
+    return sorted(stocks, key=lambda x: (
+        vol_rank.get(x.get("stock_code"), 999) + rate_rank.get(x.get("stock_code"), 999),
+        -x.get("volume", 0),
+        -x.get("rate", 0.0)
+    ))
+
+
 class NaverThemeService:
     def __init__(self):
         # 100% 인메모리 매핑 데이터 구조
@@ -355,8 +370,8 @@ class NaverThemeService:
                 t_billion = int((total_volume % 1000000000000) // 100000000)
                 vol_str = f"{t_trillion}조 {t_billion:,}억 원" if t_trillion > 0 else f"{t_billion:,}억 원"
 
-                # 등락률 높은 순 정렬 후 상위 5개 추출
-                theme_stocks = sorted(theme_stocks, key=lambda x: x['rate'], reverse=True)
+                # 거래대금 및 등락률 복합 상위 정렬 후 상위 5개 추출
+                theme_stocks = sort_stocks_composite(theme_stocks)
                 top_5_stocks = theme_stocks[:5]
 
                 # 각 상위 종목 역할 및 매수 타점 계산
@@ -542,7 +557,7 @@ class NaverThemeService:
                 t_billion = int((total_volume % 1000000000000) // 100000000)
                 vol_str = f"{t_trillion}조 {t_billion:,}억 원" if t_trillion > 0 else f"{t_billion:,}억 원"
                 
-                theme_stocks = sorted(theme_stocks, key=lambda x: x['rate'], reverse=True)
+                theme_stocks = sort_stocks_composite(theme_stocks)
                 top_5_stocks = theme_stocks[:5]
                 
                 for idx, s in enumerate(top_5_stocks):
@@ -602,7 +617,7 @@ class NaverThemeService:
                     else:
                         stock_dict[code] = s
                 
-                merged_stocks = sorted(stock_dict.values(), key=lambda x: x['rate'], reverse=True)
+                merged_stocks = sort_stocks_composite(list(stock_dict.values()))
                 existing["top_stocks"] = merged_stocks[:5]
                 
                 unique_stocks = list(stock_dict.values())
@@ -875,8 +890,8 @@ class NaverThemeService:
                 "is_global_leader": (name == global_leader)
             })
 
-        # 테마 내 등락률 내림차순 정렬
-        stock_details = sorted(stock_details, key=lambda x: x['rate'], reverse=True)
+        # 테마 내 거래대금 및 등락률 복합 상위 정렬
+        stock_details = sort_stocks_composite(stock_details)
 
         # 역할 동적 부여 (등락률 1위: 대장주, 2위: 1등주, 3위: 2등주, 그 외 후발주)
         # 단, 로얄로더 글로벌 대장주인 경우 우선 배정
@@ -976,6 +991,87 @@ class NaverThemeService:
         except Exception as e:
             logger.error(f"Slack 발송 실패: {e}")
 
+    def send_theme_leaders_summary_to_slack(self):
+        """30분 단위 주기적 호출: 각 테마의 대장주 및 1등주 목록을 요약하여 Slack 채널로 전송합니다."""
+        from datetime import datetime
+        logger.info("[SLACK SUMMARY] 30분 단위 테마별 대장주 및 1등주 요약 알림 준비 시작...")
+
+        summary_res = self.get_naver_themes_summary()
+        if isinstance(summary_res, dict) and summary_res.get("status") == "loading":
+            summary_res = self._calculate_themes_summary()
+
+        themes = summary_res.get("themes", []) if isinstance(summary_res, dict) else []
+        if not themes:
+            logger.warning("[SLACK SUMMARY] 전송할 테마 데이터가 없습니다.")
+            return
+
+        # 상위 15개 테마 대상 (거래대금 기준 내림차순 정렬)
+        sorted_themes = sorted(themes, key=lambda x: x.get("total_volume", 0), reverse=True)[:15]
+
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        lines = [f"⏰ *[실시간 테마별 대장주 & 1등주 현황 (거래대금 TOP 15)]* (기준: {now_str})\n"]
+
+        for idx, theme in enumerate(sorted_themes, 1):
+            theme_name = theme.get("theme_name", "알 수 없는 테마")
+            avg_rate = theme.get("avg_rate", 0.0)
+            try:
+                avg_rate_val = float(avg_rate)
+            except (ValueError, TypeError):
+                avg_rate_val = 0.0
+            vol_str = theme.get("total_volume_str", "0억 원")
+
+            top_stocks = theme.get("top_stocks", [])
+            # 거래대금 및 등락률 복합 상위 정렬
+            sorted_stocks = sort_stocks_composite(top_stocks)
+            leaders_info = []
+
+            for s_idx, s in enumerate(sorted_stocks[:2]):  # 거래대금/등락률 복합 1위(대장주), 2위(1등주) 추출
+                role = s.get("role", "")
+                if role != "👑 대장주 (로얄)":
+                    role = "👑 대장주" if s_idx == 0 else "🥇 1등주"
+                s_name = s.get("stock_name", "N/A")
+                s_rate = s.get("rate_str", "0.0%")
+                s_price = s.get("price_str", "-")
+                s_vol = s.get("volume_str", "-")
+                
+                leaders_info.append(f"  • {role}: *{s_name}* (거래대금: {s_vol} | {s_rate} | {s_price})")
+
+            theme_header = f"*{idx}. {theme_name}* (평균등락률: {avg_rate_val:+.2f}% | 총거래대금: {vol_str})"
+            lines.append(theme_header)
+            if leaders_info:
+                lines.extend(leaders_info)
+            else:
+                lines.append("  • 표시할 소속 종목 정보 없음")
+            lines.append("────────────────────────")
+
+        full_message = "\n".join(lines)
+
+        if not self.slack:
+            logger.info(f"[SLACK SUMMARY - Slack 미연동 상태, 콘솔 출력]\n{full_message}")
+            return
+
+        # Slack 메시지 3000자 제한 방어: 2800자 초과 시 청크 단위 분할 발송
+        max_len = 2800
+        if len(full_message) <= max_len:
+            self.send_slack("📊 테마별 대장주 & 1등주 30분 요약 브리핑", full_message)
+        else:
+            chunk_lines = []
+            curr_len = 0
+            chunk_idx = 1
+            for line in lines:
+                if curr_len + len(line) > max_len and chunk_lines:
+                    self.send_slack(f"📊 테마별 대장주 & 1등주 요약 브리핑 (Part {chunk_idx})", "\n".join(chunk_lines))
+                    time.sleep(0.5)
+                    chunk_lines = [line]
+                    curr_len = len(line) + 1
+                    chunk_idx += 1
+                else:
+                    chunk_lines.append(line)
+                    curr_len += len(line) + 1
+            if chunk_lines:
+                self.send_slack(f"📊 테마별 대장주 & 1등주 요약 브리핑 (Part {chunk_idx})", "\n".join(chunk_lines))
+
+        logger.info("[SLACK SUMMARY] 테마별 대장주 및 1등주 요약 알림 Slack 전송 완료!")
 
     def get_stock_network(self, stock_name_or_code: str) -> Dict[str, Any]:
         """
@@ -1016,12 +1112,14 @@ class NaverThemeService:
         themes_list = []
         for theme_item in self.naver_themes_summary_cache.get("themes", []):
             t_name = theme_item["theme_name"]
-            if t_name in mapped_theme_names:
+            has_stock = any(s.get("stock_code") == stock_code for s in theme_item.get("top_stocks", []))
+            if t_name in mapped_theme_names or has_stock:
                 themes_list.append({
                     "theme_name": t_name,
                     "avg_rate": theme_item["avg_rate"],
-                    "total_volume_str": theme_item["total_volume_str"],
-                    "stocks": theme_item["top_stocks"]
+                    "total_volume_str": theme_item.get("total_volume_str", ""),
+                    "stocks": theme_item.get("top_stocks", []),
+                    "source": theme_item.get("source", "naver")
                 })
 
         # 5. 기준 종목의 단가 및 등락률 최신 정보 획득
@@ -1073,29 +1171,32 @@ class NaverThemeService:
 
         res_summary = self.get_dummy_themes_data()
         themes_list = []
-        for t in res_summary["themes"]:
+        for idx, t in enumerate(res_summary["themes"]):
             if code in ["000660", "005930"] and "삼성전자" in t["theme_name"]:
                 themes_list.append({
                     "theme_name": t["theme_name"],
                     "avg_rate": t["avg_rate"],
                     "total_volume_str": t.get("total_volume_str", "12조 4,500억 원"),
-                    "stocks": t.get("top_stocks", [])
+                    "stocks": t.get("top_stocks", []),
+                    "source": t.get("source", "both" if idx % 2 == 0 else "naver")
                 })
             elif code == "080220" and "온디바이스" in t["theme_name"]:
                 themes_list.append({
                     "theme_name": t["theme_name"],
                     "avg_rate": t["avg_rate"],
                     "total_volume_str": t.get("total_volume_str", "3,500억 원"),
-                    "stocks": t.get("top_stocks", [])
+                    "stocks": t.get("top_stocks", []),
+                    "source": t.get("source", "royal")
                 })
 
         if not themes_list:
-            for t in res_summary["themes"][:2]:
+            for idx, t in enumerate(res_summary["themes"][:2]):
                 themes_list.append({
                     "theme_name": t["theme_name"],
                     "avg_rate": t["avg_rate"],
                     "total_volume_str": t.get("total_volume_str", ""),
-                    "stocks": t.get("top_stocks", [])
+                    "stocks": t.get("top_stocks", []),
+                    "source": "naver" if idx == 0 else "royal"
                 })
 
         p_hynix = getattr(self, "dummy_prices", {}).get("000660", 185000)
