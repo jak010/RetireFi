@@ -56,6 +56,16 @@ class MarketController:
         }
 
     @staticmethod
+    @market_entrypoint.get(path="/cron/theme-leaders-pullback-check",
+                           summary="[CRON] : 테마별 대장주 1차 낙폭(-4~-8%) 구간 진입 체크 및 슬랙 알림")
+    def run_theme_leaders_pullback_check():
+        naver_theme_service.check_and_alert_theme_leaders_pullback()
+        return {
+            "status": "success",
+            "message": "테마별 대장주 1차 낙폭 구간(-4~-8%) 진입 체크 완료"
+        }
+
+    @staticmethod
     @market_entrypoint.get(path="/toss-ranking",
                            summary="[MARKET] : 토스증권 거래대금 상위 종목 및 테마 매핑 조회")
     def get_toss_ranking():

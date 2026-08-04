@@ -91,6 +91,26 @@ class Application:
 
             threading.Thread(target=warm_cache, daemon=True).start()
             asyncio.create_task(self.schedule_theme_leaders_summary_loop())
+            asyncio.create_task(self.schedule_theme_leaders_pullback_loop())
+
+    async def schedule_theme_leaders_pullback_loop(self):
+        from src.application.api.market_router import naver_theme_service
+
+        # 초기 기동 후 캐시 수집 완료 대기
+        await asyncio.sleep(30)
+
+        while True:
+            try:
+                loop = asyncio.get_event_loop()
+                await loop.run_in_executor(
+                    None,
+                    naver_theme_service.check_and_alert_theme_leaders_pullback
+                )
+            except Exception as e:
+                print(f"[BACKGROUND THEME LEADER PULLBACK MONITOR ERROR] {e}")
+
+            # 3분(180초) 주기로 실시간 낙폭 진입 감지
+            await asyncio.sleep(180.0)
 
     async def schedule_theme_leaders_summary_loop(self):
         from src.application.api.market_router import naver_theme_service

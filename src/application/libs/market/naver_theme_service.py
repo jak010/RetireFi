@@ -415,13 +415,13 @@ class NaverThemeService:
                     s["drop"] = round(intraday_drop, 2)
                     s["drop_str"] = f"{intraday_drop:.2f}%"
 
-                    # 매수 밴드 산출
-                    high_minus_3pct = int(day_high * 0.97)
+                    # 1차 낙폭(-4~-8%), 2차 낙폭(-8~-12%) 매수 밴드 산출
                     high_minus_4pct = int(day_high * 0.96)
                     high_minus_8pct = int(day_high * 0.92)
+                    high_minus_12pct = int(day_high * 0.88)
 
-                    s["buy_zone_1"] = f"{high_minus_4pct:,} ~ {high_minus_3pct:,}원"
-                    s["buy_zone_2"] = f"{high_minus_8pct:,} ~ {high_minus_4pct:,}원"
+                    s["buy_zone_1"] = f"{high_minus_8pct:,} ~ {high_minus_4pct:,}원"
+                    s["buy_zone_2"] = f"{high_minus_12pct:,} ~ {high_minus_8pct:,}원"
 
                     # 실시간 매수타점 Slack 알림 발송 체크
                     self.trigger_slack_alerts_if_needed(s, theme_name)
@@ -512,10 +512,10 @@ class NaverThemeService:
                 buy_zone_1 = "-"
                 buy_zone_2 = "-"
                 if three_month_high > 0:
-                    bz1_low = int(three_month_high * 0.96)
-                    bz1_high = int(three_month_high * 0.97)
-                    bz2_low = int(three_month_high * 0.92)
-                    bz2_high = int(three_month_high * 0.96)
+                    bz1_low = int(three_month_high * 0.92)
+                    bz1_high = int(three_month_high * 0.96)
+                    bz2_low = int(three_month_high * 0.88)
+                    bz2_high = int(three_month_high * 0.92)
                     buy_zone_1 = f"{bz1_low:,} ~ {bz1_high:,}원"
                     buy_zone_2 = f"{bz2_low:,} ~ {bz2_high:,}원"
                 
@@ -569,6 +569,7 @@ class NaverThemeService:
                         s["role"] = "🥈 2등주"
                     else:
                         s["role"] = "후발주"
+                    self.trigger_slack_alerts_if_needed(s, rt.name)
                 
                 up_count = sum(1 for s in theme_stocks if s["rate"] > 0)
                 down_count = sum(1 for s in theme_stocks if s["rate"] < 0)
@@ -857,10 +858,10 @@ class NaverThemeService:
 
             intraday_drop = ((safe_price - day_high) / day_high) * 100
 
-            # 매수 밴드 산출
-            high_minus_3pct = int(day_high * 0.97)
+            # 매수 밴드 산출 (1차 낙폭 -4~-8%, 2차 낙폭 -8~-12%)
             high_minus_4pct = int(day_high * 0.96)
             high_minus_8pct = int(day_high * 0.92)
+            high_minus_12pct = int(day_high * 0.88)
 
             stock_details.append({
                 "stock_code": code,
@@ -885,8 +886,8 @@ class NaverThemeService:
                 "day_high_str": f"{day_high:,}원" if price_won > 0 else "-",
                 "drop": round(intraday_drop, 2),
                 "drop_str": f"{intraday_drop:.2f}%" if price_won > 0 else "-",
-                "buy_zone_1": f"{high_minus_4pct:,} ~ {high_minus_3pct:,}원" if price_won > 0 else "-",
-                "buy_zone_2": f"{high_minus_8pct:,} ~ {high_minus_4pct:,}원" if price_won > 0 else "-",
+                "buy_zone_1": f"{high_minus_8pct:,} ~ {high_minus_4pct:,}원" if price_won > 0 else "-",
+                "buy_zone_2": f"{high_minus_12pct:,} ~ {high_minus_8pct:,}원" if price_won > 0 else "-",
                 "is_global_leader": (name == global_leader)
             })
 
@@ -913,72 +914,86 @@ class NaverThemeService:
         return stock_details
 
     def trigger_slack_alerts_if_needed(self, stock_item: Dict[str, Any], theme_name: str):
-        """특정 종목의 매수 타점 진입 시 Slack 알림 발송 (쿨다운 1시간 적용)"""
+        """특정 종목(대장주/1등주)의 매수 타점 진입 시 Slack 알림 발송 (쿨다운 1시간 적용)"""
         if not self.slack or stock_item["role"] not in ["👑 대장주", "👑 대장주 (로얄)", "🥇 1등주"]:
             return
 
         drop = stock_item["drop"]
         code = stock_item["stock_code"]
         name = stock_item["stock_name"]
-        price_str = stock_item["price_str"]
-        rate_str = stock_item["rate_str"]
-        role = stock_item["role"]
+        price_str = stock_item.get("price_str", "-")
+        rate_str = stock_item.get("rate_str", "-")
+        role = stock_item.get("role", "")
+        buy_zone_1 = stock_item.get("buy_zone_1", "-")
+        buy_zone_2 = stock_item.get("buy_zone_2", "-")
 
-        is_1st_zone = -4.0 <= drop <= -3.0
-        is_2nd_zone = -8.0 <= drop < -4.0
+        # 1차 낙폭 (-4% ~ -8%) 매수 구간
+        is_1st_drop_zone = -8.0 <= drop <= -4.0
+        # 2차 낙폭 (-8% ~ -12%) 매수 구간
+        is_2nd_drop_zone = -12.0 <= drop < -8.0
 
         current_time = time.time()
         cooldown_seconds = 3600
 
-        if is_1st_zone:
-            cooldown_key = f"{code}_1st_zone"
+        if is_1st_drop_zone:
+            cooldown_key = f"{code}_1st_drop_zone"
             last_sent = self.slack_alert_history.get(cooldown_key, 0)
             if current_time - last_sent > cooldown_seconds:
-                title = f"🟢 [1차 매수 타점 진입] {name} ({code})"
+                title = f"⚡ [대장주 1차 낙폭(-4~-8%) 진입] {name} ({code})"
                 text = (
                     f"────────────────────────\n"
                     f"📊 *종목 프로필*\n"
-                    f"  • 종목분류: 네이버 테마주 | 역할: *{role}*\n"
-                    f"  • 소속섹터: {theme_name}\n"
+                    f"  • 종목분류: 테마주 | 역할: *{role}*\n"
+                    f"  • 소속섹터: *{theme_name}*\n"
                     f"────────────────────────\n"
                     f"💡 *실시간 단가 및 낙폭*\n"
                     f"  • 현재가: *{price_str}* (당일 등락률: {rate_str})\n"
-                    f"  • 장중 고점 대비 낙폭: *{drop:.2f}%*\n"
+                    f"  • 고점 대비 낙폭: *{drop:.2f}%* (1차 낙폭 -4~-8% 구간 진입 ⚡)\n"
                     f"────────────────────────\n"
                     f"🎯 *분할 매수 밴드*\n"
-                    f"  • *1차 매수구간*: `{stock_item['buy_zone_1']}` (진입 완료 🟢)\n"
-                    f"  • *2차 매수구간*: `{stock_item['buy_zone_2']}`\n"
+                    f"  • *1차 낙폭 매수구간 (-4~-8%)*: `{buy_zone_1}` (진입 완료 🟢)\n"
+                    f"  • *2차 낙폭 매수구간 (-8~-12%)*: `{buy_zone_2}`\n"
                     f"────────────────────────\n"
                     f"📢 *대응 가이드*\n"
-                    f"  • {role} 종목이 건전한 고점 대비 눌림목에 진입했습니다. 계획된 비중의 1차 분할 매수 진입을 검토하십시오."
+                    f"  • {role} 종목이 고점 대비 1차 낙폭(-4~-8%) 건전한 눌림목 매수 구간에 진입했습니다. 계획된 비중의 1차 분할 매수 타점으로 검토하십시오."
                 )
                 self.send_slack(title, text)
                 self.slack_alert_history[cooldown_key] = current_time
 
-        elif is_2nd_zone:
-            cooldown_key = f"{code}_2nd_zone"
+        elif is_2nd_drop_zone:
+            cooldown_key = f"{code}_2nd_drop_zone"
             last_sent = self.slack_alert_history.get(cooldown_key, 0)
             if current_time - last_sent > cooldown_seconds:
-                title = f"🟠 [2차 매수 타점 진입] {name} ({code})"
+                title = f"🟠 [대장주 2차 낙폭(-8~-12%) 진입] {name} ({code})"
                 text = (
                     f"────────────────────────\n"
                     f"📊 *종목 프로필*\n"
-                    f"  • 종목분류: 네이버 테마주 | 역할: *{role}*\n"
-                    f"  • 소속섹터: {theme_name}\n"
+                    f"  • 종목분류: 테마주 | 역할: *{role}*\n"
+                    f"  • 소속섹터: *{theme_name}*\n"
                     f"────────────────────────\n"
                     f"💡 *실시간 단가 및 낙폭*\n"
                     f"  • 현재가: *{price_str}* (당일 등락률: {rate_str})\n"
-                    f"  • 장중 고점 대비 낙폭: *{drop:.2f}%*\n"
+                    f"  • 고점 대비 낙폭: *{drop:.2f}%* (2차 낙폭 -8~-12% 구간 진입 🟠)\n"
                     f"────────────────────────\n"
                     f"🎯 *분할 매수 밴드*\n"
-                    f"  • *1차 매수구간*: `{stock_item['buy_zone_1']}`\n"
-                    f"  • *2차 매수구간*: `{stock_item['buy_zone_2']}` (진입 완료 🟠)\n"
+                    f"  • *1차 낙폭 매수구간 (-4~-8%)*: `{buy_zone_1}`\n"
+                    f"  • *2차 낙폭 매수구간 (-8~-12%)*: `{buy_zone_2}` (진입 완료 🟠)\n"
                     f"────────────────────────\n"
                     f"📢 *대응 가이드*\n"
-                    f"  • 과도한 낙폭 구간인 2차 매수구간에 진입했습니다. 분할 매수 최종 비중 채우기 또는 기술적 반등 흐름 관찰이 유효합니다."
+                    f"  • 고점 대비 2차 낙폭(-8~-12%) 과매도 매수 구간에 진입했습니다. 분할 매수 최종 비중 채우기 또는 기술적 반등 흐름 관찰이 유효합니다."
                 )
                 self.send_slack(title, text)
                 self.slack_alert_history[cooldown_key] = current_time
+
+    def check_and_alert_theme_leaders_pullback(self):
+        """백그라운드 실시간 모니터링: 테마별 대장주가 1차 낙폭(-4~-8%) 구간에 진입했는지 주기적으로 점검하고 알림 발송"""
+        try:
+            logger.info("[PULLBACK MONITOR] 테마 대장주 1차 낙폭(-4~-8%) 진입 감지 스케줄러 실행 중...")
+            # 캐싱 TTL이나 갱신 주기에 따라 시세 데이터를 수집하며 각 종목의 낙폭 알림(trigger_slack_alerts_if_needed) 자동 가동
+            self._calculate_themes_summary()
+            logger.info("[PULLBACK MONITOR] 테마 대장주 실시간 낙폭 감지 완료.")
+        except Exception as e:
+            logger.error(f"[PULLBACK MONITOR ERROR] 대장주 실시간 낙폭 감지 실패: {e}")
 
     def send_slack(self, title: str, text: str):
         if not self.slack:
