@@ -136,8 +136,8 @@ class NaverThemeService:
                 mapper = ThemeStockMapper()
                 def progress_cb(step, val):
                     self.load_status = {"step": step, "progress": val}
-                # 1페이지 분량의 네이버 금융 테마 전체(약 40여개)를 메모리로 긁어옵니다.
-                self.mapping_df = mapper.build_mapping_data(max_pages=1, progress_callback=progress_cb)
+                # 1페이지 분량의 네이버 금융 테마 중 상위 15개를 메모리로 긁어옵니다.
+                self.mapping_df = mapper.build_mapping_data(max_pages=1, limit_themes=15, progress_callback=progress_cb)
                 self.mapping_df['stock_code'] = self.mapping_df['stock_code'].astype(str).str.zfill(6)
                 logger.info(f"✅ 네이버 테마 실시간 수집 완료 및 인메모리 적재 성공 (총 {len(self.mapping_df)}개 레코드)")
             except Exception as e:
