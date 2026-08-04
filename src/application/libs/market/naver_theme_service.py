@@ -960,9 +960,18 @@ class NaverThemeService:
         self.flush_pending_alerts()
         return stock_details
 
+    @staticmethod
+    def _is_kst_alert_window() -> bool:
+        """한국시간(KST) 기준 08:00~20:00 알림 가능 시간대 여부"""
+        from datetime import datetime, timedelta, timezone
+        now_kst = datetime.now(timezone(timedelta(hours=9)))
+        return 8 <= now_kst.hour < 20
+
     def trigger_slack_alerts_if_needed(self, stock_item: Dict[str, Any], theme_name: str):
-        """특정 종목(대장주/1등주)의 매수 타점 진입 시 Slack 알림 대기열에 추가 (쿨다운 1시간 적용)"""
+        """특정 종목(대장주/1등주)의 매수 타점 진입 시 Slack 알림 대기열에 추가 (쿨다운 1시간 적용, KST 08~20시만)"""
         if not self.slack or stock_item["role"] not in ["👑 대장주", "👑 대장주 (로얄)", "🥇 1등주"]:
+            return
+        if not self._is_kst_alert_window():
             return
 
         drop = stock_item["drop"]
@@ -1010,6 +1019,10 @@ class NaverThemeService:
     def flush_pending_alerts(self):
         """대기열에 수집된 대장주 낙폭 진입 알림들을 하나의 메시지로 묶어서 슬랙으로 발송합니다."""
         if not self.slack or not self.pending_alerts:
+            return
+        if not self._is_kst_alert_window():
+            # KST 08~20시가 아니면 쌓인 대기열을 비우고 발송하지 않음
+            self.pending_alerts.clear()
             return
 
         from datetime import datetime
