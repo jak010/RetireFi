@@ -165,16 +165,22 @@ class NaverThemeService:
         """
         로얄로더 실시간 활성 종목 시세를 네이버 세부 테마에 매핑하여 테마별 요약 정보 및 Top 5 종목 상세 정보를 연산하고,
         거래대금 기준 정렬 테마 목록, 대금 상위 5대 테마, 통합 주도섹터 3대 테마를 산출합니다.
-        (비블로킹 백그라운드 스레드 업데이트 및 Stale-While-Revalidate 패턴 적용)
+        Vercel/서버리스 환경에서는 백그라운드 스레드를 사용하지 않고 동기식(Lazy Loading)으로 데이터를 즉시 갱신하여 반환합니다.
         """
         if os.getenv("USE_DUMMY", "false").lower() == "true":
             return self.get_dummy_themes_data()
 
         current_time = time.time()
+        is_vercel = os.getenv("VERCEL") is not None
 
         # 1. 캐시가 존재하고 신선한(Fresh) 경우 즉시 리턴
         if self.naver_themes_summary_cache and (current_time - self.naver_themes_summary_cache_time < self.naver_themes_summary_cache_ttl):
             return self.naver_themes_summary_cache
+
+        # Vercel/서버리스 환경인 경우: 백그라운드 스레드 대신 동기식(Lazy Loading)으로 즉시 갱신 후 리턴
+        if is_vercel:
+            logger.info("⚡ [Serverless/Vercel] 캐시가 없거나 만료되어 동기식(Lazy Loading) 시세 갱신을 실행합니다...")
+            return self._calculate_themes_summary()
 
         # 2. 캐시가 존재하지만 오래된(Stale) 경우, 백그라운드에서 갱신하고 기존 캐시 즉시 리턴 (Stale-While-Revalidate)
         if self.naver_themes_summary_cache:
@@ -196,6 +202,7 @@ class NaverThemeService:
             "step": self.load_status.get("step", "idle"),
             "progress": self.load_status.get("progress", 0)
         }
+
 
     def _run_cache_update_bg(self):
         try:
@@ -1072,10 +1079,56 @@ class NaverThemeService:
         except Exception as e:
             logger.error(f"Slack 발송 실패: {e}")
 
+    def fetch_stock_chart_data(self, stock_code: str) -> Dict[str, Any]:
+        """특정 종목의 당일 주가 변동 차트 데이터 조회 (5분 주기, 야후 파이낸스 연동)"""
+        import time
+        import requests
+        code = stock_code.strip()
+        if len(code) == 6 and code.isdigit():
+            suffixes = [".KS", ".KQ"]
+            for suffix in suffixes:
+                symbol = f"{code}{suffix}"
+                url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=5m&range=1d"
+                try:
+                    r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=3.0)
+                    if r.status_code == 200:
+                        chart_res = r.json()
+                        result = chart_res.get("chart", {}).get("result")
+                        if result and result[0].get("timestamp"):
+                            res_data = result[0]
+                            meta = res_data.get("meta", {})
+                            timestamps = res_data.get("timestamp", [])
+                            closes = res_data.get("indicators", {}).get("quote", [{}])[0].get("close", [])
+                            
+                            points = []
+                            for t, c in zip(timestamps, closes):
+                                if c is not None:
+                                    # KST 시간 변환 (KST = UTC + 9시간)
+                                    # 로컬 시간대 기준 포맷팅
+                                    local_time = time.localtime(t)
+                                    points.append({
+                                        "time": time.strftime("%H:%M", local_time),
+                                        "price": round(c, 2)
+                                    })
+                            
+                            if points:
+                                return {
+                                    "status": "success",
+                                    "symbol": symbol,
+                                    "companyName": meta.get("symbol", symbol),
+                                    "prevClose": meta.get("previousClose", 0.0),
+                                    "points": points
+                                }
+                except Exception as e:
+                    logger.warning(f"야후 파이낸스 차트 조회 에러 ({symbol}): {e}")
+                    
+        return {"status": "error", "message": "차트 데이터를 가져올 수 없거나 지원하지 않는 종목코드입니다."}
+
     def send_theme_leaders_summary_to_slack(self):
         """30분 단위 주기적 호출: 각 테마의 대장주 및 1등주 목록을 요약하여 Slack 채널에 파일(스니펫) 형태로 업로드합니다."""
         from datetime import datetime
         import tempfile
+        import os
         logger.info("[SLACK SUMMARY] 30분 단위 테마별 대장주 및 1등주 요약 알림 준비 시작 (파일 업로드 방식)...")
 
         # 1. 텍스트 파일로 저장할 내용 생성
@@ -1176,146 +1229,8 @@ class NaverThemeService:
         return "\n".join(lines)
 
     def get_stock_network(self, stock_name_or_code: str) -> Dict[str, Any]:
-        """
-        특정 종목을 기준으로 소속된 테마들과 해당 테마에 수속된 타 종목들과의 관계(마인드맵용 데이터)를 반환합니다.
-        """
-        if os.getenv("USE_DUMMY", "false").lower() == "true":
-            return self.get_dummy_stock_network(stock_name_or_code)
-
-        self.ensure_mapping_data()
-        if self.mapping_df.empty:
-            return {"status": "error", "message": "테마 매핑 데이터를 확보하지 못했습니다."}
-
-        # 1. 종목 검색 (코드 검색 -> 정확한 이름 검색 -> 부분 일치 검색 순)
-        stock_name_or_code = stock_name_or_code.strip()
-        target_df = self.mapping_df[self.mapping_df['stock_code'] == stock_name_or_code]
-        if target_df.empty:
-            target_df = self.mapping_df[self.mapping_df['stock_name'].str.lower() == stock_name_or_code.lower()]
-        if target_df.empty:
-            target_df = self.mapping_df[self.mapping_df['stock_name'].str.lower().str.contains(stock_name_or_code.lower())]
-
-        if target_df.empty:
-            return {"status": "error", "message": f"'{stock_name_or_code}' 종목을 찾을 수 없습니다."}
-
-        stock_code = target_df.iloc[0]['stock_code']
-        stock_name = target_df.iloc[0]['stock_name']
-
-        # 2. 캐시 보증
-        if not self.naver_themes_summary_cache:
-            self._calculate_themes_summary()
-
-        if not self.naver_themes_summary_cache:
-            return {"status": "error", "message": "실시간 테마 분석 데이터가 없습니다."}
-
-        # 3. 해당 종목이 속한 전체 테마명 리스트업
-        mapped_theme_names = self.mapping_df[self.mapping_df['stock_code'] == stock_code]['theme_name'].unique().tolist()
-
-        # 4. 연관 테마 정보 추출
-        themes_list = []
-        for theme_item in self.naver_themes_summary_cache.get("themes", []):
-            t_name = theme_item["theme_name"]
-            has_stock = any(s.get("stock_code") == stock_code for s in theme_item.get("top_stocks", []))
-            if t_name in mapped_theme_names or has_stock:
-                themes_list.append({
-                    "theme_name": t_name,
-                    "avg_rate": theme_item["avg_rate"],
-                    "total_volume_str": theme_item.get("total_volume_str", ""),
-                    "stocks": theme_item.get("top_stocks", []),
-                    "source": theme_item.get("source", "naver")
-                })
-
-        # 5. 기준 종목의 단가 및 등락률 최신 정보 획득
-        stock_price_str = "-"
-        stock_rate_str = "0.00%"
-        found = False
-        for t in themes_list:
-            for s in t["stocks"]:
-                if s["stock_code"] == stock_code:
-                    stock_price_str = s["price_str"]
-                    stock_rate_str = s["rate_str"]
-                    found = True
-                    break
-            if found:
-                break
-
-        if not found:
-            try:
-                price_info = self.fetch_naver_realtime_prices([stock_code]).get(stock_code, {})
-                if price_info:
-                    p_won = price_info.get("price", 0)
-                    r_val = price_info.get("rate", 0.0)
-                    stock_price_str = f"{p_won:,}원" if p_won > 0 else "-"
-                    stock_rate_str = f"{r_val:+.2f}%" if r_val is not None else "0.00%"
-            except Exception as e:
-                logger.error(f"실시간 단가 Fallback 조회 에러 ({stock_code}): {e}")
-
-        return {
-            "status": "success",
-            "stock": {
-                "code": stock_code,
-                "name": stock_name,
-                "price_str": stock_price_str,
-                "rate_str": stock_rate_str
-            },
-            "themes": themes_list
-        }
-
-    def get_dummy_stock_network(self, stock_name_or_code: str) -> Dict[str, Any]:
-        stock_name_or_code = stock_name_or_code.strip()
-        code = "000660"
-        name = "SK하이닉스"
-        if "제주" in stock_name_or_code or "080220" in stock_name_or_code:
-            code = "080220"
-            name = "제주반도체"
-        elif "삼성" in stock_name_or_code or "005930" in stock_name_or_code:
-            code = "005930"
-            name = "삼성전자"
-
-        res_summary = self.get_dummy_themes_data()
-        themes_list = []
-        for idx, t in enumerate(res_summary["themes"]):
-            if code in ["000660", "005930"] and "삼성전자" in t["theme_name"]:
-                themes_list.append({
-                    "theme_name": t["theme_name"],
-                    "avg_rate": t["avg_rate"],
-                    "total_volume_str": t.get("total_volume_str", "12조 4,500억 원"),
-                    "stocks": t.get("top_stocks", []),
-                    "source": t.get("source", "both" if idx % 2 == 0 else "naver")
-                })
-            elif code == "080220" and "온디바이스" in t["theme_name"]:
-                themes_list.append({
-                    "theme_name": t["theme_name"],
-                    "avg_rate": t["avg_rate"],
-                    "total_volume_str": t.get("total_volume_str", "3,500억 원"),
-                    "stocks": t.get("top_stocks", []),
-                    "source": t.get("source", "royal")
-                })
-
-        if not themes_list:
-            for idx, t in enumerate(res_summary["themes"][:2]):
-                themes_list.append({
-                    "theme_name": t["theme_name"],
-                    "avg_rate": t["avg_rate"],
-                    "total_volume_str": t.get("total_volume_str", ""),
-                    "stocks": t.get("top_stocks", []),
-                    "source": "naver" if idx == 0 else "royal"
-                })
-
-        p_hynix = getattr(self, "dummy_prices", {}).get("000660", 185000)
-        p_jeju = getattr(self, "dummy_prices", {}).get("080220", 24500)
-        p_samsung = getattr(self, "dummy_prices", {}).get("005930", 75800)
-        price_val = p_hynix if code == "000660" else (p_jeju if code == "080220" else p_samsung)
-
-        return {
-            "status": "success",
-            "stock": {
-                "code": code,
-                "name": name,
-                "price_str": f"{price_val:,}원",
-                "rate_str": "+8.45%" if code == "000660" else ("+12.50%" if code == "080220" else "+4.12%")
-            },
-            "themes": themes_list
-        }
+        return {"status": "error", "message": "Deprecated"}
+        # Deprecated logic removed
 
     def get_dummy_themes_data(self) -> Dict[str, Any]:
         import random

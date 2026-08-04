@@ -218,10 +218,10 @@ class MarketController:
         }
 
     @staticmethod
-    @market_entrypoint.get(path="/stocks/{stock_name_or_code}/network",
-                           summary="[MARKET] : 특정 종목 기준 연관 테마 네트워크(마인드맵) 데이터 조회")
-    def get_stock_network(stock_name_or_code: str):
-        return naver_theme_service.get_stock_network(stock_name_or_code)
+    @market_entrypoint.get(path="/stocks/{stock_code}/chart",
+                           summary="[MARKET] : 특정 종목의 당일 주가 변동 차트 데이터 조회")
+    def get_stock_chart(stock_code: str):
+        return naver_theme_service.fetch_stock_chart_data(stock_code)
 
     @staticmethod
     @market_entrypoint.get(path="/loading-progress",

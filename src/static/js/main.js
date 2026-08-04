@@ -417,9 +417,9 @@ function renderDashboard() {
     }
 
     if (!hasActiveFilters) {
-        // If there are no active filters, only render top 9 volume themes
-        displayThemes = processedThemes.slice(0, 9);
-        headerMsg = `⚡ 실시간 거래대금 상위 TOP 9 테마군 (자동 펼침 모니터링)`;
+        // If there are no active filters, only render top 8 volume themes
+        displayThemes = processedThemes.slice(0, 8);
+        headerMsg = `⚡ 실시간 거래대금 상위 TOP 8 테마군 (자동 펼침 모니터링)`;
     } else {
         // If filtering, render all matched results
         displayThemes = processedThemes;
@@ -483,16 +483,16 @@ function renderDashboard() {
                 }
                 prevPricesMap[stock.stock_code] = stock.price;
 
-                // Drop checks for buy target colors
+                // Drop checks for buy target colors (aligned with backend: 1st zone is -4% ~ -8%, 2nd zone is -8% ~ -12%)
                 const drop = parseFloat(stock.drop);
                 let buyZoneClass = '';
                 
                 if (isLeader || is1st) {
-                    if (drop >= -4.0 && drop <= -3.0) {
+                    if (drop >= -8.0 && drop <= -4.0) {
                         buyZoneClass = 'zone-1';
                         hasAlert1 = true;
                         totalBuyingTargets++;
-                    } else if (drop >= -8.0 && drop < -4.0) {
+                    } else if (drop >= -12.0 && drop < -8.0) {
                         buyZoneClass = 'zone-2';
                         hasAlert2 = true;
                         totalBuyingTargets++;
@@ -500,8 +500,8 @@ function renderDashboard() {
                 }
 
                 let dropColorClass = 'neutral';
-                if (drop < -4.0) dropColorClass = 'warning';
-                else if (drop < -2.0) dropColorClass = 'success';
+                if (drop < -8.0) dropColorClass = 'warning';
+                else if (drop < -4.0) dropColorClass = 'success';
 
                 const rateStockVal = parseFloat(stock.rate);
                 let stockRateClass = 'flat';
@@ -518,7 +518,7 @@ function renderDashboard() {
                         <div class="stock-role-indicator">${roleIcon}</div>
                         <div class="stock-info-block">
                             <div class="stock-name-line">
-                                <span class="stock-name" style="cursor: pointer;" onclick="showStockNetworkMap('${stock.stock_name}')" title="클릭 시 연관 테마 네트워크(마인드맵) 탐색">${stock.stock_name}</span>
+                                <span class="stock-name" style="cursor: pointer;" onclick="showStockNetworkMap('${stock.stock_name}', '${stock.stock_code}')" title="클릭 시 실시간 대장주 주가 차트 모니터링 탐색">${stock.stock_name}</span>
                                 <a href="https://www.tossinvest.com/stocks/A${stock.stock_code}/order" target="_blank" class="stock-code">${stock.stock_code}</a>
                             </div>
                             <div style="font-size: 0.7rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.25rem; margin-top: 0.15rem;">
@@ -546,8 +546,8 @@ function renderDashboard() {
                                 </span>
                             </div>
                             <div style="border-top: 1px dashed rgba(255,255,255,0.15); margin: 0.35rem 0;"></div>
-                            <div class="tooltip-row">1차 매수(-4%~-3%): <span>${stock.buy_zone_1}</span></div>
-                            <div class="tooltip-row">2차 매수(-8%~-4%): <span>${stock.buy_zone_2}</span></div>
+                            <div class="tooltip-row">1차 매수(-4%~-8%): <span>${stock.buy_zone_1}</span></div>
+                            <div class="tooltip-row">2차 매수(-8%~-12%): <span>${stock.buy_zone_2}</span></div>
                         </div>
                     </div>
                 `;
@@ -583,6 +583,14 @@ function renderDashboard() {
             `;
         }
 
+        // Generate alert badge if present
+        let alertBadgeHtml = '';
+        if (hasAlert1) {
+            alertBadgeHtml = `<span class="theme-alert-badge alert-1" style="font-size: 0.65rem; background: rgba(16, 185, 129, 0.12); color: var(--accent-green); padding: 0.15rem 0.35rem; border-radius: 4px; font-weight: 700; border: 1px solid rgba(16, 185, 129, 0.25); margin-left: 0.25rem; display: inline-flex; align-items: center; gap: 2px;">🟢 1차 낙폭</span>`;
+        } else if (hasAlert2) {
+            alertBadgeHtml = `<span class="theme-alert-badge alert-2" style="font-size: 0.65rem; background: rgba(217, 119, 6, 0.12); color: var(--accent-orange); padding: 0.15rem 0.35rem; border-radius: 4px; font-weight: 700; border: 1px solid rgba(217, 119, 6, 0.25); margin-left: 0.25rem; display: inline-flex; align-items: center; gap: 2px;">🟠 2차 낙폭</span>`;
+        }
+
         // Create Card element
         const card = document.createElement('div');
         card.className = `theme-card ${isExpanded ? 'expanded' : ''} ${hasAlert1 ? 'has-alert-1' : ''} ${hasAlert2 ? 'has-alert-2' : ''}`;
@@ -590,9 +598,10 @@ function renderDashboard() {
         card.innerHTML = `
             <div class="theme-card-header" onclick="toggleCard('${theme.theme_name}')">
                 <div class="theme-title-block">
-                    <div style="display: flex; align-items: center; gap: 0.35rem;">
+                    <div style="display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap;">
                         <span class="theme-card-title">${theme.theme_name}</span>
                         ${sourceBadgeHtml}
+                        ${alertBadgeHtml}
                     </div>
                     <span class="theme-card-subtitle" style="display: flex; flex-direction: column; gap: 0.15rem; margin-top: 0.15rem;">
                         <span>매핑 종목 수: ${theme.mapped_count} / ${theme.total_count}</span>
@@ -620,13 +629,13 @@ function renderDashboard() {
     };
 
     if (!hasActiveFilters) {
-        // 네이버 데이터 상단 배치 (TOP 9)
-        const naverThemes = processedThemes.filter(t => t.source === 'naver' || t.source === 'both').slice(0, 9);
-        const royalThemes = processedThemes.filter(t => t.source === 'royal' || t.source === 'both').slice(0, 9);
+        // 네이버 데이터 상단 배치 (TOP 8)
+        const naverThemes = processedThemes.filter(t => t.source === 'naver' || t.source === 'both').slice(0, 8);
+        const royalThemes = processedThemes.filter(t => t.source === 'royal' || t.source === 'both').slice(0, 8);
 
         const naverSectionHeader = document.createElement('div');
         naverSectionHeader.style.cssText = "grid-column: 1 / -1; font-size: 0.95rem; font-weight: 700; color: var(--accent-green); padding: 0.5rem 0 0.4rem 0; border-bottom: 2px solid rgba(16, 185, 129, 0.35); margin-top: 0.25rem; display: flex; align-items: center; gap: 0.5rem; letter-spacing: -0.02em;";
-        naverSectionHeader.innerHTML = `🟢 네이버 실시간 거래대금 상위 테마 (상단 TOP 9)`;
+        naverSectionHeader.innerHTML = `🟢 네이버 실시간 거래대금 상위 테마 (상단 TOP 8)`;
         container.appendChild(naverSectionHeader);
 
         if (naverThemes.length > 0) {
@@ -638,10 +647,10 @@ function renderDashboard() {
             container.appendChild(emptyNaver);
         }
 
-        // 로얄로더 데이터 하단 배치 (TOP 9)
+        // 로얄로더 데이터 하단 배치 (TOP 8)
         const royalSectionHeader = document.createElement('div');
         royalSectionHeader.style.cssText = "grid-column: 1 / -1; font-size: 0.95rem; font-weight: 700; color: var(--accent-blue); padding: 0.5rem 0 0.4rem 0; border-bottom: 2px solid rgba(29, 78, 216, 0.35); margin-top: 1.5rem; display: flex; align-items: center; gap: 0.5rem; letter-spacing: -0.02em;";
-        royalSectionHeader.innerHTML = `🔵 로얄로더 실시간 거래대금 상위 테마 (하단 TOP 9)`;
+        royalSectionHeader.innerHTML = `🔵 로얄로더 실시간 거래대금 상위 테마 (하단 TOP 8)`;
         container.appendChild(royalSectionHeader);
 
         if (royalThemes.length > 0) {
@@ -1054,79 +1063,7 @@ function renderLeaderSectorsList() {
     });
 }
 
-// ==========================================
-// Stock Theme Network Mindmap Explorer
-// ==========================================
-let activeMainView = 'grid'; // 'grid' or 'network'
-let currentNetworkStock = ''; // Track currently active network stock
-let panX = 0;
-let panY = 0;
-let zoomScale = 1;
-let collapsedThemesSet = new Set();
-let lastNetworkData = null;
 
-function toggleThemeCollapse(themeName) {
-    if (collapsedThemesSet.has(themeName)) {
-        collapsedThemesSet.delete(themeName);
-    } else {
-        collapsedThemesSet.add(themeName);
-    }
-    if (lastNetworkData) {
-        renderNetworkMindmap(lastNetworkData);
-    }
-}
-
-function switchMainView(viewType) {
-    activeMainView = viewType;
-    const tabGrid = document.getElementById('tab-grid-view');
-    const tabNetwork = document.getElementById('tab-network-view');
-    const tabStock = document.getElementById('tab-stock-view');
-    const gridContainer = document.getElementById('grid-view-container');
-    const networkContainer = document.getElementById('network-view-container');
-    const stockContainer = document.getElementById('stock-view-container');
-
-    // Reset styles
-    [tabGrid, tabNetwork, tabStock].forEach(tab => {
-        if (tab) {
-            tab.classList.remove('active');
-            tab.style.color = 'var(--text-muted)';
-        }
-    });
-    [gridContainer, networkContainer, stockContainer].forEach(c => {
-        if (c) c.style.display = 'none';
-    });
-
-    if (viewType === 'grid') {
-        if (tabGrid) {
-            tabGrid.classList.add('active');
-            tabGrid.style.color = 'var(--accent-blue)';
-        }
-        if (gridContainer) gridContainer.style.display = 'block';
-        renderDashboard();
-    } else if (viewType === 'network') {
-        if (tabNetwork) {
-            tabNetwork.classList.add('active');
-            tabNetwork.style.color = 'var(--accent-blue)';
-        }
-        if (networkContainer) networkContainer.style.display = 'flex';
-        
-        // Auto-load a stock network if none is active
-        if (!currentNetworkStock) {
-            let defaultStock = 'SK하이닉스';
-            if (themesData && themesData.length > 0 && themesData[0].top_stocks && themesData[0].top_stocks.length > 0) {
-                defaultStock = themesData[0].top_stocks[0].stock_name;
-            }
-            fetchAndRenderNetwork(defaultStock);
-        }
-    } else if (viewType === 'stock') {
-        if (tabStock) {
-            tabStock.classList.add('active');
-            tabStock.style.color = 'var(--accent-blue)';
-        }
-        if (stockContainer) stockContainer.style.display = 'flex';
-        renderConsolidatedStocks();
-    }
-}
 
 function renderConsolidatedStocks() {
     const tbody = document.getElementById('consolidated-stock-tbody');
@@ -1264,7 +1201,7 @@ function renderConsolidatedStocks() {
         tr.innerHTML = `
             <td style="padding: 0.6rem 0.5rem; font-weight: 600; color: var(--text-primary);">
                 <div style="display: flex; align-items: center; gap: 0.2rem;">
-                    <span style="cursor: pointer; text-decoration: underline; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" onclick="showStockNetworkMap('${stock.name}')" title="클릭 시 연관 테마 네트워크(마인드맵) 탐색">${stock.name}</span>
+                    <span style="cursor: pointer; text-decoration: underline; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" onclick="showStockNetworkMap('${stock.name}', '${stock.code}')" title="클릭 시 실시간 대장주 주가 차트 모니터링 탐색">${stock.name}</span>
                     ${leaderBadgeHtml}
                 </div>
                 <div style="font-size: 0.65rem; color: var(--text-muted); margin-top: 0.1rem;">${stock.code}</div>
@@ -1286,7 +1223,7 @@ function renderConsolidatedStocks() {
             </td>
             <td style="padding: 0.6rem 0.5rem; text-align: center;">
                 <div style="display: flex; gap: 0.4rem; justify-content: center; align-items: center;">
-                    <button onclick="showStockNetworkMap('${stock.name}')" style="padding: 0.25rem 0.5rem; background: var(--accent-blue-glow); color: var(--accent-blue); border: 1px solid var(--accent-blue); border-radius: 4px; font-size: 0.65rem; font-weight: 600; cursor: pointer;" title="연관 테마 마인드맵 보기">마인드맵</button>
+                    <button onclick="showStockNetworkMap('${stock.name}', '${stock.code}')" style="padding: 0.25rem 0.5rem; background: var(--accent-blue-glow); color: var(--accent-blue); border: 1px solid var(--accent-blue); border-radius: 4px; font-size: 0.65rem; font-weight: 600; cursor: pointer;" title="실시간 주가 차트 보기">차트</button>
                     <a href="https://www.tossinvest.com/stocks/A${stock.code}/order" target="_blank" style="padding: 0.25rem 0.5rem; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; border-radius: 4px; font-size: 0.65rem; font-weight: 600; text-decoration: none; display: inline-block;" title="토스증권에서 주문">토스</a>
                 </div>
             </td>
@@ -1304,414 +1241,247 @@ function renderConsolidatedStocks() {
     });
 }
 
-async function fetchAndRenderNetwork(stockName) {
-    if (!stockName) return;
-    
-    // Clear collapse states and cache when searching/loading a new stock
-    if (currentNetworkStock !== stockName) {
-        collapsedThemesSet.clear();
-    }
-    currentNetworkStock = stockName;
-    
-    const loader = document.getElementById('network-loader');
-    if (loader) loader.style.display = 'flex';
-    
-    const input = document.getElementById('network-search-input');
-    if (input) input.value = stockName;
-    
-    try {
-        const response = await fetch(`/api/v1/market/stocks/${encodeURIComponent(stockName)}/network`);
-        const result = await response.json();
-        
-        // Race condition check: Only render if the current active stock matches the requested stock
-        if (currentNetworkStock !== stockName) {
-            console.log(`Skipped rendering for ${stockName} due to race condition.`);
-            return;
+// ==========================================
+// 실시간 대장주 주가 변동 차트 모니터링
+// ==========================================
+let activeMainView = 'grid'; // 'grid', 'network', 'stock'
+let currentNetworkStock = ''; // Track currently highlighted stock code
+let chartInstances = {}; // To store Chart.js instances
+
+function switchMainView(viewType) {
+    activeMainView = viewType;
+    const tabGrid = document.getElementById('tab-grid-view');
+    const tabNetwork = document.getElementById('tab-network-view');
+    const tabStock = document.getElementById('tab-stock-view');
+    const gridContainer = document.getElementById('grid-view-container');
+    const networkContainer = document.getElementById('network-view-container');
+    const stockContainer = document.getElementById('stock-view-container');
+
+    // Reset styles
+    [tabGrid, tabNetwork, tabStock].forEach(tab => {
+        if (tab) {
+            tab.classList.remove('active');
+            tab.style.color = 'var(--text-muted)';
         }
+    });
+    [gridContainer, networkContainer, stockContainer].forEach(c => {
+        if (c) c.style.display = 'none';
+    });
+
+    if (viewType === 'grid') {
+        if (tabGrid) {
+            tabGrid.classList.add('active');
+            tabGrid.style.color = 'var(--accent-blue)';
+        }
+        if (gridContainer) gridContainer.style.display = 'block';
+        renderDashboard();
+    } else if (viewType === 'network') {
+        if (tabNetwork) {
+            tabNetwork.classList.add('active');
+            tabNetwork.style.color = 'var(--accent-blue)';
+        }
+        if (networkContainer) networkContainer.style.display = 'block';
+        renderLeaderCharts();
+    } else if (viewType === 'stock') {
+        if (tabStock) {
+            tabStock.classList.add('active');
+            tabStock.style.color = 'var(--accent-blue)';
+        }
+        if (stockContainer) stockContainer.style.display = 'flex';
+        renderConsolidatedStocks();
+    }
+}
+
+function showStockNetworkMap(stockName, stockCode) {
+    switchMainView('network');
+    
+    // Smooth scroll and flash highlight
+    setTimeout(() => {
+        const card = document.getElementById(`chart-card-${stockCode}`);
+        if (card) {
+            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            card.classList.add('flash-chart-card-active');
+            setTimeout(() => {
+                card.classList.remove('flash-chart-card-active');
+            }, 3000);
+        }
+    }, 300);
+}
+
+function renderLeaderCharts() {
+    const container = document.getElementById('charts-grid-container');
+    if (!container) return;
+
+    // Destroy existing charts to prevent memory leaks
+    Object.values(chartInstances).forEach(chart => {
+        if (chart) chart.destroy();
+    });
+    chartInstances = {};
+    container.innerHTML = '';
+
+    if (!themesData || themesData.length === 0) {
+        container.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-muted); font-size: 0.9rem;">수집된 테마 데이터가 아직 없습니다.</div>';
+        return;
+    }
+
+    // Filter themes containing stock data, limit to top 8
+    const targetThemes = themesData.slice(0, 8);
+
+    targetThemes.forEach(theme => {
+        if (!theme.top_stocks || theme.top_stocks.length === 0) return;
+
+        // Find leader stock
+        const stock = theme.top_stocks.find(s => s.role.includes("대장주") || s.role.includes("1등주")) || theme.top_stocks[0];
         
-        if (result.status === 'success') {
-            lastNetworkData = result;
-            renderNetworkMindmap(result);
+        // Decide colors
+        const rateVal = parseFloat(stock.rate);
+        let rateColor = 'var(--text-muted)';
+        let rateSign = '';
+        if (rateVal > 0) {
+            rateColor = 'var(--accent-red)';
+            rateSign = '+';
+        } else if (rateVal < 0) {
+            rateColor = 'var(--accent-blue)';
+        }
+
+        const drop = parseFloat(stock.drop);
+        let dropColor = 'var(--text-muted)';
+        if (drop < -8.0) dropColor = 'var(--accent-orange)';
+        else if (drop < -4.0) dropColor = 'var(--accent-green)';
+
+        // Create card element
+        const card = document.createElement('div');
+        card.className = 'chart-card';
+        card.id = `chart-card-${stock.stock_code}`;
+        card.innerHTML = `
+            <div class="chart-card-header">
+                <div>
+                    <span class="chart-theme-badge">${theme.theme_name}</span>
+                    <div class="chart-stock-title">${stock.stock_name} <span class="chart-stock-code">${stock.stock_code}</span></div>
+                </div>
+                <div style="text-align: right;">
+                    <div style="font-size: 0.95rem; font-weight: 700; color: ${rateColor};">${stock.price_str}</div>
+                    <div style="font-size: 0.72rem; font-weight: 600; color: ${rateColor};">${rateSign}${stock.rate_str}</div>
+                </div>
+            </div>
+            <div class="chart-canvas-container">
+                <canvas id="canvas-${stock.stock_code}"></canvas>
+                <div class="chart-spinner" id="spinner-${stock.stock_code}">
+                    <div class="spinner"></div>
+                </div>
+            </div>
+            <div class="chart-card-footer">
+                <div>당일 낙폭: <span style="font-weight: 700; color: ${dropColor};">${stock.drop_str}</span></div>
+                <div class="chart-target-bands">
+                    <span class="band-pill zone-1">1차: ${stock.buy_zone_1}</span>
+                    <span class="band-pill zone-2">2차: ${stock.buy_zone_2}</span>
+                </div>
+            </div>
+        `;
+        container.appendChild(card);
+
+        // Load chart asynchronously
+        fetchAndDrawChart(stock.stock_code);
+    });
+}
+
+async function fetchAndDrawChart(stockCode) {
+    const spinner = document.getElementById(`spinner-${stockCode}`);
+    const canvas = document.getElementById(`canvas-${stockCode}`);
+    if (!canvas) return;
+
+    try {
+        const response = await fetch(`/api/v1/market/stocks/${stockCode}/chart`);
+        const result = await response.json();
+
+        if (spinner) spinner.style.display = 'none';
+
+        if (result.status === 'success' && result.points && result.points.length > 0) {
+            const ctx = canvas.getContext('2d');
+            const prices = result.points.map(p => p.price);
+            const labels = result.points.map(p => p.time);
+            const prevClose = result.prevClose || prices[0];
+
+            // Line Color (red for positive vs previous close or first price, blue for negative)
+            const currentPrice = prices[prices.length - 1];
+            const isPositive = currentPrice >= prevClose;
+            const lineColor = isPositive ? 'rgba(239, 68, 68, 1)' : 'rgba(59, 130, 246, 1)';
+            const fillColor = isPositive ? 'rgba(239, 68, 68, 0.05)' : 'rgba(59, 130, 246, 0.05)';
+
+            // Draw line chart
+            const chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '주가',
+                        data: prices,
+                        borderColor: lineColor,
+                        borderWidth: 2,
+                        backgroundColor: fillColor,
+                        fill: true,
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                        tension: 0.15
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            backgroundColor: 'rgba(15, 23, 42, 0.85)',
+                            titleFont: { size: 10, weight: 'bold' },
+                            bodyFont: { size: 10 },
+                            callbacks: {
+                                label: function(context) {
+                                    return ` ${context.parsed.y.toLocaleString()}원`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            ticks: {
+                                maxRotation: 0,
+                                autoSkip: true,
+                                maxTicksLimit: 5,
+                                font: { size: 8 }
+                            }
+                        },
+                        y: {
+                            grid: { color: 'rgba(0, 0, 0, 0.03)' },
+                            ticks: {
+                                font: { size: 8 },
+                                callback: function(value) {
+                                    return value.toLocaleString();
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            chartInstances[stockCode] = chart;
         } else {
-            alert(result.message || '네트워크 조회 실패');
+            drawEmptyChartMsg(canvas, '차트 데이터 없음');
         }
     } catch (e) {
-        console.error('Error fetching stock network:', e);
-    } finally {
-        if (loader && currentNetworkStock === stockName) {
-            loader.style.display = 'none';
-        }
+        console.error(`Error loading chart for ${stockCode}:`, e);
+        if (spinner) spinner.style.display = 'none';
+        drawEmptyChartMsg(canvas, '로딩 실패');
     }
 }
 
-function searchNetworkStock() {
-    const input = document.getElementById('network-search-input');
-    if (input) {
-        const val = input.value.trim();
-        if (val) {
-            fetchAndRenderNetwork(val);
-        }
-    }
-}
-
-function showStockNetworkMap(stockName) {
-    currentNetworkStock = stockName; // Set it first to prevent switchMainView from loading the default stock
-    switchMainView('network');
-    fetchAndRenderNetwork(stockName);
-}
-
-function resetNetworkTransform() {
-    panX = 0;
-    panY = 0;
-    zoomScale = 1;
-    updateNetworkTransform();
-}
-
-function zoomNetwork(factor) {
-    zoomScale *= factor;
-    zoomScale = Math.max(0.3, Math.min(3, zoomScale));
-    updateNetworkTransform();
-}
-
-function updateNetworkTransform() {
-    const g = document.getElementById('network-g');
-    if (g) {
-        g.setAttribute('transform', `translate(${panX}, ${panY}) scale(${zoomScale})`);
-    }
-}
-
-function initNetworkSVGEvents() {
-    const svg = document.getElementById('network-svg');
-    if (!svg) return;
-
-    let isDragging = false;
-    let startX, startY;
-
-    svg.addEventListener('mousedown', (e) => {
-        if (e.target.closest('.network-node-html')) return;
-        isDragging = true;
-        svg.style.cursor = 'grabbing';
-        startX = e.clientX - panX;
-        startY = e.clientY - panY;
-    });
-
-    svg.addEventListener('mousemove', (e) => {
-        if (!isDragging) return;
-        panX = e.clientX - startX;
-        panY = e.clientY - startY;
-        updateNetworkTransform();
-    });
-
-    svg.addEventListener('mouseup', () => {
-        isDragging = false;
-        svg.style.cursor = 'grab';
-    });
-
-    svg.addEventListener('mouseleave', () => {
-        isDragging = false;
-        svg.style.cursor = 'grab';
-    });
-
-    svg.addEventListener('wheel', (e) => {
-        e.preventDefault();
-        const factor = 1.1;
-        if (e.deltaY < 0) {
-            zoomScale *= factor;
-        } else {
-            zoomScale /= factor;
-        }
-        zoomScale = Math.max(0.3, Math.min(3, zoomScale));
-        updateNetworkTransform();
-    }, { passive: false });
-}
-
-function renderNetworkMindmap(data) {
-    const svg = document.getElementById('network-svg');
-    const linksGroup = document.getElementById('network-links');
-    const nodesGroup = document.getElementById('network-nodes');
-    if (!svg || !linksGroup || !nodesGroup) return;
-
-    // Clear previous
-    linksGroup.innerHTML = '';
-    nodesGroup.innerHTML = '';
-
-    const width = svg.clientWidth || 800;
-    const height = svg.clientHeight || 600;
-    
-    // Center coordinates
-    const cx = width / 2;
-    const cy = height / 2;
-
-    resetNetworkTransform();
-
-    // Sort themes by avg_rate in descending order (strongest first)
-    const themes = (data.themes || []).sort((a, b) => (parseFloat(b.avg_rate) || 0) - (parseFloat(a.avg_rate) || 0));
-    const mainStock = data.stock;
-
-    // Helper to get filtered and sorted peer stocks for a theme
-    const getSortedPeerStocks = (theme) => {
-        if (collapsedThemesSet.has(theme.theme_name)) {
-            return [];
-        }
-        return (theme.stocks || [])
-            .filter(s => s.stock_code !== mainStock.code)
-            .sort((a, b) => {
-                const valA = parseFloat(a.rate_str.replace('%', '').replace('+', '')) || 0;
-                const valB = parseFloat(b.rate_str.replace('%', '').replace('+', '')) || 0;
-                return valB - valA;
-            });
-    };
-
-    // Split themes by source: Left (Naver or Both) vs Right (Royal Roader or Both)
-    const leftThemes = themes.filter(t => t.source === 'naver' || t.source === 'both');
-    const rightThemes = themes.filter(t => t.source === 'royal' || t.source === 'both');
-
-    const slotHeight = 65; // vertical height per slot
-
-    // Calculate vertical heights for Left side
-    const leftHeights = leftThemes.length > 0 ? leftThemes.map(theme => {
-        const validStocks = getSortedPeerStocks(theme);
-        return Math.max(1, validStocks.length) * slotHeight;
-    }) : [slotHeight * 2];
-    const leftTotalHeight = leftHeights.reduce((sum, h) => sum + h, 0);
-
-    // Calculate vertical heights for Right side
-    const rightHeights = rightThemes.length > 0 ? rightThemes.map(theme => {
-        const validStocks = getSortedPeerStocks(theme);
-        return Math.max(1, validStocks.length) * slotHeight;
-    }) : [slotHeight * 2];
-    const rightTotalHeight = rightHeights.reduce((sum, h) => sum + h, 0);
-
-    const maxBranchHeight = Math.max(leftTotalHeight, rightTotalHeight);
-
-    // 1. Draw Columns Grid Lines and Labels (Visual Hierarchy Lanes)
-    // 5 vertical columns: Peers (L) -> Themes (L) -> Root Stock -> Themes (R) -> Peers (R)
-    const minGridY = cy - Math.max(400, maxBranchHeight / 2 + 50);
-    const maxGridY = cy + Math.max(400, maxBranchHeight / 2 + 50);
-    const columns = [
-        { x: cx - 360, label: "🟢 네이버 연관종목" },
-        { x: cx - 180, label: "🟢 네이버 소속테마" },
-        { x: cx,       label: "기준 종목 (Root)" },
-        { x: cx + 180, label: "🔵 로얄 소속테마" },
-        { x: cx + 360, label: "🔵 로얄 연관종목" }
-    ];
-
-    columns.forEach(col => {
-        // Draw dashed grid line
-        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        line.setAttribute('x1', col.x);
-        line.setAttribute('y1', minGridY);
-        line.setAttribute('x2', col.x);
-        line.setAttribute('y2', maxGridY);
-        line.setAttribute('stroke', 'rgba(226, 232, 240, 0.85)');
-        line.setAttribute('stroke-width', '1.5');
-        line.setAttribute('stroke-dasharray', '4,4');
-        linksGroup.appendChild(line);
-
-        // Draw header background pill (rounded rect)
-        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-        rect.setAttribute('x', col.x - 70);
-        rect.setAttribute('y', cy - Math.max(350, maxBranchHeight / 2 + 30));
-        rect.setAttribute('width', 140);
-        rect.setAttribute('height', 24);
-        rect.setAttribute('rx', 12);
-        rect.setAttribute('fill', '#f8fafc');
-        rect.setAttribute('stroke', '#e2e8f0');
-        rect.setAttribute('stroke-width', '1');
-        linksGroup.appendChild(rect);
-
-        // Draw column label text
-        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        text.setAttribute('x', col.x);
-        text.setAttribute('y', cy - Math.max(334, maxBranchHeight / 2 + 14));
-        text.setAttribute('text-anchor', 'middle');
-        text.setAttribute('fill', 'var(--text-secondary)');
-        text.setAttribute('font-size', '10px');
-        text.setAttribute('font-weight', '800');
-        text.setAttribute('style', 'font-family: inherit;');
-        text.textContent = col.label;
-        linksGroup.appendChild(text);
-    });
-
-    // Create main stock node (vibrant blue-indigo gradient card) in the exact center
-    createSVGNode(nodesGroup, cx, cy, 185, 75, `
-        <div class="network-node-html main-node" style="width: 100%; height: 100%; background: linear-gradient(135deg, #1e40af, #3b82f6); border: 2.5px solid #ffffff; border-radius: 12px; box-shadow: 0 10px 20px rgba(30, 64, 175, 0.25); display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 0.5rem; text-align: center; cursor: default; user-select: none;">
-            <div style="font-size: 0.85rem; font-weight: 800; color: #ffffff; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${mainStock.name}</div>
-            <div style="font-size: 0.65rem; color: rgba(255, 255, 255, 0.75); font-weight: 600; margin-top: 0.1rem;">${mainStock.code}</div>
-            <div style="font-size: 0.78rem; font-weight: 700; color: #fef08a; margin-top: 0.15rem;">${mainStock.price_str} (${mainStock.rate_str})</div>
-        </div>
-    `);
-
-    // 2. Render Left Side Themes & Stocks (Naver Data)
-    if (leftThemes.length > 0) {
-        let currentLeftY = cy - leftTotalHeight / 2;
-        leftThemes.forEach((theme, idx) => {
-            const themeHeight = leftHeights[idx];
-            const tx = cx - 180;
-            const ty = currentLeftY + themeHeight / 2;
-
-            // Color connection lines based on theme avg_rate
-            const rateVal = parseFloat(theme.avg_rate);
-            const themeRateColor = rateVal > 0 ? 'rgba(239, 68, 68, 0.65)' : (rateVal < 0 ? 'rgba(59, 130, 246, 0.65)' : '#cbd5e1');
-
-            // Render theme node (isLeft = true, collapse button is on the left edge)
-            renderThemeNode(nodesGroup, tx, ty, theme, true, mainStock.code);
-            
-            // Link from center root stock to theme
-            drawBezierCurve(linksGroup, cx, cy, tx, ty, themeRateColor, 2, false);
-
-            // Render stocks and link from theme to stocks
-            const validStocks = getSortedPeerStocks(theme);
-            const sx = cx - 360;
-            
-            validStocks.forEach((stock, sIdx) => {
-                const sy = currentLeftY + sIdx * slotHeight + slotHeight / 2;
-                renderStockNode(nodesGroup, sx, sy, stock);
-                drawBezierCurve(linksGroup, tx, ty, sx, sy, '#cbd5e1', 1.5, false);
-            });
-
-            currentLeftY += themeHeight;
-        });
-    } else {
-        const tx = cx - 180;
-        const ty = cy;
-        createSVGNode(nodesGroup, tx, ty, 150, 48, `
-            <div class="network-node-html" style="width: 100%; height: 100%; background: #f8fafc; border: 1.5px dashed var(--border-color); border-radius: 8px; display: flex; justify-content: center; align-items: center; color: var(--text-muted); font-size: 0.75rem; font-weight: 600; text-align: center; user-select: none;">
-                🟢 네이버 테마 없음
-            </div>
-        `);
-        drawBezierCurve(linksGroup, cx, cy, tx, ty, '#e2e8f0', 1.5, true);
-    }
-
-    // 3. Render Right Side Themes & Stocks (Royal Roader Data)
-    if (rightThemes.length > 0) {
-        let currentRightY = cy - rightTotalHeight / 2;
-        rightThemes.forEach((theme, idx) => {
-            const themeHeight = rightHeights[idx];
-            const tx = cx + 180;
-            const ty = currentRightY + themeHeight / 2;
-
-            // Color connection lines based on theme avg_rate
-            const rateVal = parseFloat(theme.avg_rate);
-            const themeRateColor = rateVal > 0 ? 'rgba(239, 68, 68, 0.65)' : (rateVal < 0 ? 'rgba(59, 130, 246, 0.65)' : '#cbd5e1');
-
-            // Render theme node (isLeft = false, collapse button is on the right edge)
-            renderThemeNode(nodesGroup, tx, ty, theme, false, mainStock.code);
-            
-            // Link from center root stock to theme
-            drawBezierCurve(linksGroup, cx, cy, tx, ty, themeRateColor, 2, false);
-
-            // Render stocks and link from theme to stocks
-            const validStocks = getSortedPeerStocks(theme);
-            const sx = cx + 360;
-            
-            validStocks.forEach((stock, sIdx) => {
-                const sy = currentRightY + sIdx * slotHeight + slotHeight / 2;
-                renderStockNode(nodesGroup, sx, sy, stock);
-                drawBezierCurve(linksGroup, tx, ty, sx, sy, '#cbd5e1', 1.5, false);
-            });
-
-            currentRightY += themeHeight;
-        });
-    } else {
-        const tx = cx + 180;
-        const ty = cy;
-        createSVGNode(nodesGroup, tx, ty, 150, 48, `
-            <div class="network-node-html" style="width: 100%; height: 100%; background: #f8fafc; border: 1.5px dashed var(--border-color); border-radius: 8px; display: flex; justify-content: center; align-items: center; color: var(--text-muted); font-size: 0.75rem; font-weight: 600; text-align: center; user-select: none;">
-                🔵 로얄로더 테마 없음
-            </div>
-        `);
-        drawBezierCurve(linksGroup, cx, cy, tx, ty, '#e2e8f0', 1.5, true);
-    }
-}
-
-function renderThemeNode(parent, x, y, theme, isLeft, mainStockCode) {
-    const rateVal = parseFloat(theme.avg_rate);
-    const rateColor = rateVal > 0 ? 'var(--accent-red)' : (rateVal < 0 ? 'var(--accent-blue)' : 'var(--text-muted)');
-    const rateSign = rateVal > 0 ? '+' : '';
-    
-    // Check collapse state
-    const isCollapsed = collapsedThemesSet.has(theme.theme_name);
-    const peerStocksCount = (theme.stocks || []).filter(s => s.stock_code !== mainStockCode).length;
-    
-    // Position toggle button on Left edge or Right edge
-    const toggleStyle = isLeft ? 'left: -10px;' : 'right: -10px;';
-    const toggleHtml = peerStocksCount > 0
-        ? `<button onclick="event.stopPropagation(); toggleThemeCollapse('${theme.theme_name}')" style="position: absolute; ${toggleStyle} top: 50%; transform: translateY(-50%); width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--border-color); background: #ffffff; color: var(--text-secondary); font-size: 0.65rem; font-weight: 800; cursor: pointer; display: flex; justify-content: center; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: all 0.2s; outline: none; z-index: 20;" onmouseover="this.style.borderColor='var(--accent-blue)'; this.style.color='var(--accent-blue)';" onmouseout="this.style.borderColor='var(--border-color)'; this.style.color='var(--text-secondary)';">${isCollapsed ? `+${peerStocksCount}` : '-'}</button>`
-        : '';
-
-    // Style card based on positive/negative rate
-    let cardBorderColor = 'var(--border-color)';
-    if (rateVal > 3.0) cardBorderColor = 'rgba(239, 68, 68, 0.4)'; // Red outline for strong themes
-    else if (rateVal < -3.0) cardBorderColor = 'rgba(59, 130, 246, 0.4)'; // Blue outline for weak themes
-
-    let badgeHtml = '';
-    if (theme.source === 'both') {
-        badgeHtml = `<div style="font-size: 0.58rem; color: #7c3aed; font-weight: 800; margin-bottom: 0.1rem;">⚡ 네이버·로얄</div>`;
-    } else if (theme.source === 'royal') {
-        badgeHtml = `<div style="font-size: 0.58rem; color: var(--accent-blue); font-weight: 800; margin-bottom: 0.1rem;">🔵 로얄로더</div>`;
-    } else {
-        badgeHtml = `<div style="font-size: 0.58rem; color: var(--accent-green); font-weight: 800; margin-bottom: 0.1rem;">🟢 네이버</div>`;
-    }
-
-    createSVGNode(parent, x, y, 155, 60, `
-        <div class="network-node-html theme-node" style="width: 100%; height: 100%; background: #f8fafc; border: 2px solid ${cardBorderColor}; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 0.35rem; text-align: center; cursor: default; user-select: none; position: relative;">
-            ${badgeHtml}
-            <div style="font-size: 0.72rem; font-weight: 700; color: var(--text-secondary); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${theme.theme_name}">${theme.theme_name}</div>
-            <div style="font-size: 0.65rem; font-weight: 700; color: ${rateColor}; margin-top: 0.05rem;">평균 ${rateSign}${theme.avg_rate}%</div>
-            ${toggleHtml}
-        </div>
-    `);
-}
-
-function renderStockNode(parent, x, y, stock) {
-    const stockRateVal = parseFloat(stock.rate_str.replace('%', '').replace('+', ''));
-    const stockRateColor = stockRateVal > 0 ? 'var(--accent-red)' : (stockRateVal < 0 ? 'var(--accent-blue)' : 'var(--text-muted)');
-    
-    const isLeader = stock.role.includes("대장주") || stock.role.includes("1등주");
-    const roleBadge = isLeader 
-        ? `<span style="font-size: 0.55rem; background: #fef3c7; color: #d97706; padding: 0.05rem 0.25rem; border-radius: 4px; font-weight: 700; border: 1px solid #fde68a;">대장</span>` 
-        : '';
-
-    createSVGNode(parent, x, y, 140, 50, `
-        <div class="network-node-html stock-node" onclick="fetchAndRenderNetwork('${stock.stock_name}')" style="width: 100%; height: 100%; background: #ffffff; border: 1.5px solid var(--border-color); border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.03); display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 0.35rem; text-align: center; cursor: pointer; transition: all 0.2s ease; user-select: none;" onmouseover="this.style.borderColor='var(--accent-blue)'; this.style.transform='scale(1.05)';" onmouseout="this.style.borderColor='var(--border-color)'; this.style.transform='scale(1)';">
-            <div style="display: flex; align-items: center; gap: 0.2rem; max-width: 100%; justify-content: center;">
-                <span style="font-size: 0.72rem; font-weight: 700; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 90px;" title="${stock.stock_name}">${stock.stock_name}</span>
-                ${roleBadge}
-            </div>
-            <div style="font-size: 0.68rem; font-weight: 600; color: ${stockRateColor}; margin-top: 0.1rem;">${stock.price_str} (${stock.rate_str})</div>
-        </div>
-    `);
-}
-
-function drawBezierCurve(parent, x1, y1, x2, y2, strokeColor, strokeWidth, dashed) {
-    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    const mx = (x1 + x2) / 2;
-    const d = `M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`;
-    
-    path.setAttribute('d', d);
-    path.setAttribute('fill', 'none');
-    path.setAttribute('stroke', strokeColor);
-    path.setAttribute('stroke-width', strokeWidth);
-    if (dashed) {
-        path.setAttribute('stroke-dasharray', '4,4');
-    }
-    parent.appendChild(path);
-}
-
-function createSVGNode(parent, x, y, width, height, htmlContent) {
-    const fo = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
-    fo.setAttribute('x', x - width / 2);
-    fo.setAttribute('y', y - height / 2);
-    fo.setAttribute('width', width);
-    fo.setAttribute('height', height);
-    fo.setAttribute('style', 'overflow: visible;');
-
-    const container = document.createElement('div');
-    container.style.width = '100%';
-    container.style.height = '100%';
-    container.innerHTML = htmlContent;
-
-    fo.appendChild(container);
-    parent.appendChild(fo);
+function drawEmptyChartMsg(canvas, msg) {
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.font = '11px Inter, sans-serif';
+    ctx.fillStyle = 'var(--text-muted)';
+    ctx.textAlign = 'center';
+    ctx.fillText(msg, canvas.width / 2, canvas.height / 2);
 }

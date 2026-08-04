@@ -11,6 +11,8 @@
     
     <!-- External Premium Light Mode Stylesheet -->
     <link rel="stylesheet" href="/static/css/style.css">
+    <!-- Chart.js for High-Fidelity Intraday Charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <header>
@@ -152,7 +154,7 @@
             <!-- Tabs Navigation -->
             <div class="main-tabs" style="display: flex; gap: 0.5rem; border-bottom: 2px solid var(--border-color); padding: 0.5rem 1.5rem; margin-bottom: 0.5rem; user-select: none;">
                 <button class="main-tab active" id="tab-grid-view" onclick="switchMainView('grid')" style="background: none; border: none; font-size: 0.85rem; font-weight: 700; color: var(--accent-blue); cursor: pointer; padding: 0.4rem 1rem; border-radius: 6px; transition: all 0.2s;">전광판 매트릭스</button>
-                <button class="main-tab" id="tab-network-view" onclick="switchMainView('network')" style="background: none; border: none; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); cursor: pointer; padding: 0.4rem 1rem; border-radius: 6px; transition: all 0.2s;">연관 테마 네트워크 (마인드맵)</button>
+                <button class="main-tab" id="tab-network-view" onclick="switchMainView('network')" style="background: none; border: none; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); cursor: pointer; padding: 0.4rem 1rem; border-radius: 6px; transition: all 0.2s;">📈 대장주 주가 차트</button>
                 <button class="main-tab" id="tab-stock-view" onclick="switchMainView('stock')" style="background: none; border: none; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); cursor: pointer; padding: 0.4rem 1rem; border-radius: 6px; transition: all 0.2s;">종목 압축 관찰판</button>
             </div>
             
@@ -171,34 +173,16 @@
                 </div>
             </div>
 
-            <!-- Tab Content 2: Network Mindmap View -->
-            <div id="network-view-container" style="display: none; flex: 1; min-height: 0; background: #ffffff; border-radius: 12px; border: 1px solid var(--border-color); position: relative; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); margin: 0.5rem 1.5rem 1.5rem 1.5rem;">
-                <!-- Dedicated Search Bar on SVG -->
-                <div class="network-search-bar" style="position: absolute; top: 1rem; left: 1rem; z-index: 10; display: flex; gap: 0.4rem; background: rgba(255,255,255,0.9); padding: 0.4rem; border-radius: 8px; border: 1px solid var(--border-color); box-shadow: 0 4px 6px rgba(0,0,0,0.05); backdrop-filter: blur(4px);">
-                    <input type="text" id="network-search-input" placeholder="종목명 또는 코드 입력..." style="padding: 0.45rem 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); font-size: 0.75rem; width: 180px; outline: none;" onkeydown="if(event.key==='Enter') searchNetworkStock()">
-                    <button onclick="searchNetworkStock()" style="padding: 0.45rem 1rem; background: var(--accent-blue); color: white; border: none; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: all 0.2s;">조회</button>
+            <!-- Tab Content 2: Leader Stocks Chart View -->
+            <div id="network-view-container" style="display: none; flex: 1; min-height: 0; position: relative; overflow-y: auto; margin: 0.5rem 1.5rem 1.5rem 1.5rem;">
+                <div id="charts-grid-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 1.25rem; width: 100%;">
+                    <!-- Injected dynamically via JS -->
                 </div>
                 
-                <!-- Mindmap Zoom & Reset buttons -->
-                <div class="network-controls" style="position: absolute; bottom: 1rem; right: 1rem; z-index: 10; display: flex; flex-direction: column; gap: 0.3rem; user-select: none;">
-                    <button onclick="zoomNetwork(1.2)" style="width: 32px; height: 32px; border-radius: 6px; border: 1px solid var(--border-color); background: white; font-size: 1.1rem; font-weight: bold; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; justify-content: center; align-items: center;">+</button>
-                    <button onclick="zoomNetwork(0.8)" style="width: 32px; height: 32px; border-radius: 6px; border: 1px solid var(--border-color); background: white; font-size: 1.1rem; font-weight: bold; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; justify-content: center; align-items: center;">-</button>
-                    <button onclick="resetNetworkTransform()" style="width: 32px; height: 32px; border-radius: 6px; border: 1px solid var(--border-color); background: white; font-size: 0.7rem; font-weight: 600; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; justify-content: center; align-items: center;">리셋</button>
-                </div>
-
-                <!-- Interactive SVG Mindmap Canvas -->
-                <svg id="network-svg" style="width: 100%; height: 100%; cursor: grab; background: radial-gradient(circle, #f8fafc 15%, #ffffff 90%); user-select: none;">
-                    <!-- Zoom & Pan group -->
-                    <g id="network-g">
-                        <g id="network-links"></g>
-                        <g id="network-nodes"></g>
-                    </g>
-                </svg>
-                
-                <!-- Loader inside mindmap -->
-                <div id="network-loader" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.7); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 5;">
-                    <div style="font-size: 1.5rem; margin-bottom: 0.5rem; animation: spin 1.5s linear infinite;">⏳</div>
-                    <div style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 600;">연관 테마 네트워크 분석 중...</div>
+                <!-- Loader inside chart view -->
+                <div id="network-loader" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-card); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 5; border-radius: 12px; border: 1px solid var(--border-color);">
+                    <div class="spinner" style="width: 40px; height: 40px; border: 4px solid rgba(59, 130, 246, 0.1); border-top-color: var(--accent-blue); border-radius: 50%; animation: spin 1s infinite linear; margin-bottom: 0.75rem;"></div>
+                    <div style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600;">실시간 대장주 주가 변동 차트를 불러오는 중...</div>
                 </div>
             </div>
 

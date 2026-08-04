@@ -34,7 +34,7 @@ class ThemeStockMapper:
                     })
             time.sleep(0.1)
 
-        print(f"✅ 총 {len(themes)}개 테마 수집 완료!")
+        print(f"🔍 총 {len(themes)}개 테마 목록 검색 완료!")
         return themes
 
     def get_stocks_in_theme(self, theme_no, theme_name):
@@ -67,6 +67,7 @@ class ThemeStockMapper:
         """전체 테마-종목 매핑 데이터 생성 및 병합"""
         themes = self.get_theme_list(max_pages=max_pages)
         if limit_themes:
+            print(f"ℹ️ 수집할 테마 개수를 상위 {limit_themes}개로 제한합니다.")
             themes = themes[:limit_themes]
 
         all_records = []

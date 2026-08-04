@@ -597,14 +597,44 @@ header {
     padding-bottom: 1.25rem;
 }
 
+@keyframes alert-pulse-green {
+    0% {
+        border-color: rgba(16, 185, 129, 0.4);
+        box-shadow: 0 0 12px rgba(16, 185, 129, 0.04) inset, 0 4px 15px rgba(16, 185, 129, 0.05);
+    }
+    50% {
+        border-color: rgba(16, 185, 129, 0.85);
+        box-shadow: 0 0 20px rgba(16, 185, 129, 0.15) inset, 0 4px 22px rgba(16, 185, 129, 0.22);
+    }
+    100% {
+        border-color: rgba(16, 185, 129, 0.4);
+        box-shadow: 0 0 12px rgba(16, 185, 129, 0.04) inset, 0 4px 15px rgba(16, 185, 129, 0.05);
+    }
+}
+
+@keyframes alert-pulse-orange {
+    0% {
+        border-color: rgba(217, 119, 6, 0.4);
+        box-shadow: 0 0 12px rgba(217, 119, 6, 0.04) inset, 0 4px 15px rgba(217, 119, 6, 0.05);
+    }
+    50% {
+        border-color: rgba(217, 119, 6, 0.85);
+        box-shadow: 0 0 20px rgba(217, 119, 6, 0.15) inset, 0 4px 22px rgba(217, 119, 6, 0.22);
+    }
+    100% {
+        border-color: rgba(217, 119, 6, 0.4);
+        box-shadow: 0 0 12px rgba(217, 119, 6, 0.04) inset, 0 4px 15px rgba(217, 119, 6, 0.05);
+    }
+}
+
 .theme-card.has-alert-1 {
-    border: 1px solid rgba(16, 185, 129, 0.5);
-    box-shadow: 0 0 12px rgba(16, 185, 129, 0.04) inset, 0 4px 15px rgba(16, 185, 129, 0.06);
+    border: 2px solid rgba(16, 185, 129, 0.5);
+    animation: alert-pulse-green 2.5s infinite ease-in-out;
 }
 
 .theme-card.has-alert-2 {
-    border: 1px solid rgba(245, 158, 11, 0.5);
-    box-shadow: 0 0 12px rgba(245, 158, 11, 0.04) inset, 0 4px 15px rgba(245, 158, 11, 0.06);
+    border: 2px solid rgba(217, 119, 6, 0.5);
+    animation: alert-pulse-orange 2.5s infinite ease-in-out;
 }
 
 .theme-card-header {
@@ -1483,4 +1513,136 @@ header {
     background: #0066ff !important;
     color: #ffffff !important;
     box-shadow: 0 2px 4px rgba(0, 102, 255, 0.25);
+}
+
+/* Leader Stock Charts CSS */
+.chart-card {
+    background: var(--bg-card);
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-height: 280px;
+    position: relative;
+    box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.05), 0 2px 4px -2px rgba(15, 23, 42, 0.03);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.chart-card:hover {
+    border-color: var(--accent-blue);
+    transform: translateY(-3px);
+    box-shadow: 0 10px 15px -3px rgba(15, 23, 42, 0.1), 0 4px 6px -2px rgba(15, 23, 42, 0.05);
+}
+
+.chart-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 1px dashed var(--border-color);
+    padding-bottom: 0.6rem;
+}
+
+.chart-theme-badge {
+    font-size: 0.62rem;
+    color: var(--accent-blue);
+    font-weight: 800;
+    background: var(--accent-blue-glow);
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    display: inline-block;
+    margin-bottom: 0.25rem;
+    letter-spacing: -0.01em;
+}
+
+.chart-stock-title {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.chart-stock-code {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.chart-canvas-container {
+    flex: 1;
+    min-height: 120px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.chart-spinner {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: var(--bg-card);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2;
+}
+
+.chart-spinner .spinner {
+    width: 24px;
+    height: 24px;
+    border: 3px solid rgba(59, 130, 246, 0.1);
+    border-top-color: var(--accent-blue);
+    border-radius: 50%;
+    animation: spin 1s infinite linear;
+}
+
+.chart-card-footer {
+    border-top: 1px dashed var(--border-color);
+    padding-top: 0.6rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+}
+
+.chart-target-bands {
+    display: flex;
+    gap: 0.4rem;
+}
+
+.chart-target-bands .band-pill {
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+}
+
+.chart-target-bands .band-pill.zone-1 {
+    background: rgba(16, 185, 129, 0.08);
+    color: var(--accent-green);
+    border: 1px solid rgba(16, 185, 129, 0.15);
+}
+
+.chart-target-bands .band-pill.zone-2 {
+    background: rgba(245, 158, 11, 0.08);
+    color: var(--accent-orange);
+    border: 1px solid rgba(245, 158, 11, 0.15);
+}
+
+/* Flash highlight animation for chart cards when focused */
+@keyframes flash-chart-card {
+    0% { border-color: var(--accent-blue); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3); }
+    50% { border-color: var(--accent-blue); box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.5); }
+    100% { border-color: var(--border-color); box-shadow: none; }
+}
+
+.flash-chart-card-active {
+    animation: flash-chart-card 3s ease-out;
 }
