@@ -398,6 +398,30 @@ header {
     border-color: rgba(0, 0, 0, 0.15);
 }
 
+.btn-download-briefing {
+    background: var(--accent-blue);
+    border: none;
+    padding: 0.45rem 0.9rem;
+    border-radius: 6px;
+    color: #ffffff;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    outline: none;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(29, 78, 216, 0.15);
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.btn-download-briefing:hover {
+    background: #1e40af;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px rgba(29, 78, 216, 0.25);
+}
+
 .stats-summary {
     font-size: 0.8rem;
     color: var(--text-secondary);

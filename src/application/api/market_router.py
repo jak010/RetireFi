@@ -66,6 +66,26 @@ class MarketController:
         }
 
     @staticmethod
+    @market_entrypoint.get(path="/themes/download-briefing",
+                           summary="[MARKET] : 실시간 테마 & 대장주 30분 브리핑 다운로드 (텍스트 파일)")
+    def download_theme_briefing():
+        from fastapi.responses import Response
+        from datetime import datetime
+        
+        briefing_text = naver_theme_service.generate_briefing_text()
+        now_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"theme_briefing_{now_str}.txt"
+        
+        return Response(
+            content=briefing_text,
+            media_type="text/plain",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}",
+                "Content-Type": "text/plain; charset=utf-8"
+            }
+        )
+
+    @staticmethod
     @market_entrypoint.get(path="/toss-ranking",
                            summary="[MARKET] : 토스증권 거래대금 상위 종목 및 테마 매핑 조회")
     def get_toss_ranking():

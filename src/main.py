@@ -115,10 +115,23 @@ class Application:
     async def schedule_theme_leaders_summary_loop(self):
         from src.application.api.market_router import naver_theme_service
 
-        # 초기 기동 후 첫 매핑 및 통계 수집(웜업) 대기
-        await asyncio.sleep(20)
-
         while True:
+            # 즉시 발송하지 않고, 먼저 다음 정시(XX:00 혹은 XX:30)까지 대기 시간을 계산하여 대기합니다.
+            now = datetime.now()
+            minutes_to_add = 30 - (now.minute % 30)
+            next_run = (
+                now + timedelta(minutes=minutes_to_add)
+            ).replace(
+                second=0,
+                microsecond=0
+            )
+            sleep_seconds = (next_run - now).total_seconds()
+            if sleep_seconds <= 0:
+                sleep_seconds = 1800.0
+
+            print(f"[INFO] Next 30-minute theme summary scheduled at {next_run} (sleeping for {sleep_seconds:.1f} seconds)")
+            await asyncio.sleep(max(1.0, sleep_seconds))
+
             try:
                 loop = asyncio.get_event_loop()
                 await loop.run_in_executor(
@@ -127,21 +140,6 @@ class Application:
                 )
             except Exception as e:
                 print(f"[BACKGROUND THEME LEADER SUMMARY ERROR] {e}")
-
-            now = datetime.now()
-            # 30분 단위 정시 구하기 (예: 매 시간 0분, 30분)
-            minutes_to_add = 30 - (now.minute % 30)
-            next_run = (
-                now + timedelta(minutes=minutes_to_add)
-            ).replace(
-                second=0,
-                microsecond=0
-            )
-            sleep_seconds = (next_run - datetime.now()).total_seconds()
-            if sleep_seconds <= 0:
-                sleep_seconds = 1800.0
-
-            await asyncio.sleep(max(1.0, sleep_seconds))
 
     async def schedule_news_summary_loop(self):
 

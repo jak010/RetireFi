@@ -41,6 +41,7 @@ class NaverThemeService:
         
         # Slack 발송 이력 캐시 (메모리 상에 유지)
         self.slack_alert_history = {}
+        self.pending_alerts = []
 
         try:
             self.save_ticker_service = SaveTickerService()
@@ -690,6 +691,7 @@ class NaverThemeService:
         self.naver_themes_summary_cache = result
         self.naver_themes_summary_cache_time = current_time
         self.load_status = {"step": "done", "progress": 100}
+        self.flush_pending_alerts()
         return result
 
     def fetch_yahoo_index(self, symbol: str) -> Dict[str, Any]:
@@ -911,10 +913,11 @@ class NaverThemeService:
             # 매수 가능 구간 판정 및 Slack 알림 연동
             self.trigger_slack_alerts_if_needed(s, theme_name)
 
+        self.flush_pending_alerts()
         return stock_details
 
     def trigger_slack_alerts_if_needed(self, stock_item: Dict[str, Any], theme_name: str):
-        """특정 종목(대장주/1등주)의 매수 타점 진입 시 Slack 알림 발송 (쿨다운 1시간 적용)"""
+        """특정 종목(대장주/1등주)의 매수 타점 진입 시 Slack 알림 대기열에 추가 (쿨다운 1시간 적용)"""
         if not self.slack or stock_item["role"] not in ["👑 대장주", "👑 대장주 (로얄)", "🥇 1등주"]:
             return
 
@@ -935,55 +938,115 @@ class NaverThemeService:
         current_time = time.time()
         cooldown_seconds = 3600
 
-        if is_1st_drop_zone:
-            cooldown_key = f"{code}_1st_drop_zone"
+        if is_1st_drop_zone or is_2nd_drop_zone:
+            zone_name = "1차 낙폭(-4~-8%)" if is_1st_drop_zone else "2차 낙폭(-8~-12%)"
+            emoji = "⚡" if is_1st_drop_zone else "🟠"
+            cooldown_key = f"{code}_1st_drop_zone" if is_1st_drop_zone else f"{code}_2nd_drop_zone"
             last_sent = self.slack_alert_history.get(cooldown_key, 0)
+            
             if current_time - last_sent > cooldown_seconds:
-                title = f"⚡ [대장주 1차 낙폭(-4~-8%) 진입] {name} ({code})"
-                text = (
-                    f"────────────────────────\n"
-                    f"📊 *종목 프로필*\n"
-                    f"  • 종목분류: 테마주 | 역할: *{role}*\n"
-                    f"  • 소속섹터: *{theme_name}*\n"
-                    f"────────────────────────\n"
-                    f"💡 *실시간 단가 및 낙폭*\n"
-                    f"  • 현재가: *{price_str}* (당일 등락률: {rate_str})\n"
-                    f"  • 고점 대비 낙폭: *{drop:.2f}%* (1차 낙폭 -4~-8% 구간 진입 ⚡)\n"
-                    f"────────────────────────\n"
-                    f"🎯 *분할 매수 밴드*\n"
-                    f"  • *1차 낙폭 매수구간 (-4~-8%)*: `{buy_zone_1}` (진입 완료 🟢)\n"
-                    f"  • *2차 낙폭 매수구간 (-8~-12%)*: `{buy_zone_2}`\n"
-                    f"────────────────────────\n"
-                    f"📢 *대응 가이드*\n"
-                    f"  • {role} 종목이 고점 대비 1차 낙폭(-4~-8%) 건전한 눌림목 매수 구간에 진입했습니다. 계획된 비중의 1차 분할 매수 타점으로 검토하십시오."
-                )
-                self.send_slack(title, text)
-                self.slack_alert_history[cooldown_key] = current_time
+                # 알림 대기열(배치용)에 수집
+                self.pending_alerts.append({
+                    "code": code,
+                    "name": name,
+                    "role": role,
+                    "theme_name": theme_name,
+                    "price_str": price_str,
+                    "rate_str": rate_str,
+                    "drop": drop,
+                    "buy_zone_1": buy_zone_1,
+                    "buy_zone_2": buy_zone_2,
+                    "is_1st": is_1st_drop_zone,
+                    "zone_name": zone_name,
+                    "emoji": emoji,
+                    "cooldown_key": cooldown_key,
+                    "current_time": current_time
+                })
 
-        elif is_2nd_drop_zone:
-            cooldown_key = f"{code}_2nd_drop_zone"
-            last_sent = self.slack_alert_history.get(cooldown_key, 0)
-            if current_time - last_sent > cooldown_seconds:
-                title = f"🟠 [대장주 2차 낙폭(-8~-12%) 진입] {name} ({code})"
-                text = (
-                    f"────────────────────────\n"
-                    f"📊 *종목 프로필*\n"
-                    f"  • 종목분류: 테마주 | 역할: *{role}*\n"
-                    f"  • 소속섹터: *{theme_name}*\n"
-                    f"────────────────────────\n"
-                    f"💡 *실시간 단가 및 낙폭*\n"
-                    f"  • 현재가: *{price_str}* (당일 등락률: {rate_str})\n"
-                    f"  • 고점 대비 낙폭: *{drop:.2f}%* (2차 낙폭 -8~-12% 구간 진입 🟠)\n"
-                    f"────────────────────────\n"
-                    f"🎯 *분할 매수 밴드*\n"
-                    f"  • *1차 낙폭 매수구간 (-4~-8%)*: `{buy_zone_1}`\n"
-                    f"  • *2차 낙폭 매수구간 (-8~-12%)*: `{buy_zone_2}` (진입 완료 🟠)\n"
-                    f"────────────────────────\n"
-                    f"📢 *대응 가이드*\n"
-                    f"  • 고점 대비 2차 낙폭(-8~-12%) 과매도 매수 구간에 진입했습니다. 분할 매수 최종 비중 채우기 또는 기술적 반등 흐름 관찰이 유효합니다."
-                )
-                self.send_slack(title, text)
-                self.slack_alert_history[cooldown_key] = current_time
+    def flush_pending_alerts(self):
+        """대기열에 수집된 대장주 낙폭 진입 알림들을 하나의 메시지로 묶어서 슬랙으로 발송합니다."""
+        if not self.slack or not self.pending_alerts:
+            return
+
+        from datetime import datetime
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        # 1. Block Kit blocks 구성
+        blocks = []
+        blocks.append({
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": "🚨 [대장주/1등주 매수 타점 진입 알림]",
+                "emoji": True
+            }
+        })
+        blocks.append({
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": f"⏰ *감지 일시:* {now_str} | *실시간 대장주 낙폭 모니터링*"
+                }
+            ]
+        })
+        blocks.append({"type": "divider"})
+
+        fallback_lines = [f"🚨 [대장주/1등주 매수 타점 진입 알림] (기준: {now_str})\n"]
+
+        for idx, alert in enumerate(self.pending_alerts, 1):
+            name = alert["name"]
+            code = alert["code"]
+            role = alert["role"]
+            theme_name = alert["theme_name"]
+            price_str = alert["price_str"]
+            rate_str = alert["rate_str"]
+            drop = alert["drop"]
+            buy_zone_1 = alert["buy_zone_1"]
+            buy_zone_2 = alert["buy_zone_2"]
+            is_1st = alert["is_1st"]
+            emoji = alert["emoji"]
+
+            stock_text = (
+                f"{emoji} *[{alert['zone_name']}] {name} ({code})* | {role}\n"
+                f"• *소속 테마:* {theme_name}\n"
+                f"• *현재가:* {price_str} ({rate_str}) | *고점 대비 낙폭:* `{drop:.2f}%`\n"
+                f"• *1차 매수구간 (-4~-8%):* `{buy_zone_1}`" + (" 🟢 진입" if is_1st else "") + "\n"
+                f"• *2차 매수구간 (-8~-12%):* `{buy_zone_2}`" + (" 🟠 진입" if not is_1st else "")
+            )
+            
+            fallback_lines.append(f"{idx}. {emoji} {name}({code}) | {role} | {theme_name} | 낙폭: {drop:.2f}% | 1차: {buy_zone_1} | 2차: {buy_zone_2}")
+
+            blocks.append({
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": stock_text
+                }
+            })
+
+            # 발송 이력 캐시에 시간 기록
+            self.slack_alert_history[alert["cooldown_key"]] = alert["current_time"]
+
+            if idx < len(self.pending_alerts):
+                blocks.append({"type": "divider"})
+
+        # 대기열 비우기
+        self.pending_alerts.clear()
+
+        fallback_text = "\n".join(fallback_lines)
+
+        try:
+            # 50개 블록 초과 시 방어
+            if len(blocks) <= 50:
+                self.send_slack("🚨 대장주 매수 타점 진입 알림", fallback_text, blocks=blocks)
+            else:
+                # 안전 장치: 나눠서 발송
+                for chunk in [blocks[i:i + 25] for i in range(0, len(blocks), 25)]:
+                    self.send_slack("🚨 대장주 매수 타점 진입 알림", fallback_text, blocks=chunk)
+            logger.info("[PULLBACK ALERT] 대장주 낙폭 통합 슬랙 알림 발송 완료!")
+        except Exception as e:
+            logger.error(f"[PULLBACK ALERT SEND ERROR] 슬랙 통합 전송 실패: {e}")
 
     def check_and_alert_theme_leaders_pullback(self):
         """백그라운드 실시간 모니터링: 테마별 대장주가 1차 낙폭(-4~-8%) 구간에 진입했는지 주기적으로 점검하고 알림 발송"""
@@ -995,36 +1058,88 @@ class NaverThemeService:
         except Exception as e:
             logger.error(f"[PULLBACK MONITOR ERROR] 대장주 실시간 낙폭 감지 실패: {e}")
 
-    def send_slack(self, title: str, text: str):
+    def send_slack(self, title: str, text: str, blocks: Optional[List[Dict[str, Any]]] = None):
         if not self.slack:
             return
         try:
-            self.slack.get_client.chat_postMessage(
-                channel=SlackClient.FINANCE_CHNNAEL,
-                text=f"*{title}*\n{text}"
-            )
+            kwargs = {
+                "channel": SlackClient.FINANCE_CHNNAEL,
+                "text": f"*{title}*\n{text}" if not blocks else text
+            }
+            if blocks:
+                kwargs["blocks"] = blocks
+            self.slack.get_client.chat_postMessage(**kwargs)
         except Exception as e:
             logger.error(f"Slack 발송 실패: {e}")
 
     def send_theme_leaders_summary_to_slack(self):
-        """30분 단위 주기적 호출: 각 테마의 대장주 및 1등주 목록을 요약하여 Slack 채널로 전송합니다."""
+        """30분 단위 주기적 호출: 각 테마의 대장주 및 1등주 목록을 요약하여 Slack 채널에 파일(스니펫) 형태로 업로드합니다."""
         from datetime import datetime
-        logger.info("[SLACK SUMMARY] 30분 단위 테마별 대장주 및 1등주 요약 알림 준비 시작...")
+        import tempfile
+        logger.info("[SLACK SUMMARY] 30분 단위 테마별 대장주 및 1등주 요약 알림 준비 시작 (파일 업로드 방식)...")
 
+        # 1. 텍스트 파일로 저장할 내용 생성
+        briefing_text = self.generate_briefing_text()
+        
+        if not self.slack:
+            logger.info(f"[SLACK SUMMARY - Slack 미연동 상태, 콘솔 출력]\n{briefing_text}")
+            return
+
+        # 2. 임시 파일 생성
+        temp_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "temp")
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        now = datetime.now()
+        file_name = f"theme_briefing_{now.strftime('%Y%m%d_%H%M%S')}.txt"
+        file_path = os.path.join(temp_dir, file_name)
+        
+        try:
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(briefing_text)
+                
+            # 3. 슬랙 파일 업로드 전송
+            # sned_message_with_file 내부적으로 files_upload_v2를 사용하여 슬랙 채널에 업로드하며, 
+            # 슬랙 UI 상에서 접었다 펼쳐볼 수 있는 스니펫 형태와 다운로드 기능을 동시에 지원하게 됩니다.
+            title = f"📊 실시간 테마 & 대장주 30분 브리핑 ({now.strftime('%Y-%m-%d %H:%M')})"
+            comment = f"실시간 거래대금 상위 TOP 15 테마군 및 대장주/1등주 브리핑 파일입니다. (정각/30분 발송)"
+            
+            self.slack.sned_message_with_file(
+                title=title,
+                comment=comment,
+                file_path=file_path,
+                channel=SlackClient.FINANCE_CHNNAEL
+            )
+            logger.info("[SLACK SUMMARY] 테마별 대장주 및 1등주 요약 파일 슬랙 전송 완료!")
+        except Exception as e:
+            logger.error(f"[SLACK SUMMARY ERROR] 슬랙 파일 전송 실패: {e}")
+        finally:
+            if os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                except Exception as ex:
+                    logger.warning(f"임시 파일 삭제 실패: {ex}")
+
+    def generate_briefing_text(self) -> str:
+        """실시간 테마별 대장주 & 1등주 현황 (거래대금 TOP 15) 브리핑 텍스트를 생성합니다."""
+        from datetime import datetime
+        
         summary_res = self.get_naver_themes_summary()
         if isinstance(summary_res, dict) and summary_res.get("status") == "loading":
             summary_res = self._calculate_themes_summary()
 
         themes = summary_res.get("themes", []) if isinstance(summary_res, dict) else []
         if not themes:
-            logger.warning("[SLACK SUMMARY] 전송할 테마 데이터가 없습니다.")
-            return
+            return "조회된 테마 데이터가 없습니다."
 
         # 상위 15개 테마 대상 (거래대금 기준 내림차순 정렬)
         sorted_themes = sorted(themes, key=lambda x: x.get("total_volume", 0), reverse=True)[:15]
 
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        lines = [f"⏰ *[실시간 테마별 대장주 & 1등주 현황 (거래대금 TOP 15)]* (기준: {now_str})\n"]
+        lines = [
+            f"⏰ [실시간 테마별 대장주 & 1등주 현황 (거래대금 TOP 15)]",
+            f"기준 일시: {now_str}",
+            "────────────────────────────────────────────────"
+        ]
 
         for idx, theme in enumerate(sorted_themes, 1):
             theme_name = theme.get("theme_name", "알 수 없는 테마")
@@ -1036,57 +1151,29 @@ class NaverThemeService:
             vol_str = theme.get("total_volume_str", "0억 원")
 
             top_stocks = theme.get("top_stocks", [])
-            # 거래대금 및 등락률 복합 상위 정렬
             sorted_stocks = sort_stocks_composite(top_stocks)
             leaders_info = []
 
-            for s_idx, s in enumerate(sorted_stocks[:2]):  # 거래대금/등락률 복합 1위(대장주), 2위(1등주) 추출
+            for s_idx, s in enumerate(sorted_stocks[:2]):
                 role = s.get("role", "")
-                if role != "👑 대장주 (로얄)":
+                if "대장주" not in role and "1등주" not in role:
                     role = "👑 대장주" if s_idx == 0 else "🥇 1등주"
                 s_name = s.get("stock_name", "N/A")
                 s_rate = s.get("rate_str", "0.0%")
                 s_price = s.get("price_str", "-")
                 s_vol = s.get("volume_str", "-")
                 
-                leaders_info.append(f"  • {role}: *{s_name}* (거래대금: {s_vol} | {s_rate} | {s_price})")
+                leaders_info.append(f"  • {role}: {s_name} (거래대금: {s_vol} | 등락률: {s_rate} | 현재가: {s_price})")
 
-            theme_header = f"*{idx}. {theme_name}* (평균등락률: {avg_rate_val:+.2f}% | 총거래대금: {vol_str})"
+            theme_header = f"{idx}. {theme_name} (평균등락률: {avg_rate_val:+.2f}% | 총거래대금: {vol_str})"
             lines.append(theme_header)
             if leaders_info:
                 lines.extend(leaders_info)
             else:
                 lines.append("  • 표시할 소속 종목 정보 없음")
-            lines.append("────────────────────────")
+            lines.append("────────────────────────────────────────────────")
 
-        full_message = "\n".join(lines)
-
-        if not self.slack:
-            logger.info(f"[SLACK SUMMARY - Slack 미연동 상태, 콘솔 출력]\n{full_message}")
-            return
-
-        # Slack 메시지 3000자 제한 방어: 2800자 초과 시 청크 단위 분할 발송
-        max_len = 2800
-        if len(full_message) <= max_len:
-            self.send_slack("📊 테마별 대장주 & 1등주 30분 요약 브리핑", full_message)
-        else:
-            chunk_lines = []
-            curr_len = 0
-            chunk_idx = 1
-            for line in lines:
-                if curr_len + len(line) > max_len and chunk_lines:
-                    self.send_slack(f"📊 테마별 대장주 & 1등주 요약 브리핑 (Part {chunk_idx})", "\n".join(chunk_lines))
-                    time.sleep(0.5)
-                    chunk_lines = [line]
-                    curr_len = len(line) + 1
-                    chunk_idx += 1
-                else:
-                    chunk_lines.append(line)
-                    curr_len += len(line) + 1
-            if chunk_lines:
-                self.send_slack(f"📊 테마별 대장주 & 1등주 요약 브리핑 (Part {chunk_idx})", "\n".join(chunk_lines))
-
-        logger.info("[SLACK SUMMARY] 테마별 대장주 및 1등주 요약 알림 Slack 전송 완료!")
+        return "\n".join(lines)
 
     def get_stock_network(self, stock_name_or_code: str) -> Dict[str, Any]:
         """

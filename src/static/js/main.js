@@ -374,6 +374,12 @@ function toggleAllCards() {
     renderDashboard();
 }
 
+// Download Briefing File
+function downloadBriefing() {
+    window.open('/api/v1/market/themes/download-briefing', '_blank');
+}
+
+
 // Render Main Themes Grid Cards (Top 9 by default or filtered results)
 function renderDashboard() {
     const container = document.getElementById('dashboard-grid-container');
