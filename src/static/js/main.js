@@ -23,6 +23,8 @@ async function loadAlertSettings() {
     } catch (error) {
         console.error("알림 설정 로드 실패:", error);
     }
+    renderAlertStocksList();
+    if (activeMainView === 'network') renderLeaderCharts();
 }
 
 async function saveAlertSettings() {
@@ -44,6 +46,8 @@ function onPullbackAlertChange(code, enabled) {
         alertEnabledCodes.delete(code);
     }
     saveAlertSettings();
+    renderAlertStocksList();
+    if (activeMainView === 'network') renderLeaderCharts();
 }
 
 // Track previous values for visual highlighting
@@ -121,6 +125,8 @@ async function fetchThemes() {
             renderRankingSidebar();
             renderDashboard();
             renderIndices();
+
+            if (activeMainView === 'network') renderLeaderCharts();
 
             if (currentSidebarTab === 'leader') {
                 renderLeaderSectorsList();
@@ -794,14 +800,16 @@ function switchTickerTab(tabName) {
     currentTickerTab = tabName;
     const tabNews = document.getElementById('ticker-tab-news');
     const tabToss = document.getElementById('ticker-tab-toss');
+    const tabAlerts = document.getElementById('ticker-tab-alerts');
     const wrapperNews = document.getElementById('recent-news-chips');
     const wrapperToss = document.getElementById('toss-ranking-chips');
+    const wrapperAlerts = document.getElementById('alert-stocks-chips');
     const filterPills = document.getElementById('toss-filter-pills');
     
-    [tabNews, tabToss].forEach(tab => {
+    [tabNews, tabToss, tabAlerts].forEach(tab => {
         if (tab) tab.classList.remove('active');
     });
-    [wrapperNews, wrapperToss].forEach(wrap => {
+    [wrapperNews, wrapperToss, wrapperAlerts].forEach(wrap => {
         if (wrap) wrap.style.display = 'none';
     });
     if (filterPills) filterPills.style.display = 'none';
@@ -814,6 +822,10 @@ function switchTickerTab(tabName) {
         if (wrapperToss) wrapperToss.style.display = 'flex';
         if (filterPills) filterPills.style.display = 'flex';
         fetchTossRanking();
+    } else if (tabName === 'alerts') {
+        if (tabAlerts) tabAlerts.classList.add('active');
+        if (wrapperAlerts) wrapperAlerts.style.display = 'flex';
+        renderAlertStocksList();
     }
     updateTickerPreview();
 }
@@ -832,6 +844,8 @@ function toggleTickerPopup() {
                     titleEl.innerText = '📰 실시간 주요 속보';
                 } else if (currentTickerTab === 'toss') {
                     titleEl.innerText = '💙 Toss 실시간 거래대금 상위';
+                } else if (currentTickerTab === 'alerts') {
+                    titleEl.innerText = '🔔 알림 수신 종목';
                 }
             }
         }
@@ -878,6 +892,8 @@ function onTickerTabClick(tabName) {
                 titleEl.innerText = '📰 실시간 주요 속보';
             } else if (tabName === 'toss') {
                 titleEl.innerText = '💙 Toss 실시간 거래대금 상위';
+            } else if (tabName === 'alerts') {
+                titleEl.innerText = '🔔 알림 수신 종목';
             }
         }
     }
@@ -897,6 +913,9 @@ function updateTickerPreview() {
             ? ` [${topStock.themes[0]}]`
             : '';
         previewEl.innerHTML = `💙 <span class="preview-highlight">Toss 대금 1위:</span> ${topStock.name} (${topStock.price_str}, ${topStock.rate_str})${themeText} &nbsp;&nbsp;|&nbsp;&nbsp; 💡 탭하여 실시간 거래 순위 보기`;
+    } else if (currentTickerTab === 'alerts') {
+        const count = alertEnabledCodes.size;
+        previewEl.innerHTML = `🔔 <span class="preview-highlight">알림 수신 종목 ${count}개:</span> &nbsp;&nbsp;|&nbsp;&nbsp; 💡 탭하여 알림 수신 종목 확인`;
     } else {
         previewEl.innerHTML = `📢 실시간 주요 속보 및 Toss 인기 거래 순위를 확인하세요.`;
     }
@@ -1059,6 +1078,71 @@ function renderTossRankingList() {
 
 
 
+// Render Alert-Enabled Stocks List in the bottom ticker popup (alerts tab)
+function renderAlertStocksList() {
+    const container = document.getElementById('alert-stocks-chips');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const codes = Array.from(alertEnabledCodes);
+    if (codes.length === 0) {
+        container.innerHTML = `<span style="font-size:0.75rem; color:var(--text-muted); padding:0.35rem 0.5rem;">알람이 설정된 종목이 없습니다. 종목 압축 관찰판의 알림 설정에서 받기를 선택하세요.</span>`;
+        updateTickerPreview();
+        return;
+    }
+
+    // 종목 코드 -> 종목 정보 맵 구축 (테마 데이터의 대장주/1등주 등 상위 종목 기준)
+    const stockMap = new Map();
+    themesData.forEach(theme => {
+        (theme.top_stocks || []).forEach(stock => {
+            if (!stockMap.has(stock.stock_code)) {
+                stockMap.set(stock.stock_code, { ...stock, theme_name: theme.theme_name });
+            }
+        });
+    });
+
+    codes.forEach((code) => {
+        const stock = stockMap.get(code);
+        if (!stock) return;
+        const chip = document.createElement('div');
+        chip.className = 'summary-chip';
+        chip.style.cursor = 'pointer';
+        chip.title = `${stock.stock_name} | ${stock.theme_name || ''} | ${stock.role || ''} (클릭 시 관찰판에서 위치 확인)`;
+        chip.onclick = () => { closeTickerPopup(); focusConsolidatedStock(code); };
+        const rateVal = parseFloat(stock.rate);
+        const rateClass = rateVal > 0 ? 'up' : (rateVal < 0 ? 'down' : 'flat');
+        chip.innerHTML = `
+            <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 0.5rem;">
+                <div style="display: flex; align-items: center; gap: 0.35rem; min-width: 0;">
+                    <span style="font-weight: 700; color: var(--text-primary); white-space: nowrap;">${stock.stock_name}</span>
+                    <span style="font-size: 0.68rem; color: var(--accent-green); font-weight: 600; white-space: nowrap;">${stock.role || ''}</span>
+                </div>
+                <span class="chip-val ${rateClass}" style="font-weight: 600; white-space: nowrap;">${stock.price_str} (${stock.rate_str})</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; width: 100%; font-size: 0.68rem; color: var(--text-secondary); margin-top: 0.1rem; gap: 0.5rem;">
+                <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">🏷️ ${stock.theme_name || '소속 테마 없음'}</span>
+                <span style="color: var(--accent-red); font-weight: 600; white-space: nowrap;">🔔 알람 수신</span>
+            </div>
+        `;
+        container.appendChild(chip);
+    });
+    updateTickerPreview();
+}
+
+// Point to the stock's row in the consolidated stock view, with a temporary highlight
+function focusConsolidatedStock(code) {
+    switchMainView('stock');
+    let row = document.getElementById('consolidated-row-' + code);
+    if (!row) {
+        resetAllFilters();
+        row = document.getElementById('consolidated-row-' + code);
+    }
+    if (!row) return;
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    row.style.background = 'rgba(250, 204, 21, 0.25)';
+    setTimeout(() => { row.style.background = 'transparent'; }, 2500);
+}
+
 // Render Leader Sectors Top 3 List in sidebar container
 function renderLeaderSectorsList() {
     const container = document.getElementById('leader-list-container');
@@ -1195,6 +1279,7 @@ function renderConsolidatedStocks() {
     // 4. Render Table Rows
     consolidatedList.forEach(stock => {
         const tr = document.createElement('tr');
+        tr.id = 'consolidated-row-' + stock.code;
         tr.style.borderBottom = '1px solid var(--border-color)';
         tr.style.transition = 'background 0.2s';
         
@@ -1392,6 +1477,19 @@ function renderLeaderCharts() {
             }
             leaderMap.set(key, { theme: entry.theme, stock: entry.stock, themes: [entry.theme.theme_name] });
         });
+
+    // 알림 종목으로 체크된 종목도 차트에 포함 (상위 8개 테마 밖이라도)
+    alertEnabledCodes.forEach(code => {
+        if (leaderMap.has(code)) return;
+        for (const theme of themesData) {
+            const stock = (theme.top_stocks || []).find(s => s.stock_code === code);
+            if (stock) {
+                leaderMap.set(code, { stock, themes: [theme.theme_name] });
+                return;
+            }
+        }
+    });
+
     const leaders = [...leaderMap.values()];
 
     leaders.forEach(({ theme, stock, themes }) => {
@@ -1428,13 +1526,13 @@ function renderLeaderCharts() {
 
         // Create card element
         const card = document.createElement('div');
-        card.className = 'chart-card';
+        card.className = 'chart-card' + (alertEnabledCodes.has(stock.stock_code) ? ' chart-card-alert' : '');
         card.id = `chart-card-${stock.stock_code}`;
         card.innerHTML = `
             <div class="chart-card-header">
                 <div>
                     <span class="chart-theme-badge" title="${themes.join(' · ')}">${themes.join(' · ')}</span>
-                    <div class="chart-stock-title">${stock.stock_name} <span class="chart-stock-code">${stock.stock_code}</span></div>
+                    <div class="chart-stock-title">${stock.stock_name} ${alertEnabledCodes.has(stock.stock_code) ? '<span style="font-size:0.7rem;" title="알림 수신 종목">🔔</span>' : ''} <span class="chart-stock-code">${stock.stock_code}</span></div>
                     <div style="display: flex; gap: 0.3rem; margin-top: 0.35rem; flex-wrap: wrap;">
                         <span id="level-badge-${stock.stock_code}" style="font-size: 0.6rem; font-weight: 700; padding: 0.1rem 0.4rem; border-radius: 4px; color: ${levelColor}; background: ${levelBg}; border: 1px solid ${levelColor};" title="최근 3개월 수급 위치: ${levelPos} (${stock.price_level_desc || ''})">${level} ${levelPos}</span>
                         <span id="ma-badge-${stock.stock_code}" style="font-size: 0.6rem; font-weight: 700; padding: 0.1rem 0.4rem; border-radius: 4px; color: ${maColor}; background: ${maBg}; border: 1px solid ${maColor};" title="10일 vs 20일 이평선 정배열 여부">${maLabel}</span>

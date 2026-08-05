@@ -1022,6 +1022,8 @@ class NaverThemeService:
                     "cooldown_key": cooldown_key,
                     "current_time": current_time
                 })
+                # 트리거 시점에 즉시 쿨다운 기록 -> 같은 사이클/경로에서 같은 종목·구간 중복 큐잉 방지
+                self.slack_alert_history[cooldown_key] = current_time
 
     def flush_pending_alerts(self):
         """대기열에 수집된 대장주 낙폭 진입 알림들을 하나의 메시지로 묶어서 슬랙으로 발송합니다."""

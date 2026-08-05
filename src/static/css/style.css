@@ -1536,6 +1536,15 @@ header {
     box-shadow: 0 10px 15px -3px rgba(15, 23, 42, 0.1), 0 4px 6px -2px rgba(15, 23, 42, 0.05);
 }
 
+.chart-card.chart-card-alert {
+    border: 2px dashed #f59e0b;
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.12), 0 4px 6px -1px rgba(15, 23, 42, 0.05);
+}
+
+.chart-card.chart-card-alert:hover {
+    border-color: #f59e0b;
+}
+
 .chart-card-header {
     display: flex;
     justify-content: space-between;
@@ -1621,7 +1630,8 @@ header {
 
 .chart-target-bands {
     display: flex;
-    gap: 0.4rem;
+    flex-direction: column;
+    gap: 0.25rem;
     flex-shrink: 0;
     white-space: nowrap;
 }
