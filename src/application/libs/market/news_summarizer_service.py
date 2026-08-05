@@ -18,10 +18,22 @@ class NewsSummaryService:
             
         self.slack = SlackClient(token=settings.SLACK_TOKEN) if settings.SLACK_TOKEN else None
 
+    @staticmethod
+    def _is_kst_alert_window() -> bool:
+        """한국시간(KST) 기준 08:00~20:00 알림 가능 시간대 여부"""
+        from datetime import datetime, timedelta, timezone
+        now_kst = datetime.now(timezone(timedelta(hours=9)))
+        return 8 <= now_kst.hour < 20
+
     def execute_summary_and_alert(self) -> str:
         """
         최신 속보 뉴스를 가져와 Gemini LLM을 통해 요약 브리핑을 생성하고 슬랙 채널로 발송합니다.
         """
+        # KST 08:00~20:00 시간대에만 슬랙 발송
+        if not self._is_kst_alert_window():
+            logger.info("뉴스 요약 브리핑은 KST 08~20시 시간대에만 슬랙 발송됩니다.")
+            return "Skipped: Outside KST 08~20 alert window"
+
         if not self.save_ticker:
             logger.warning("SaveTickerService가 준비되지 않아 요약을 생략합니다.")
             return "SaveTickerService Not Initialized"

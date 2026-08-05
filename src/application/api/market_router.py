@@ -56,6 +56,26 @@ class MarketController:
         }
 
     @staticmethod
+    @market_entrypoint.get(path="/pullback-alert-settings",
+                           summary="[MARKET] : 대장주 낙폭 알람 수신 종목 설정 조회")
+    def get_pullback_alert_settings():
+        return {
+            "status": "success",
+            "data": naver_theme_service.get_pullback_alert_settings()
+        }
+
+    @staticmethod
+    @market_entrypoint.put(path="/pullback-alert-settings",
+                           summary="[MARKET] : 대장주 낙폭 알람 수신 종목 설정 저장")
+    def set_pullback_alert_settings(payload: dict):
+        return {
+            "status": "success",
+            "data": naver_theme_service.set_pullback_alert_settings(
+                payload.get("enabled_codes", [])
+            )
+        }
+
+    @staticmethod
     @market_entrypoint.get(path="/cron/theme-leaders-pullback-check",
                            summary="[CRON] : 테마별 대장주 1차 낙폭(-4~-8%) 구간 진입 체크 및 슬랙 알림")
     def run_theme_leaders_pullback_check():

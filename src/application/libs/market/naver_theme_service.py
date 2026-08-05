@@ -43,6 +43,9 @@ class NaverThemeService:
         self.slack_alert_history = {}
         self.pending_alerts = []
 
+        # 대장주 낙폭 알람 수신 종목 코드 (라디오버튼 설정, 기본은 안받기 = 빈 집합이면 수신 없음)
+        self.pullback_alert_enabled_codes: set = set()
+
         try:
             self.save_ticker_service = SaveTickerService()
         except Exception as e:
@@ -977,6 +980,10 @@ class NaverThemeService:
         drop = stock_item["drop"]
         code = stock_item["stock_code"]
         name = stock_item["stock_name"]
+
+        # 종목별 라디오버튼 설정으로 수신 종목에 없는 경우 알림을 보내지 않음 (기본 안받기)
+        if code not in self.pullback_alert_enabled_codes:
+            return
         price_str = stock_item.get("price_str", "-")
         rate_str = stock_item.get("rate_str", "-")
         role = stock_item.get("role", "")
@@ -1104,6 +1111,17 @@ class NaverThemeService:
             logger.info("[PULLBACK ALERT] 대장주 낙폭 통합 슬랙 알림 발송 완료!")
         except Exception as e:
             logger.error(f"[PULLBACK ALERT SEND ERROR] 슬랙 통합 전송 실패: {e}")
+
+    def get_pullback_alert_settings(self) -> Dict[str, Any]:
+        """대장주 낙폭 알람 수신 종목 코드 조회"""
+        return {
+            "enabled_codes": sorted(self.pullback_alert_enabled_codes)
+        }
+
+    def set_pullback_alert_settings(self, enabled_codes: List[str]) -> Dict[str, Any]:
+        """대장주 낙폭 알람 수신 종목 코드 저장"""
+        self.pullback_alert_enabled_codes = set(enabled_codes or [])
+        return self.get_pullback_alert_settings()
 
     def check_and_alert_theme_leaders_pullback(self):
         """백그라운드 실시간 모니터링: 테마별 대장주가 1차 낙폭(-4~-8%) 구간에 진입했는지 주기적으로 점검하고 알림 발송"""
@@ -1262,6 +1280,10 @@ class NaverThemeService:
         from datetime import datetime
         import tempfile
         import os
+        # KST 08:00~20:00 시간대에만 슬랙 발송
+        if not self._is_kst_alert_window():
+            logger.info("[SLACK SUMMARY] KST 08~20시 시간대가 아니어서 브리핑 슬랙 발송을 건너뜁니다.")
+            return
         logger.info("[SLACK SUMMARY] 30분 단위 테마별 대장주 및 1등주 요약 알림 준비 시작 (파일 업로드 방식)...")
 
         # 1. 텍스트 파일로 저장할 내용 생성

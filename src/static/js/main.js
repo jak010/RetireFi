@@ -10,6 +10,42 @@ let currentSidebarTab = 'theme'; // Sidebar active tab
 let tossData = []; // Toss ranking list
 let currentTossFilter = 'all'; // Toss filters: 'all', 'strong-theme', 'high-rate', 'high-vol-rate'
 
+// 대장주 낙폭 알람 수신 종목 코드 (라디오버튼 설정, 서버에 저장됨, 기본은 안받기)
+let alertEnabledCodes = new Set();
+
+async function loadAlertSettings() {
+    try {
+        const response = await fetch('/api/v1/market/pullback-alert-settings');
+        const result = await response.json();
+        if (result.status === 'success') {
+            alertEnabledCodes = new Set(result.data.enabled_codes || []);
+        }
+    } catch (error) {
+        console.error("알림 설정 로드 실패:", error);
+    }
+}
+
+async function saveAlertSettings() {
+    try {
+        await fetch('/api/v1/market/pullback-alert-settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled_codes: Array.from(alertEnabledCodes) })
+        });
+    } catch (error) {
+        console.error("알림 설정 저장 실패:", error);
+    }
+}
+
+function onPullbackAlertChange(code, enabled) {
+    if (enabled) {
+        alertEnabledCodes.add(code);
+    } else {
+        alertEnabledCodes.delete(code);
+    }
+    saveAlertSettings();
+}
+
 // Track previous values for visual highlighting
 let prevPricesMap = {};
 let prevIndicesMap = {};
@@ -749,6 +785,7 @@ window.onload = () => {
     updateClock();
     setInterval(updateClock, 1000);
     initNetworkSVGEvents();
+    loadAlertSettings();
 };
 
 // Switch between Ticker Tabs (Breaking News vs Toss)
@@ -1223,6 +1260,14 @@ function renderConsolidatedStocks() {
             </td>
             <td style="padding: 0.6rem 0.5rem; text-align: center; vertical-align: middle;">
                 ${alertBadge}
+            </td>
+            <td style="padding: 0.6rem 0.5rem; text-align: center; vertical-align: middle; white-space: nowrap;">
+                <label style="font-size: 0.68rem; font-weight: 600; color: var(--accent-green); cursor: pointer; margin-right: 0.45rem;" title="이 종목의 대장주 낙폭 알람을 받습니다">
+                    <input type="radio" name="alert-${stock.code}" value="on" ${alertEnabledCodes.has(stock.code) ? 'checked' : ''} onchange="onPullbackAlertChange('${stock.code}', true)" style="cursor: pointer; accent-color: #10b981;"> 받기
+                </label>
+                <label style="font-size: 0.68rem; font-weight: 600; color: var(--accent-red); cursor: pointer;" title="이 종목의 대장주 낙폭 알람을 받지 않습니다">
+                    <input type="radio" name="alert-${stock.code}" value="off" ${alertEnabledCodes.has(stock.code) ? '' : 'checked'} onchange="onPullbackAlertChange('${stock.code}', false)" style="cursor: pointer; accent-color: #ef4444;"> 안받기
+                </label>
             </td>
             <td style="padding: 0.6rem 0.5rem; text-align: center;">
                 <div style="display: flex; gap: 0.4rem; justify-content: center; align-items: center;">
