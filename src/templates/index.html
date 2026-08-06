@@ -156,6 +156,7 @@
                 <button class="main-tab active" id="tab-grid-view" onclick="switchMainView('grid')" style="background: none; border: none; font-size: 0.85rem; font-weight: 700; color: var(--accent-blue); cursor: pointer; padding: 0.4rem 1rem; border-radius: 6px; transition: all 0.2s;">전광판 매트릭스</button>
                 <button class="main-tab" id="tab-network-view" onclick="switchMainView('network')" style="background: none; border: none; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); cursor: pointer; padding: 0.4rem 1rem; border-radius: 6px; transition: all 0.2s;">📈 대장주 주가 차트</button>
                 <button class="main-tab" id="tab-stock-view" onclick="switchMainView('stock')" style="background: none; border: none; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); cursor: pointer; padding: 0.4rem 1rem; border-radius: 6px; transition: all 0.2s;">종목 압축 관찰판</button>
+                <button class="main-tab" id="tab-sangtta-view" onclick="switchMainView('sangtta')" style="background: none; border: none; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); cursor: pointer; padding: 0.4rem 1rem; border-radius: 6px; transition: all 0.2s;">🔥 상따 종목 (+24%↑)</button>
             </div>
             
             <!-- Tab Content 1: Grid View -->
@@ -197,12 +198,22 @@
                         <thead>
                             <tr style="border-bottom: 2px solid var(--border-color); color: var(--text-secondary); font-weight: 700; font-family: var(--font-outfit); background: rgba(0, 0, 0, 0.01); user-select: none;">
                                 <th style="padding: 0.75rem 0.5rem; width: 130px;">종목명</th>
-                                <th style="padding: 0.75rem 0.5rem; width: 110px; text-align: right;">현재가 (등락률)</th>
-                                <th style="padding: 0.75rem 0.5rem; width: 85px; text-align: right;">고점대비 낙폭</th>
+                                <th style="padding: 0.75rem 0.5rem; width: 95px; text-align: right; cursor: pointer; user-select: none; transition: all 0.2s;" onclick="sortConsolidatedStocks('price')" title="클릭하여 현재가 기준으로 오름차순/내림차순 정렬" onmouseover="this.style.background='rgba(0,0,0,0.03)';" onmouseout="this.style.background='transparent';">
+                                    <span>현재가</span> <span id="sort-arrow-c-price" style="display: inline-block; width: 18px; text-align: center; font-size: 0.65rem; opacity: 0.35; color: var(--text-muted);">▲▼</span>
+                                </th>
+                                <th style="padding: 0.75rem 0.5rem; width: 100px; text-align: right; cursor: pointer; user-select: none; transition: all 0.2s; color: #dc2626;" onclick="sortConsolidatedStocks('rate')" title="클릭하여 당일 등락률 기준으로 오름차순/내림차순 정렬" onmouseover="this.style.background='rgba(220, 38, 38, 0.04)';" onmouseout="this.style.background='transparent';">
+                                    <span>당일 등락률</span> <span id="sort-arrow-c-rate" style="display: inline-block; width: 18px; text-align: center; font-size: 0.8rem; color: #dc2626; opacity: 1;">▼</span>
+                                </th>
+                                <th style="padding: 0.75rem 0.5rem; width: 95px; text-align: right; cursor: pointer; user-select: none; transition: all 0.2s;" onclick="sortConsolidatedStocks('volume')" title="클릭하여 거래대금 기준으로 오름차순/내림차순 정렬" onmouseover="this.style.background='rgba(0,0,0,0.03)';" onmouseout="this.style.background='transparent';">
+                                    <span>거래대금</span> <span id="sort-arrow-c-volume" style="display: inline-block; width: 18px; text-align: center; font-size: 0.65rem; opacity: 0.35; color: var(--text-muted);">▲▼</span>
+                                </th>
+                                <th style="padding: 0.75rem 0.5rem; width: 105px; text-align: right; cursor: pointer; user-select: none; transition: all 0.2s;" onclick="sortConsolidatedStocks('drop')" title="클릭하여 고점대비 낙폭 기준으로 오름차순/내림차순 정렬" onmouseover="this.style.background='rgba(0,0,0,0.03)';" onmouseout="this.style.background='transparent';">
+                                    <span>고점대비 낙폭</span> <span id="sort-arrow-c-drop" style="display: inline-block; width: 18px; text-align: center; font-size: 0.65rem; opacity: 0.35; color: var(--text-muted);">▲▼</span>
+                                </th>
                                 <th style="padding: 0.75rem 0.5rem; text-align: left; padding-left: 1.5rem;">연계 테마 목록</th>
-                                <th style="padding: 0.75rem 0.5rem; width: 90px; text-align: center;">타점 신호</th>
-                                <th style="padding: 0.75rem 0.5rem; width: 110px; text-align: center;">알림 설정</th>
-                                <th style="padding: 0.75rem 0.5rem; width: 100px; text-align: center;">바로가기</th>
+                                <th style="padding: 0.75rem 0.5rem; width: 85px; text-align: center;">타점 신호</th>
+                                <th style="padding: 0.75rem 0.5rem; width: 105px; text-align: center;">알림 설정</th>
+                                <th style="padding: 0.75rem 0.5rem; width: 90px; text-align: center;">바로가기</th>
                             </tr>
                         </thead>
                         <tbody id="consolidated-stock-tbody">
@@ -212,6 +223,54 @@
                 </div>
                 <div id="stock-view-empty-msg" style="display: none; text-align: center; padding: 3rem; color: var(--text-muted); font-weight: 600; user-select: none;">
                     조건에 맞는 종목이 없습니다.
+                </div>
+            </div>
+
+            <!-- Tab Content 4: Sangtta (Limit-up Chasing) View -->
+            <div id="sangtta-view-container" style="display: none; flex-direction: column; flex: 1; min-height: 0; background: #ffffff; border-radius: 12px; border: 1px solid var(--border-color); position: relative; overflow-y: auto; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); margin: 0.5rem 1.5rem 1.5rem 1.5rem; padding: 1.25rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1rem; user-select: none;">
+                    <div>
+                        <span style="font-family: var(--font-outfit); font-size: 0.95rem; font-weight: 800; color: #dc2626; text-transform: uppercase; letter-spacing: 0.03em;">🔥 통합 상따 (상한가 따라잡기) 후보 리스트</span>
+                        <span style="display: inline-block; margin-left: 0.5rem; background: #fee2e2; color: #b91c1c; font-size: 0.7rem; font-weight: 700; padding: 0.2rem 0.6rem; border-radius: 9999px;">네이버 · 로얄로더 · 토스 당일 +24%↑</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                        <div id="sangtta-lock-wrapper" style="display: flex; align-items: center; gap: 0.4rem; background: #fff1f2; padding: 0.35rem 0.65rem; border-radius: 8px; border: 1px solid #fecdd3; cursor: pointer;" onclick="toggleSangttaOrderLock(event)" title="실시간 자동 갱신 중 행 위치가 뒤바뀌거나 사라지지 않고 주가만 제자리에 부드럽게 표시되어 눈으로 모니터링하기 쉽도록 고정합니다.">
+                            <input type="checkbox" id="sangtta-lock-checkbox" checked style="cursor: pointer; accent-color: #dc2626; width: 15px; height: 15px;" onclick="event.stopPropagation(); toggleSangttaOrderLock(null);">
+                            <span id="sangtta-lock-label" style="font-size: 0.75rem; font-weight: 700; color: #e11d48; cursor: pointer;">🔒 위치 고정 (눈고정 모드 ON)</span>
+                        </div>
+                        <button onclick="fetchAndRenderSangttaStocks(true)" style="padding: 0.35rem 0.65rem; background: #ffffff; border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 0.75rem; font-weight: 700; border-radius: 8px; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.25rem; box-shadow: 0 1px 2px rgba(0,0,0,0.04);" onmouseover="this.style.borderColor='#94a3b8'; this.style.color='var(--text-primary)';" onmouseout="this.style.borderColor='var(--border-color)'; this.style.color='var(--text-secondary)';" title="현재 등락률 및 순위 기준으로 리스트를 즉시 재정렬합니다">
+                            <span>🔄 순위 즉시 재정렬</span>
+                        </button>
+                        <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 600;">⚡ 3중 실시간 연동</div>
+                    </div>
+                </div>
+                <div style="overflow-x: auto; width: 100%;">
+                    <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.78rem; min-width: 700px;">
+                        <thead>
+                            <tr style="border-bottom: 2px solid var(--border-color); color: var(--text-secondary); font-weight: 700; font-family: var(--font-outfit); background: rgba(0, 0, 0, 0.01); user-select: none;">
+                                <th style="padding: 0.75rem 0.5rem; width: 60px; text-align: center;">순위</th>
+                                <th style="padding: 0.75rem 0.5rem; width: 160px;">종목명 (코드)</th>
+                                <th style="padding: 0.75rem 0.5rem; width: 110px; text-align: right; cursor: pointer; user-select: none; transition: all 0.2s;" onclick="sortSangttaStocks('price')" title="클릭하여 현재가 기준으로 오름차순/내림차순 정렬" onmouseover="this.style.background='rgba(0,0,0,0.03)';" onmouseout="this.style.background='transparent';">
+                                    <span>현재가</span> <span id="sort-arrow-price" style="display: inline-block; width: 18px; text-align: center; font-size: 0.65rem; opacity: 0.35; color: var(--text-muted);">▲▼</span>
+                                </th>
+                                <th style="padding: 0.75rem 0.5rem; width: 110px; text-align: right; cursor: pointer; user-select: none; transition: all 0.2s; color: #dc2626;" onclick="sortSangttaStocks('rate')" title="클릭하여 당일 등락률 기준으로 오름차순/내림차순 정렬" onmouseover="this.style.background='rgba(220, 38, 38, 0.04)';" onmouseout="this.style.background='transparent';">
+                                    <span>당일 등락률</span> <span id="sort-arrow-rate" style="display: inline-block; width: 18px; text-align: center; font-size: 0.8rem; color: #dc2626; opacity: 1;">▼</span>
+                                </th>
+                                <th style="padding: 0.75rem 0.5rem; width: 120px; text-align: right; cursor: pointer; user-select: none; transition: all 0.2s;" onclick="sortSangttaStocks('volume')" title="클릭하여 거래대금 기준으로 오름차순/내림차순 정렬" onmouseover="this.style.background='rgba(0,0,0,0.03)';" onmouseout="this.style.background='transparent';">
+                                    <span>거래대금</span> <span id="sort-arrow-volume" style="display: inline-block; width: 18px; text-align: center; font-size: 0.65rem; opacity: 0.35; color: var(--text-muted);">▲▼</span>
+                                </th>
+                                <th style="padding: 0.75rem 0.7rem; text-align: left; padding-left: 1.5rem;">출처 및 연계 테마 속성</th>
+                                <th style="padding: 0.75rem 0.5rem; width: 120px; text-align: center;">토스 주문 바로가기</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sangtta-stock-tbody">
+                            <!-- Injected via JS -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="sangtta-view-empty-msg" style="display: none; text-align: center; padding: 3.5rem; color: var(--text-muted); font-weight: 600; user-select: none;">
+                    <div style="font-size: 2rem; margin-bottom: 0.5rem;">🧘</div>
+                    현재 네이버/로얄로더/토스 데이터 내 당일 +24% 이상 급등한 종목이 없습니다.
                 </div>
             </div>
         </div>

@@ -1666,3 +1666,27 @@ header {
 .flash-chart-card-active {
     animation: flash-chart-card 3s ease-out;
 }
+
+/* Table Cell Flash Highlights for In-Place Updates */
+@keyframes cell-flash-red {
+    0% { background-color: rgba(239, 68, 68, 0.35); color: #dc2626; font-weight: 800; }
+    100% { background-color: transparent; }
+}
+@keyframes cell-flash-blue {
+    0% { background-color: rgba(37, 99, 235, 0.35); color: #2563eb; font-weight: 800; }
+    100% { background-color: transparent; }
+}
+@keyframes row-fade-in-new {
+    0% { background-color: rgba(245, 158, 11, 0.25); opacity: 0; }
+    100% { background-color: transparent; opacity: 1; }
+}
+
+.cell-flash-up {
+    animation: cell-flash-red 1.2s ease-out;
+}
+.cell-flash-down {
+    animation: cell-flash-blue 1.2s ease-out;
+}
+.row-new-entrant {
+    animation: row-fade-in-new 0.8s ease-out forwards;
+}

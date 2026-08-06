@@ -77,12 +77,12 @@ class MarketController:
 
     @staticmethod
     @market_entrypoint.get(path="/cron/theme-leaders-pullback-check",
-                           summary="[CRON] : 테마별 대장주 1차 낙폭(-4~-8%) 구간 진입 체크 및 슬랙 알림")
+                           summary="[CRON] : 테마별 대장주 1차 낙폭(-4.4~-8%) 구간 진입 체크 및 슬랙 알림")
     def run_theme_leaders_pullback_check():
         naver_theme_service.check_and_alert_theme_leaders_pullback()
         return {
             "status": "success",
-            "message": "테마별 대장주 1차 낙폭 구간(-4~-8%) 진입 체크 완료"
+            "message": "테마별 대장주 1차 낙폭 구간(-4.4~-8%) 진입 체크 완료"
         }
 
     @staticmethod
@@ -208,7 +208,7 @@ class MarketController:
             themes = stock_themes_map.get(symbol, [])
             
             price = int(r.price.last_price)
-            rate = float(r.price.change_rate)
+            rate = round(float(r.price.change_rate) * 100.0, 2)
             amount = int(r.trading_amount)
             
             trillion = int(amount // 1000000000000)
@@ -232,6 +232,122 @@ class MarketController:
                 "toss_url": f"https://www.tossinvest.com/stocks/A{symbol}/order"
             })
             
+        return {
+            "status": "success",
+            "data": data
+        }
+
+    @staticmethod
+    @market_entrypoint.get(path="/toss-sangtta",
+                           summary="[MARKET] : 네이버, 로얄로더, 토스 통합 상따 (당일 +24% 이상 급등) 후보 종목 조회")
+    def get_toss_sangtta():
+        import os
+        import logging
+        logger = logging.getLogger("uvicorn")
+
+        # 1. 네이버 금융 및 로얄로더에서 당일 +24% 이상 급등 후보 및 매핑 정보 획득
+        candidates, stock_name_map, stock_themes_map = naver_theme_service.get_sangtta_candidates_from_naver_and_royal(min_rate=24.0)
+
+        # 2. 토스증권 TOP_GAINERS 순위에서 당일 +24% 이상 급등 종목 통합
+        try:
+            from adapter.toss_api.toss_client import TossInvestmentAPI
+            toss_api = TossInvestmentAPI()
+            ranking_dto = toss_api.get_ranking(ranking_type="TOP_GAINERS", duration="1d", count=100)
+            rankings = ranking_dto.result.rankings
+            for r in rankings:
+                rate_val = round(float(r.price.change_rate) * 100.0, 2)
+                if rate_val >= 24.0:
+                    symbol = r.symbol
+                    if symbol not in candidates:
+                        name = stock_name_map.get(symbol, symbol)
+                        price = int(r.price.last_price)
+                        amount = int(r.trading_amount)
+                        candidates[symbol] = {
+                            "symbol": symbol,
+                            "name": name,
+                            "price": price,
+                            "rate": rate_val,
+                            "volume": amount,
+                            "sources": {"토스"},
+                            "themes": stock_themes_map.get(symbol, [])
+                        }
+                    else:
+                        candidates[symbol]["sources"].add("토스")
+                        if rate_val > candidates[symbol]["rate"]:
+                            candidates[symbol]["rate"] = rate_val
+                        if int(r.trading_amount) > candidates[symbol]["volume"]:
+                            candidates[symbol]["volume"] = int(r.trading_amount)
+        except Exception as e:
+            logger.warning(f"Toss API get_ranking failed during sangtta aggregation: {e}")
+
+        # 만약 전체 수집된 종목이 없고 실패 Fallback이 필요하거나 더미 환경인 경우 목 데이터 제공
+        if not candidates and os.getenv("USE_DUMMY", "false").lower() == "true":
+            mock_symbols = ["011330", "148780", "239340", "0039P0", "348080"]
+            mock_names = ["유니켐", "비큐AI", "이스트에이드", "매드업", "큐라티스"]
+            for idx, symbol in enumerate(mock_symbols, 1):
+                name = stock_name_map.get(symbol, mock_names[idx-1])
+                themes = stock_themes_map.get(symbol, ["AI 챗봇", "온디바이스 AI"] if idx % 2 == 0 else ["메타버스", "로보틱스"])
+                price = 5000 + idx * 1500
+                rate = 29.98 if idx <= 2 else round(25.4 - idx * 0.3, 2)
+                amount = 150000000000 - idx * 10000000000
+                candidates[symbol] = {
+                    "symbol": symbol,
+                    "name": name,
+                    "price": price,
+                    "rate": rate,
+                    "volume": amount,
+                    "sources": {"네이버", "로얄로더", "토스"},
+                    "themes": themes
+                }
+
+        # 누락된 종목명은 네이버 실시간 시세 API로 보완 조회
+        missing_symbols = [symbol for symbol, c in candidates.items() if c["name"] == symbol or not c["name"]]
+        if missing_symbols:
+            try:
+                resolved = naver_theme_service.fetch_naver_realtime_prices(missing_symbols)
+                for code, details in resolved.items():
+                    name = details.get("name")
+                    if name and code in candidates:
+                        candidates[code]["name"] = name
+                        stock_name_map[code] = name
+            except Exception as e:
+                logger.error(f"Failed to resolve missing stock names for sangtta: {e}")
+
+        # 등락률 높은 순서로 정렬
+        sorted_candidates = sorted(candidates.values(), key=lambda x: x["rate"], reverse=True)
+
+        data = []
+        for idx, item in enumerate(sorted_candidates, 1):
+            symbol = item["symbol"]
+            name = item["name"]
+            themes = item["themes"]
+            price = item["price"]
+            rate = item["rate"]
+            amount = item["volume"]
+            sources = sorted(list(item["sources"]))
+
+            trillion = int(amount // 1000000000000)
+            billion = int((amount % 1000000000000) // 100000000)
+            amount_str = f"{trillion}조 {billion:,}억" if trillion > 0 else f"{billion:,}억"
+            if trillion == 0 and billion == 0:
+                million = int((amount % 100000000) // 1000000)
+                amount_str = f"{million}백만" if million > 0 else "0억"
+
+            data.append({
+                "rank": idx,
+                "symbol": symbol,
+                "name": name,
+                "themes": themes,
+                "sources": sources,
+                "price": price,
+                "price_str": f"{price:,}원",
+                "rate": rate,
+                "rate_str": f"{rate:+.2f}%",
+                "volume": amount,
+                "volume_str": amount_str,
+                "toss_url": f"https://www.tossinvest.com/stocks/A{symbol}/order"
+            })
+
         return {
             "status": "success",
             "data": data

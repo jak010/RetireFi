@@ -1,3 +1,13 @@
+function getFormattedRateStr(rateStr, rateVal) {
+    let s = (rateStr != null ? rateStr : `${rateVal}%`).toString().trim();
+    if (!s.startsWith('+') && !s.startsWith('-') && rateVal > 0) {
+        s = '+' + s;
+    } else if (!s.startsWith('-') && rateVal < 0) {
+        s = '-' + s.replace(/^\+/, '');
+    }
+    return s.replace(/^(\++)/, '+').replace(/^(\-+)/, '-');
+}
+
 let countdownValue = 5;
 let countdownTimer = null;
 let themesData = [];
@@ -127,6 +137,8 @@ async function fetchThemes() {
             renderIndices();
 
             if (activeMainView === 'network') renderLeaderCharts();
+            else if (activeMainView === 'stock') renderConsolidatedStocks();
+            else if (activeMainView === 'sangtta') fetchAndRenderSangttaStocks();
 
             if (currentSidebarTab === 'leader') {
                 renderLeaderSectorsList();
@@ -195,16 +207,14 @@ function renderIndices() {
                 
                 const rateVal = parseFloat(data.rate_str.replace('%', ''));
                 let rateClass = 'flat';
-                let rateSign = '';
                 if (rateVal > 0) {
                     rateClass = 'up';
-                    rateSign = '+';
                 } else if (rateVal < 0) {
                     rateClass = 'down';
                 }
                 
                 rateEl.className = `index-rate ${rateClass}`;
-                rateEl.innerText = `${rateSign}${data.rate_str}`;
+                rateEl.innerText = getFormattedRateStr(data.rate_str, rateVal);
             }
         }
     }
@@ -363,7 +373,7 @@ function triggerSearch(themeName) {
 function onFilterChange() {
     if (activeMainView === 'stock') {
         renderConsolidatedStocks();
-    } else {
+    } else if (activeMainView === 'grid') {
         renderDashboard();
     }
     renderRankingSidebar();
@@ -530,7 +540,7 @@ function renderDashboard() {
                 let buyZoneClass = '';
                 
                 if (isLeader || is1st) {
-                    if (drop >= -8.0 && drop <= -4.0) {
+                    if (drop >= -8.0 && drop <= -4.4) {
                         buyZoneClass = 'zone-1';
                         hasAlert1 = true;
                         totalBuyingTargets++;
@@ -543,7 +553,7 @@ function renderDashboard() {
 
                 let dropColorClass = 'neutral';
                 if (drop < -8.0) dropColorClass = 'warning';
-                else if (drop < -4.0) dropColorClass = 'success';
+                else if (drop < -4.4) dropColorClass = 'success';
 
                 const rateStockVal = parseFloat(stock.rate);
                 let stockRateClass = 'flat';
@@ -588,7 +598,7 @@ function renderDashboard() {
                                 </span>
                             </div>
                             <div style="border-top: 1px dashed rgba(255,255,255,0.15); margin: 0.35rem 0;"></div>
-                            <div class="tooltip-row">1차 매수(-4%~-8%): <span>${stock.buy_zone_1}</span></div>
+                            <div class="tooltip-row">1차 매수(-4.4%~-8%): <span>${stock.buy_zone_1}</span></div>
                             <div class="tooltip-row">2차 매수(-8%~-12%): <span>${stock.buy_zone_2}</span></div>
                         </div>
                     </div>
@@ -1047,7 +1057,7 @@ function renderTossRankingList() {
         
         const rateVal = parseFloat(stock.rate);
         const rateClass = rateVal > 0 ? 'up' : (rateVal < 0 ? 'down' : 'flat');
-        const rateSign = rateVal > 0 ? '+' : '';
+        const cleanRateStr = getFormattedRateStr(stock.rate_str, rateVal);
 
         const hasTheme = Array.isArray(stock.themes) && stock.themes.length > 0;
         const themeTextHtml = hasTheme
@@ -1062,7 +1072,7 @@ function renderTossRankingList() {
                     <span class="chip-rank" style="background: rgba(0, 102, 255, 0.1); color: #0066ff;">${stock.rank}</span>
                     <span style="font-weight: 700; color: var(--text-primary);">${stock.name}</span>
                 </div>
-                <span class="chip-val ${rateClass}" style="font-weight: 600;">${stock.price_str} (${rateSign}${stock.rate_str})</span>
+                <span class="chip-val ${rateClass}" style="font-weight: 600;">${stock.price_str} (${cleanRateStr})</span>
             </div>
             <div style="display: flex; justify-content: space-between; width: 100%; font-size: 0.68rem; color: var(--text-secondary); margin-top: 0.1rem;">
                 <span>대금: <strong style="color: var(--text-primary);">${stock.volume_str}</strong></span>
@@ -1186,6 +1196,47 @@ function renderLeaderSectorsList() {
 
 
 
+let currentConsolidatedSortField = 'rate'; // 'price', 'rate', 'volume', 'drop'
+let currentConsolidatedSortAsc = false;     // 기본 내림차순
+
+function sortConsolidatedStocks(field) {
+    if (currentConsolidatedSortField === field) {
+        currentConsolidatedSortAsc = !currentConsolidatedSortAsc;
+    } else {
+        currentConsolidatedSortField = field;
+        currentConsolidatedSortAsc = (field === 'drop'); // 고점대비 낙폭은 음수가 깊을수록(오름차순) 기본 정렬
+    }
+    updateConsolidatedSortIcons();
+    renderConsolidatedStocks();
+}
+
+function updateConsolidatedSortIcons() {
+    ['price', 'rate', 'volume', 'drop'].forEach(f => {
+        const arrowEl = document.getElementById(`sort-arrow-c-${f}`);
+        const thEl = arrowEl ? arrowEl.parentElement : null;
+        if (!arrowEl) return;
+
+        if (currentConsolidatedSortField === f) {
+            if (currentConsolidatedSortAsc) {
+                arrowEl.innerHTML = `▲`;
+                arrowEl.style.color = '#2563eb';
+                arrowEl.style.opacity = '1';
+                if (thEl) thEl.style.color = '#2563eb';
+            } else {
+                arrowEl.innerHTML = `▼`;
+                arrowEl.style.color = '#dc2626';
+                arrowEl.style.opacity = '1';
+                if (thEl) thEl.style.color = '#dc2626';
+            }
+        } else {
+            arrowEl.innerHTML = `▲▼`;
+            arrowEl.style.color = 'var(--text-muted)';
+            arrowEl.style.opacity = '0.35';
+            if (thEl) thEl.style.color = 'var(--text-secondary)';
+        }
+    });
+}
+
 function renderConsolidatedStocks() {
     const tbody = document.getElementById('consolidated-stock-tbody');
     const emptyMsg = document.getElementById('stock-view-empty-msg');
@@ -1211,6 +1262,7 @@ function renderConsolidatedStocks() {
                     stockMap.set(code, {
                         code: code,
                         name: stock.stock_name,
+                        price: stock.price !== undefined ? stock.price : parseFloat((stock.price_str || '').replace(/[^0-9.-]/g, '')) || 0,
                         price_str: stock.price_str,
                         rate: stock.rate,
                         rate_str: stock.rate_str,
@@ -1255,26 +1307,13 @@ function renderConsolidatedStocks() {
         if (emptyMsg) emptyMsg.style.display = 'none';
     }
 
-    // 3. Sort unique stocks based on active filter-sort and filter-sort-order
-    const sortCriteria = document.getElementById('filter-sort').value;
-    const sortOrder = document.getElementById('filter-sort-order').value;
-    const isAsc = (sortOrder === 'asc');
-    const orderMultiplier = isAsc ? -1 : 1;
-
+    // 3. Sort unique stocks based on active consolidated table sort settings
     consolidatedList.sort((a, b) => {
-        if (sortCriteria === 'rate') {
-            return (parseFloat(b.rate) - parseFloat(a.rate)) * orderMultiplier;
-        } else if (sortCriteria === 'composite') {
-            // Sort by number of mapped themes (multi-themed stocks first)
-            return (b.themes.length - a.themes.length) * orderMultiplier;
-        } else if (sortCriteria === 'mapped_count') {
-            // Sort by drop (drawdown)
-            return (parseFloat(a.drop) - parseFloat(b.drop)) * orderMultiplier;
-        } else {
-            // Sort by volume amount
-            return (b.volume - a.volume) * orderMultiplier;
-        }
+        const valA = parseFloat(a[currentConsolidatedSortField]) || 0;
+        const valB = parseFloat(b[currentConsolidatedSortField]) || 0;
+        return currentConsolidatedSortAsc ? (valA - valB) : (valB - valA);
     });
+    updateConsolidatedSortIcons();
 
     // 4. Render Table Rows
     consolidatedList.forEach(stock => {
@@ -1290,11 +1329,11 @@ function renderConsolidatedStocks() {
         // Rate styles
         const rateVal = parseFloat(stock.rate);
         const rateClass = rateVal > 0 ? 'up' : (rateVal < 0 ? 'down' : 'flat');
-        const rateSign = rateVal > 0 ? '+' : '';
+        const cleanRateStr = getFormattedRateStr(stock.rate_str, rateVal);
 
         // Drop styles
         let dropColor = 'var(--text-primary)';
-        if (stock.drop < -4.0) dropColor = 'var(--accent-red)';
+        if (stock.drop < -4.4) dropColor = 'var(--accent-red)';
         else if (stock.drop < -2.0) dropColor = '#d97706';
 
         // Mapped Themes tags HTML
@@ -1331,11 +1370,16 @@ function renderConsolidatedStocks() {
                 </div>
                 <div style="font-size: 0.65rem; color: var(--text-muted); margin-top: 0.1rem;">${stock.code}</div>
             </td>
-            <td style="padding: 0.6rem 0.5rem; text-align: right; font-weight: 700; font-family: var(--font-outfit);">
-                <div>${stock.price_str}</div>
-                <div class="${rateClass}" style="font-size: 0.68rem; margin-top: 0.1rem;">${rateSign}${stock.rate_str}</div>
+            <td style="padding: 0.6rem 0.5rem; text-align: right; font-weight: 700; font-family: var(--font-outfit); font-size: 0.85rem;">
+                ${stock.price_str}
             </td>
-            <td style="padding: 0.6rem 0.5rem; text-align: right; font-weight: 700; color: ${dropColor}; font-family: var(--font-outfit);">
+            <td class="${rateClass}" style="padding: 0.6rem 0.5rem; text-align: right; font-weight: 800; font-family: var(--font-outfit); font-size: 0.85rem;">
+                ${cleanRateStr}
+            </td>
+            <td style="padding: 0.6rem 0.5rem; text-align: right; font-weight: 700; color: #4338ca; font-family: var(--font-outfit); font-size: 0.82rem;">
+                ${stock.volume_str || '-'}
+            </td>
+            <td style="padding: 0.6rem 0.5rem; text-align: right; font-weight: 700; color: ${dropColor}; font-family: var(--font-outfit); font-size: 0.85rem;">
                 ${stock.drop_str}
             </td>
             <td style="padding: 0.6rem 0.5rem 0.6rem 1.5rem; text-align: left;">
@@ -1377,7 +1421,7 @@ function renderConsolidatedStocks() {
 // ==========================================
 // 실시간 대장주 주가 변동 차트 모니터링
 // ==========================================
-let activeMainView = 'grid'; // 'grid', 'network', 'stock'
+let activeMainView = 'grid'; // 'grid', 'network', 'stock', 'sangtta'
 let currentNetworkStock = ''; // Track currently highlighted stock code
 let chartInstances = {}; // To store Chart.js instances
 
@@ -1386,18 +1430,20 @@ function switchMainView(viewType) {
     const tabGrid = document.getElementById('tab-grid-view');
     const tabNetwork = document.getElementById('tab-network-view');
     const tabStock = document.getElementById('tab-stock-view');
+    const tabSangtta = document.getElementById('tab-sangtta-view');
     const gridContainer = document.getElementById('grid-view-container');
     const networkContainer = document.getElementById('network-view-container');
     const stockContainer = document.getElementById('stock-view-container');
+    const sangttaContainer = document.getElementById('sangtta-view-container');
 
     // Reset styles
-    [tabGrid, tabNetwork, tabStock].forEach(tab => {
+    [tabGrid, tabNetwork, tabStock, tabSangtta].forEach(tab => {
         if (tab) {
             tab.classList.remove('active');
             tab.style.color = 'var(--text-muted)';
         }
     });
-    [gridContainer, networkContainer, stockContainer].forEach(c => {
+    [gridContainer, networkContainer, stockContainer, sangttaContainer].forEach(c => {
         if (c) c.style.display = 'none';
     });
 
@@ -1421,8 +1467,310 @@ function switchMainView(viewType) {
             tabStock.style.color = 'var(--accent-blue)';
         }
         if (stockContainer) stockContainer.style.display = 'flex';
+        updateConsolidatedSortIcons();
         renderConsolidatedStocks();
+    } else if (viewType === 'sangtta') {
+        if (tabSangtta) {
+            tabSangtta.classList.add('active');
+            tabSangtta.style.color = '#dc2626';
+        }
+        if (sangttaContainer) sangttaContainer.style.display = 'flex';
+        updateSangttaSortIcons();
+        fetchAndRenderSangttaStocks();
     }
+}
+
+let sangttaData = [];
+let isSangttaOrderLocked = true;
+let currentSangttaSortField = 'rate'; // 'price', 'rate', 'volume'
+let currentSangttaSortAsc = false;     // 기본 내림차순
+
+function sortSangttaStocks(field) {
+    if (currentSangttaSortField === field) {
+        currentSangttaSortAsc = !currentSangttaSortAsc;
+    } else {
+        currentSangttaSortField = field;
+        currentSangttaSortAsc = false; // 신규 컬럼 선택 시 높은순(내림차순)을 기본으로
+    }
+    updateSangttaSortIcons();
+    fetchAndRenderSangttaStocks(true, true); // (forceReorder=true, useLocalData=true)
+}
+
+function updateSangttaSortIcons() {
+    ['price', 'rate', 'volume'].forEach(f => {
+        const arrowEl = document.getElementById(`sort-arrow-${f}`);
+        const thEl = arrowEl ? arrowEl.parentElement : null;
+        if (!arrowEl) return;
+
+        if (currentSangttaSortField === f) {
+            if (currentSangttaSortAsc) {
+                arrowEl.innerHTML = `▲`;
+                arrowEl.style.color = '#2563eb';
+                arrowEl.style.opacity = '1';
+                if (thEl) thEl.style.color = '#2563eb';
+            } else {
+                arrowEl.innerHTML = `▼`;
+                arrowEl.style.color = '#dc2626';
+                arrowEl.style.opacity = '1';
+                if (thEl) thEl.style.color = '#dc2626';
+            }
+        } else {
+            arrowEl.innerHTML = `▲▼`;
+            arrowEl.style.color = 'var(--text-muted)';
+            arrowEl.style.opacity = '0.35';
+            if (thEl) thEl.style.color = 'var(--text-secondary)';
+        }
+    });
+}
+
+function toggleSangttaOrderLock(e) {
+    const cb = document.getElementById('sangtta-lock-checkbox');
+    const label = document.getElementById('sangtta-lock-label');
+    const wrapper = document.getElementById('sangtta-lock-wrapper');
+    if (!cb) return;
+    if (e && e.target && e.target.id !== 'sangtta-lock-checkbox') {
+        cb.checked = !cb.checked;
+    }
+    isSangttaOrderLocked = cb.checked;
+    if (isSangttaOrderLocked) {
+        if (label) {
+            label.innerText = "🔒 위치 고정 (눈고정 모드 ON)";
+            label.style.color = "#e11d48";
+        }
+        if (wrapper) {
+            wrapper.style.background = "#fff1f2";
+            wrapper.style.borderColor = "#fecdd3";
+        }
+    } else {
+        if (label) {
+            label.innerText = "🔓 자동 순위 재정렬 모드 (OFF)";
+            label.style.color = "var(--text-muted)";
+        }
+        if (wrapper) {
+            wrapper.style.background = "#f8fafc";
+            wrapper.style.borderColor = "var(--border-color)";
+        }
+        fetchAndRenderSangttaStocks(true);
+    }
+}
+
+function buildSangttaRowHtml(stock, isExited = false) {
+    let rateClass = 'flat';
+    if (stock.rate > 0) rateClass = 'up';
+    else if (stock.rate < 0) rateClass = 'down';
+
+    const cleanRateStr = getFormattedRateStr(stock.rate_str, stock.rate);
+
+    let sourcesHtml = '';
+    if (stock.sources && stock.sources.length > 0) {
+        sourcesHtml = stock.sources.map(s => {
+            if (s === '네이버') return `<span style="background: #ecfdf5; color: #047857; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 700; border: 1px solid #a7f3d0; margin-bottom: 0.1rem; display: inline-flex; align-items: center; margin-right: 0.2rem;">⚡ 네이버</span>`;
+            if (s === '로얄로더') return `<span style="background: #fffbeb; color: #b45309; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 700; border: 1px solid #fde68a; margin-bottom: 0.1rem; display: inline-flex; align-items: center; margin-right: 0.2rem;">👑 로얄로더</span>`;
+            if (s === '토스') return `<span style="background: #eff6ff; color: #1d4ed8; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 700; border: 1px solid #bfdbfe; margin-bottom: 0.1rem; display: inline-flex; align-items: center; margin-right: 0.2rem;">🚀 토스</span>`;
+            return `<span style="background: #f1f5f9; color: var(--text-secondary); padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 700; margin-bottom: 0.1rem; margin-right: 0.2rem;">${s}</span>`;
+        }).join('');
+    }
+
+    let themeTagsHtml = '';
+    if (stock.themes && stock.themes.length > 0) {
+        themeTagsHtml = stock.themes.map(t => 
+            `<span style="background: #eff6ff; color: #1d4ed8; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; border: 1px solid #bfdbfe; display: inline-block; margin-bottom: 0.1rem;">${t}</span>`
+        ).join(' ');
+    } else {
+        themeTagsHtml = '<span style="color: var(--text-muted); font-size: 0.7rem;">-</span>';
+    }
+
+    const rankDisplay = isExited ? `<span style="color:#94a3b8; font-size:0.7rem;">이탈</span>` : stock.rank;
+    const nameExtra = isExited ? ` <span style="font-size:0.65rem; color:#ef4444; background:#fef2f2; padding:0.1rem 0.3rem; border-radius:4px; border:1px solid #fecdd3;">24% 미만 이탈</span>` : '';
+
+    return `
+        <td class="col-rank" style="padding: 0.75rem 0.5rem; text-align: center; font-weight: 800; color: #dc2626; font-family: var(--font-outfit);">
+            ${rankDisplay}
+        </td>
+        <td class="col-name" style="padding: 0.75rem 0.5rem; font-weight: 700; color: var(--text-primary);">
+            <div style="font-size: 0.85rem; font-weight: 700;">${stock.name}${nameExtra}</div>
+            <div style="font-size: 0.65rem; color: var(--text-muted); margin-top: 0.1rem;">${stock.symbol}</div>
+        </td>
+        <td class="col-price" style="padding: 0.75rem 0.5rem; text-align: right; font-weight: 700; font-family: var(--font-outfit); font-size: 0.85rem; transition: background-color 0.3s;">
+            ${stock.price_str}
+        </td>
+        <td class="col-rate ${rateClass}" style="padding: 0.75rem 0.5rem; text-align: right; font-weight: 800; font-family: var(--font-outfit); font-size: 0.85rem; transition: background-color 0.3s;">
+            ${cleanRateStr}
+        </td>
+        <td class="col-volume" style="padding: 0.75rem 0.5rem; text-align: right; font-weight: 700; color: #4338ca; font-family: var(--font-outfit); font-size: 0.82rem;">
+            ${stock.volume_str}
+        </td>
+        <td class="col-themes" style="padding: 0.75rem 0.7rem 0.75rem 1.5rem; text-align: left;">
+            <div style="display: flex; flex-wrap: wrap; gap: 0.2rem; align-items: center;">
+                ${sourcesHtml}
+                ${themeTagsHtml}
+            </div>
+        </td>
+        <td style="padding: 0.75rem 0.5rem; text-align: center;">
+            <a href="${stock.toss_url}" target="_blank" style="padding: 0.35rem 0.65rem; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; border-radius: 6px; font-size: 0.72rem; font-weight: 700; text-decoration: none; display: inline-block; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.05);" title="토스증권에서 주문">🚀 토스 주문</a>
+        </td>
+    `;
+}
+
+async function fetchAndRenderSangttaStocks(forceReorder = false, useLocalData = false) {
+    const tbody = document.getElementById('sangtta-stock-tbody');
+    const emptyMsg = document.getElementById('sangtta-view-empty-msg');
+    if (!tbody) return;
+
+    if (!useLocalData || !sangttaData || sangttaData.length === 0) {
+        try {
+            const response = await fetch('/api/v1/market/toss-sangtta');
+            const result = await response.json();
+            if (result.status === 'success') {
+                sangttaData = result.data || [];
+            } else {
+                sangttaData = [];
+            }
+        } catch (e) {
+            console.error("토스 상따 종목 로딩 실패:", e);
+            sangttaData = [];
+        }
+    }
+
+    // 선택된 정렬 기준에 맞게 데이터 재정렬 및 순위 번호 재부여
+    if (sangttaData && sangttaData.length > 0) {
+        sangttaData.sort((a, b) => {
+            const valA = parseFloat(a[currentSangttaSortField]) || 0;
+            const valB = parseFloat(b[currentSangttaSortField]) || 0;
+            return currentSangttaSortAsc ? (valA - valB) : (valB - valA);
+        });
+        sangttaData.forEach((item, index) => {
+            item.rank = index + 1;
+        });
+    }
+    updateSangttaSortIcons();
+
+    const isLocked = isSangttaOrderLocked && (forceReorder !== true);
+    const existingRows = Array.from(tbody.querySelectorAll('tr[data-symbol]'));
+    const hasExisting = existingRows.length > 0;
+
+    // [초기 로드 / 수동 재정렬 / 눈고정 OFF 시] 깔끔한 새로 렌더링 (순위순 정렬 유지)
+    if (!isLocked || !hasExisting) {
+        tbody.innerHTML = '';
+        if (sangttaData.length === 0) {
+            if (emptyMsg) emptyMsg.style.display = 'block';
+            return;
+        }
+        if (emptyMsg) emptyMsg.style.display = 'none';
+
+        sangttaData.forEach(stock => {
+            const tr = document.createElement('tr');
+            tr.setAttribute('data-symbol', stock.symbol);
+            tr.setAttribute('data-price', stock.price_str);
+            tr.setAttribute('data-rate', stock.rate_str);
+            tr.id = `sangtta-tr-${stock.symbol}`;
+            tr.style.borderBottom = '1px solid var(--border-color)';
+            tr.style.transition = 'background-color 0.15s, opacity 0.3s';
+            tr.onmouseover = () => { tr.style.backgroundColor = '#fef2f2'; };
+            tr.onmouseout = () => { tr.style.backgroundColor = 'transparent'; };
+
+            tr.innerHTML = buildSangttaRowHtml(stock, false);
+            tbody.appendChild(tr);
+        });
+        return;
+    }
+
+    // [위치 고정 (눈고정 모드 ON) - In-Place 실시간 업데이트]
+    if (emptyMsg) emptyMsg.style.display = 'none';
+    const newSymbolMap = new Map();
+    sangttaData.forEach(stock => newSymbolMap.set(stock.symbol, stock));
+
+    existingRows.forEach(tr => {
+        const symbol = tr.getAttribute('data-symbol');
+        const stock = newSymbolMap.get(symbol);
+
+        if (stock) {
+            tr.style.opacity = '1';
+            const oldPrice = tr.getAttribute('data-price');
+            const oldRate = tr.getAttribute('data-rate');
+
+            const priceCell = tr.querySelector('.col-price');
+            const rateCell = tr.querySelector('.col-rate');
+            const volumeCell = tr.querySelector('.col-volume');
+
+            let priceChanged = oldPrice && oldPrice !== stock.price_str;
+            let rateChanged = oldRate && oldRate !== stock.rate_str;
+
+            if (priceChanged && priceCell) {
+                priceCell.innerText = stock.price_str;
+                tr.setAttribute('data-price', stock.price_str);
+                priceCell.classList.remove('cell-flash-up', 'cell-flash-down');
+                void priceCell.offsetWidth;
+                priceCell.classList.add('cell-flash-up');
+            } else if (priceCell && priceCell.innerText !== stock.price_str) {
+                priceCell.innerText = stock.price_str;
+                tr.setAttribute('data-price', stock.price_str);
+            }
+
+            if (rateChanged && rateCell) {
+                const rateVal = parseFloat(stock.rate);
+                rateCell.className = `col-rate ${rateVal > 0 ? 'up' : (rateVal < 0 ? 'down' : 'flat')}`;
+                rateCell.innerText = getFormattedRateStr(stock.rate_str, stock.rate);
+                tr.setAttribute('data-rate', stock.rate_str);
+                rateCell.classList.remove('cell-flash-up', 'cell-flash-down');
+                void rateCell.offsetWidth;
+                rateCell.classList.add(rateVal > 0 ? 'cell-flash-up' : 'cell-flash-down');
+            } else if (rateCell) {
+                const rateVal = parseFloat(stock.rate);
+                rateCell.className = `col-rate ${rateVal > 0 ? 'up' : (rateVal < 0 ? 'down' : 'flat')}`;
+                rateCell.innerText = getFormattedRateStr(stock.rate_str, stock.rate);
+                tr.setAttribute('data-rate', stock.rate_str);
+            }
+
+            if (volumeCell) {
+                volumeCell.innerText = stock.volume_str;
+            }
+
+            if (tr.getAttribute('data-exited') === 'true') {
+                tr.removeAttribute('data-exited');
+                tr.innerHTML = buildSangttaRowHtml(stock, false);
+            }
+
+            newSymbolMap.delete(symbol);
+        } else {
+            // 이번 주기에서 +24% 미만으로 내려가거나 리스트에서 제외된 종목 처리
+            if (tr.getAttribute('data-exited') !== 'true') {
+                tr.setAttribute('data-exited', 'true');
+                tr.style.opacity = '0.55';
+                const nameCell = tr.querySelector('.col-name');
+                const rankCell = tr.querySelector('.col-rank');
+                if (rankCell) rankCell.innerHTML = `<span style="color:#94a3b8; font-size:0.7rem;">이탈</span>`;
+                if (nameCell && !nameCell.innerHTML.includes('24% 미만 이탈')) {
+                    const nameDiv = nameCell.querySelector('div:first-child');
+                    if (nameDiv) {
+                        nameDiv.innerHTML += ` <span style="font-size:0.65rem; color:#ef4444; background:#fef2f2; padding:0.1rem 0.3rem; border-radius:4px; border:1px solid #fecdd3; display:inline-block; margin-top:0.1rem;">24% 미만 이탈</span>`;
+                    }
+                }
+            }
+        }
+    });
+
+    // 신규 진입 종목은 눈의 관찰 시야를 방해하지 않도록 테이블 최하단에 부드럽게 추가
+    newSymbolMap.forEach(stock => {
+        const tr = document.createElement('tr');
+        tr.setAttribute('data-symbol', stock.symbol);
+        tr.setAttribute('data-price', stock.price_str);
+        tr.setAttribute('data-rate', stock.rate_str);
+        tr.id = `sangtta-tr-${stock.symbol}`;
+        tr.className = 'row-new-entrant';
+        tr.style.borderBottom = '1px solid var(--border-color)';
+        tr.style.transition = 'background-color 0.15s, opacity 0.3s';
+        tr.onmouseover = () => { tr.style.backgroundColor = '#fef2f2'; };
+        tr.onmouseout = () => { tr.style.backgroundColor = 'transparent'; };
+
+        tr.innerHTML = buildSangttaRowHtml(stock, false);
+        const nameDiv = tr.querySelector('.col-name div:first-child');
+        if (nameDiv) {
+            nameDiv.innerHTML += ` <span style="font-size:0.65rem; background:#fef3c7; color:#b45309; padding:0.1rem 0.4rem; border-radius:4px; font-weight:800; border:1px solid #fde68a;">✨ NEW 진입</span>`;
+        }
+
+        tbody.appendChild(tr);
+    });
 }
 
 function showStockNetworkMap(stockName, stockCode) {
@@ -1496,18 +1844,17 @@ function renderLeaderCharts() {
         // Decide colors
         const rateVal = parseFloat(stock.rate);
         let rateColor = 'var(--text-muted)';
-        let rateSign = '';
         if (rateVal > 0) {
             rateColor = 'var(--accent-red)';
-            rateSign = '+';
         } else if (rateVal < 0) {
             rateColor = 'var(--accent-blue)';
         }
+        const cleanRateStr = getFormattedRateStr(stock.rate_str, rateVal);
 
         const drop = parseFloat(stock.drop);
         let dropColor = 'var(--text-muted)';
         if (drop < -8.0) dropColor = 'var(--accent-orange)';
-        else if (drop < -4.0) dropColor = 'var(--accent-green)';
+        else if (drop < -4.4) dropColor = 'var(--accent-green)';
 
         // 3개월 수급 위치 (머리/어깨/무릎)
         const level = stock.price_level || '-';
@@ -1540,7 +1887,7 @@ function renderLeaderCharts() {
                 </div>
                 <div style="text-align: right;">
                     <div style="font-size: 0.95rem; font-weight: 700; color: ${rateColor};">${stock.price_str}</div>
-                    <div style="font-size: 0.72rem; font-weight: 600; color: ${rateColor};">${rateSign}${stock.rate_str}</div>
+                    <div style="font-size: 0.72rem; font-weight: 600; color: ${rateColor};">${cleanRateStr}</div>
                 </div>
             </div>
             <div class="chart-canvas-container">
@@ -1694,12 +2041,12 @@ async function fetchAndDrawChart(stockCode) {
                     dropSpan.textContent = `${result.drop.toFixed(2)}%`;
                     let dropColor = 'var(--text-muted)';
                     if (result.drop < -8.0) dropColor = 'var(--accent-orange)';
-                    else if (result.drop < -4.0) dropColor = 'var(--accent-green)';
+                    else if (result.drop < -4.4) dropColor = 'var(--accent-green)';
                     dropSpan.style.color = dropColor;
                 }
-                // 매수 구간은 당일 고점 기준 1차(-4~-8%) / 2차(-8~-12%)
+                // 매수 구간은 당일 고점 기준 1차(-4.4~-8%) / 2차(-8~-12%)
                 const fmtWon = n => `${n.toLocaleString()}원`;
-                const z1Low = Math.floor(result.dayHigh * 0.92), z1High = Math.floor(result.dayHigh * 0.96);
+                const z1Low = Math.floor(result.dayHigh * 0.92), z1High = Math.floor(result.dayHigh * 0.956);
                 const z2Low = Math.floor(result.dayHigh * 0.88), z2High = Math.floor(result.dayHigh * 0.92);
                 const zone1Span = document.getElementById(`zone-1-${stockCode}`);
                 if (zone1Span) zone1Span.textContent = `1차: ${fmtWon(z1Low)} ~ ${fmtWon(z1High)}`;

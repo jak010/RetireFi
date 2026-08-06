@@ -3,7 +3,7 @@ import time
 import logging
 import requests
 import xml.etree.ElementTree as ET
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 import pandas as pd
 from bs4 import BeautifulSoup
 
@@ -78,6 +78,10 @@ class NaverThemeService:
         self.naver_themes_summary_cache = None
         self.naver_themes_summary_cache_time = 0.0
         self.naver_themes_summary_cache_ttl = 15.0 # 15초 캐시
+
+        # 실시간 시세 및 로얄로더 종목 저장 캐시 (상따 종목 조회용)
+        self.latest_naver_prices = {}
+        self.latest_rr_stocks = {}
 
         # 실시간 데이터 로딩 진행률 (0~100)
         self.load_status = {"step": "idle", "progress": 0}
@@ -255,6 +259,7 @@ class NaverThemeService:
                     rr_stock_map[code_6d] = s
                 if code_6d not in all_active_codes:
                     all_active_codes.append(code_6d)
+        self.latest_rr_stocks = rr_stock_map
 
         # 2.1. 종목 통계 데이터 병렬 사전 수집 (ThreadPoolExecutor)
         codes_to_fetch = []
@@ -286,6 +291,8 @@ class NaverThemeService:
         naver_prices = {}
         try:
             naver_prices = self.fetch_naver_realtime_prices(all_active_codes)
+            if naver_prices:
+                self.latest_naver_prices = naver_prices
         except Exception as e:
             logger.error(f"네이버 금융 실시간 시세 일괄 조회 예외 발생: {e}")
 
@@ -447,8 +454,8 @@ class NaverThemeService:
                     s["drop"] = round(intraday_drop, 2)
                     s["drop_str"] = f"{intraday_drop:.2f}%"
 
-                    # 1차 낙폭(-4~-8%), 2차 낙폭(-8~-12%) 매수 밴드 산출
-                    high_minus_4pct = int(day_high * 0.96)
+                    # 1차 낙폭(-4.4~-8%), 2차 낙폭(-8~-12%) 매수 밴드 산출
+                    high_minus_4pct = int(day_high * 0.956)
                     high_minus_8pct = int(day_high * 0.92)
                     high_minus_12pct = int(day_high * 0.88)
 
@@ -545,7 +552,7 @@ class NaverThemeService:
                 buy_zone_2 = "-"
                 if three_month_high > 0:
                     bz1_low = int(three_month_high * 0.92)
-                    bz1_high = int(three_month_high * 0.96)
+                    bz1_high = int(three_month_high * 0.956)
                     bz2_low = int(three_month_high * 0.88)
                     bz2_high = int(three_month_high * 0.92)
                     buy_zone_1 = f"{bz1_low:,} ~ {bz1_high:,}원"
@@ -725,6 +732,98 @@ class NaverThemeService:
         self.flush_pending_alerts()
         return result
 
+    def get_sangtta_candidates_from_naver_and_royal(self, min_rate: float = 24.0) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, str], Dict[str, List[str]]]:
+        """네이버 금융 및 로얄로더 시세 데이터에서 당일 등락률 min_rate(24%) 이상인 급등 후보 종목 조회"""
+        self.get_naver_themes_summary()  # 캐시 갱신 또는 확인
+        candidates = {}
+
+        stock_name_map = {}
+        stock_themes_map = {}
+        if not self.mapping_df.empty:
+            for _, row in self.mapping_df.iterrows():
+                code = row["stock_code"]
+                name = row["stock_name"]
+                theme = row["theme_name"]
+                stock_name_map[code] = name
+                if code not in stock_themes_map:
+                    stock_themes_map[code] = []
+                if theme and theme not in stock_themes_map[code]:
+                    stock_themes_map[code].append(theme)
+
+        # 1. 네이버 실시간 시세 (latest_naver_prices 및 테마 캐시) 검사
+        for code, data in getattr(self, "latest_naver_prices", {}).items():
+            rate = float(data.get("rate") or 0.0)
+            if rate >= min_rate:
+                name = data.get("name") or stock_name_map.get(code, code)
+                price = int(data.get("price") or 0)
+                amount = int(data.get("amount") or 0)
+                candidates[code] = {
+                    "symbol": code,
+                    "name": name,
+                    "price": price,
+                    "rate": round(rate, 2),
+                    "volume": amount,
+                    "sources": {"네이버"},
+                    "themes": stock_themes_map.get(code, [])
+                }
+
+        # 요약 캐시 내 상위 종목에서도 재검증 및 테마 병합
+        if self.naver_themes_summary_cache:
+            for t_item in self.naver_themes_summary_cache.get("themes", []):
+                t_name = t_item.get("theme_name")
+                for s in t_item.get("top_stocks", []):
+                    code = s.get("stock_code")
+                    rate_val = float(s.get("rate") or 0.0)
+                    if rate_val >= min_rate:
+                        if code not in candidates:
+                            candidates[code] = {
+                                "symbol": code,
+                                "name": s.get("stock_name") or stock_name_map.get(code, code),
+                                "price": int(s.get("price") or 0),
+                                "rate": round(rate_val, 2),
+                                "volume": int(s.get("volume") or 0),
+                                "sources": {"네이버"},
+                                "themes": stock_themes_map.get(code, [])
+                            }
+                        else:
+                            candidates[code]["sources"].add("네이버")
+                        if t_name and t_name not in candidates[code]["themes"]:
+                            candidates[code]["themes"].append(t_name)
+
+        # 2. 로얄로더 실시간 데이터 검사
+        rr_stocks = getattr(self, "latest_rr_stocks", {})
+        if not rr_stocks and hasattr(self, "rr_cache") and self.rr_cache:
+            for rt in self.rr_cache:
+                for s in rt.stocks:
+                    rr_stocks[s.stock_code[-6:]] = s
+
+        for code, s in rr_stocks.items():
+            rate_val = float(getattr(s, "stock_rate", 0.0) or 0.0)
+            if code in getattr(self, "latest_naver_prices", {}):
+                naver_rate = float(self.latest_naver_prices[code].get("rate") or 0.0)
+                rate_val = max(rate_val, naver_rate)
+            
+            if rate_val >= min_rate or code in candidates:
+                if code not in candidates:
+                    price = int(getattr(s, "current_price_krw", 0) or 0)
+                    amount = int((getattr(s, "trade_volume_krw", 0) or 0) * 1000000)
+                    name = getattr(s, "stock_name", None) or stock_name_map.get(code, code)
+                    candidates[code] = {
+                        "symbol": code,
+                        "name": name,
+                        "price": price,
+                        "rate": round(rate_val, 2),
+                        "volume": amount,
+                        "sources": {"로얄로더"},
+                        "themes": stock_themes_map.get(code, [])
+                    }
+                else:
+                    candidates[code]["sources"].add("로얄로더")
+                    if round(rate_val, 2) > candidates[code]["rate"]:
+                        candidates[code]["rate"] = round(rate_val, 2)
+
+        return candidates, stock_name_map, stock_themes_map
+
     def fetch_yahoo_index(self, symbol: str) -> Dict[str, Any]:
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1m&range=1d"
         try:
@@ -779,13 +878,19 @@ class NaverThemeService:
                     for area in areas:
                         for item in area.get("datas", []):
                             code = item.get("cd")
+                            name = item.get("nm", "")
                             price = item.get("nv", 0)
                             high = item.get("hv", 0)
-                            rate = item.get("cr", 0.0)
+                            rate = float(item.get("cr", 0.0) or 0.0)
+                            rf = str(item.get("rf", ""))
+                            # 네이버 API의 rf (Rise/Fall) 코드: '4'(하한), '5'(하락)이거나 현재가(nv)가 전일종가(sv)보다 낮으면 음수 변환
+                            if rf in ("4", "5") or (price > 0 and item.get("sv", 0) > price):
+                                rate = -abs(rate)
                             amount = item.get("aa", 0) # 거래대금(원 단위)
                             volume = item.get("aq", 0) # 누적거래량(주 단위)
                             
                             result_map[code] = {
+                                "name": name,
                                 "price": price,
                                 "high": high,
                                 "rate": rate,
@@ -902,8 +1007,8 @@ class NaverThemeService:
 
             intraday_drop = ((safe_price - day_high) / day_high) * 100
 
-            # 매수 밴드 산출 (1차 낙폭 -4~-8%, 2차 낙폭 -8~-12%)
-            high_minus_4pct = int(day_high * 0.96)
+            # 매수 밴드 산출 (1차 낙폭 -4.4~-8%, 2차 낙폭 -8~-12%)
+            high_minus_4pct = int(day_high * 0.956)
             high_minus_8pct = int(day_high * 0.92)
             high_minus_12pct = int(day_high * 0.88)
 
@@ -991,7 +1096,7 @@ class NaverThemeService:
         buy_zone_2 = stock_item.get("buy_zone_2", "-")
 
         # 1차 낙폭 (-4% ~ -8%) 매수 구간
-        is_1st_drop_zone = -8.0 <= drop <= -4.0
+        is_1st_drop_zone = -8.0 <= drop <= -4.4
         # 2차 낙폭 (-8% ~ -12%) 매수 구간
         is_2nd_drop_zone = -12.0 <= drop < -8.0
 
@@ -999,7 +1104,7 @@ class NaverThemeService:
         cooldown_seconds = 3600
 
         if is_1st_drop_zone or is_2nd_drop_zone:
-            zone_name = "1차 낙폭(-4~-8%)" if is_1st_drop_zone else "2차 낙폭(-8~-12%)"
+            zone_name = "1차 낙폭(-4.4~-8%)" if is_1st_drop_zone else "2차 낙폭(-8~-12%)"
             emoji = "⚡" if is_1st_drop_zone else "🟠"
             cooldown_key = f"{code}_1st_drop_zone" if is_1st_drop_zone else f"{code}_2nd_drop_zone"
             last_sent = self.slack_alert_history.get(cooldown_key, 0)
@@ -1077,7 +1182,7 @@ class NaverThemeService:
                 f"{emoji} *[{alert['zone_name']}] {name} ({code})* | {role}\n"
                 f"• *소속 테마:* {theme_name}\n"
                 f"• *현재가:* {price_str} ({rate_str}) | *고점 대비 낙폭:* `{drop:.2f}%`\n"
-                f"• *1차 매수구간 (-4~-8%):* `{buy_zone_1}`" + (" 🟢 진입" if is_1st else "") + "\n"
+                f"• *1차 매수구간 (-4.4~-8%):* `{buy_zone_1}`" + (" 🟢 진입" if is_1st else "") + "\n"
                 f"• *2차 매수구간 (-8~-12%):* `{buy_zone_2}`" + (" 🟠 진입" if not is_1st else "")
             )
             
@@ -1126,9 +1231,9 @@ class NaverThemeService:
         return self.get_pullback_alert_settings()
 
     def check_and_alert_theme_leaders_pullback(self):
-        """백그라운드 실시간 모니터링: 테마별 대장주가 1차 낙폭(-4~-8%) 구간에 진입했는지 주기적으로 점검하고 알림 발송"""
+        """백그라운드 실시간 모니터링: 테마별 대장주가 1차 낙폭(-4.4~-8%) 구간에 진입했는지 주기적으로 점검하고 알림 발송"""
         try:
-            logger.info("[PULLBACK MONITOR] 테마 대장주 1차 낙폭(-4~-8%) 진입 감지 스케줄러 실행 중...")
+            logger.info("[PULLBACK MONITOR] 테마 대장주 1차 낙폭(-4.4~-8%) 진입 감지 스케줄러 실행 중...")
             # 캐싱 TTL이나 갱신 주기에 따라 시세 데이터를 수집하며 각 종목의 낙폭 알림(trigger_slack_alerts_if_needed) 자동 가동
             self._calculate_themes_summary()
             logger.info("[PULLBACK MONITOR] 테마 대장주 실시간 낙폭 감지 완료.")
@@ -1310,8 +1415,8 @@ class NaverThemeService:
             # 3. 슬랙 파일 업로드 전송
             # sned_message_with_file 내부적으로 files_upload_v2를 사용하여 슬랙 채널에 업로드하며, 
             # 슬랙 UI 상에서 접었다 펼쳐볼 수 있는 스니펫 형태와 다운로드 기능을 동시에 지원하게 됩니다.
-            title = f"📊 실시간 테마 & 대장주 30분 브리핑 ({now.strftime('%Y-%m-%d %H:%M')})"
-            comment = f"실시간 거래대금 상위 TOP 15 테마군 및 대장주/1등주 브리핑 파일입니다. (정각/30분 발송)"
+            title = f"📊 실시간 테마 & 대장주 고점 대비 낙폭 브리핑 ({now.strftime('%Y-%m-%d %H:%M')})"
+            comment = f"실시간 거래대금 상위 TOP 15 테마군 및 대장주/1등주 고점 대비 낙폭 브리핑 파일입니다. (정각/30분 발송)"
             
             self.slack.sned_message_with_file(
                 title=title,
@@ -1330,7 +1435,7 @@ class NaverThemeService:
                     logger.warning(f"임시 파일 삭제 실패: {ex}")
 
     def generate_briefing_text(self) -> str:
-        """실시간 테마별 대장주 & 1등주 현황 (거래대금 TOP 15) 브리핑 텍스트를 생성합니다."""
+        """실시간 테마별 대장주 & 1등주 당일 고점 대비 낙폭 현황 (거래대금 TOP 15) 브리핑 텍스트를 생성합니다."""
         from datetime import datetime
         
         summary_res = self.get_naver_themes_summary()
@@ -1346,8 +1451,9 @@ class NaverThemeService:
 
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         lines = [
-            f"⏰ [실시간 테마별 대장주 & 1등주 현황 (거래대금 TOP 15)]",
+            f"⏰ [실시간 테마별 대장주 & 1등주 고점 대비 낙폭 브리핑 (거래대금 TOP 15)]",
             f"기준 일시: {now_str}",
+            "💡 핵심 포커스: 당일 장중 고점 대비 하락한 가격(원) 및 낙폭률(%) 위주 정리 (눌림목 타점 체크)",
             "────────────────────────────────────────────────"
         ]
 
@@ -1373,7 +1479,57 @@ class NaverThemeService:
                 s_price = s.get("price_str", "-")
                 s_vol = s.get("volume_str", "-")
                 
-                leaders_info.append(f"  • {role}: {s_name} (거래대금: {s_vol} | 등락률: {s_rate} | 현재가: {s_price})")
+                try:
+                    price_val = int(s.get("price", 0))
+                except (ValueError, TypeError):
+                    price_val = 0
+
+                try:
+                    day_high_val = int(s.get("day_high", 0))
+                except (ValueError, TypeError):
+                    day_high_val = 0
+
+                try:
+                    drop_val = float(s.get("drop", 0.0))
+                except (ValueError, TypeError):
+                    drop_val = 0.0
+
+                drop_str = s.get("drop_str", f"{drop_val:.2f}%")
+
+                # 당일 고점 값이 없거나 현재가보다 낮은 경우 복구 처리 (예: 더미 데이터 등)
+                if not day_high_val or day_high_val < price_val:
+                    if drop_val < 0 and price_val > 0:
+                        day_high_val = int(price_val / (1 + (drop_val / 100.0)))
+                    else:
+                        day_high_val = price_val
+
+                diff_won = int(day_high_val) - int(price_val)
+                if diff_won < 0:
+                    diff_won = 0
+
+                # 고점 대비 하락 가격 및 낙폭률 문자열 구성
+                if diff_won == 0 or drop_val == 0.0:
+                    drop_desc = f"🚀 당일 고점 대비: 0.00% (당일 장중 고점(최고가) 돌파/유지 중 ──▶ 현재가: {s_price})"
+                else:
+                    drop_desc = f"📉 당일 고점 대비: {drop_str} (당일 고점 {int(day_high_val):,}원 대비 -{diff_won:,}원 하락 ──▶ 현재가: {s_price})"
+
+                # 1차/2차 매수 구간 및 진입 여부 안내
+                buy_zone_1 = s.get("buy_zone_1", "-")
+                buy_zone_2 = s.get("buy_zone_2", "-")
+                if -8.0 <= drop_val <= -4.4:
+                    zone_desc = f"⚡ [1차 낙폭 매수구간 진입!] 1차 매수 밴드(-4.4~-8%): {buy_zone_1}"
+                elif -12.0 <= drop_val < -8.0:
+                    zone_desc = f"🟠 [2차 낙폭 매수구간 진입!] 2차 매수 밴드(-8~-12%): {buy_zone_2}"
+                elif drop_val < -12.0:
+                    zone_desc = f"🛑 [2차 매수구간 하향 이탈] 2차 매수 밴드(-8~-12%): {buy_zone_2}"
+                else:
+                    zone_desc = f"🎯 [1차 낙폭 대기 중] 1차 매수 밴드(-4.4~-8%): {buy_zone_1}"
+
+                leaders_info.append(f"  • {role}: {s_name} (거래대금: {s_vol} | 당일 등락률: {s_rate})")
+                leaders_info.append(f"    └ {drop_desc}")
+                leaders_info.append(f"    └ {zone_desc}")
+                if s_idx == 0 and len(sorted_stocks[:2]) > 1:
+                    leaders_info.append("")
 
             theme_header = f"{idx}. {theme_name} (평균등락률: {avg_rate_val:+.2f}% | 총거래대금: {vol_str})"
             lines.append(theme_header)
