@@ -8,7 +8,7 @@ function getFormattedRateStr(rateStr, rateVal) {
     return s.replace(/^(\++)/, '+').replace(/^(\-+)/, '-');
 }
 
-let countdownValue = 5;
+let countdownValue = 7;
 let countdownTimer = null;
 let themesData = [];
 let recentNews = [];
@@ -771,13 +771,13 @@ function updateClock() {
 // Live Auto-Refresh system
 function startCountdown() {
     clearInterval(countdownTimer);
-    countdownValue = 5;
+    countdownValue = 7;
     document.getElementById('countdown').innerText = countdownValue;
     
     countdownTimer = setInterval(() => {
         countdownValue--;
         if (countdownValue <= 0) {
-            countdownValue = 5;
+            countdownValue = 7;
             fetchThemes();
         }
         document.getElementById('countdown').innerText = countdownValue;

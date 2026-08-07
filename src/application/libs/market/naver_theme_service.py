@@ -59,11 +59,11 @@ class NaverThemeService:
 
         self.rr_cache = None
         self.rr_cache_time = 0.0
-        self.rr_cache_ttl = 5.0 # 로얄로더 시세 TTL: 5초
+        self.rr_cache_ttl = 7.0 # 로얄로더 시세 TTL: 7초
 
         self.indices_cache = None
         self.indices_cache_time = 0.0
-        self.indices_cache_ttl = 5.0 # 지수 데이터 TTL: 5초
+        self.indices_cache_ttl = 7.0 # 지수 데이터 TTL: 7초
 
         # 종목 통계 데이터 (종목별 3개월 최고가, 20일 평균 거래량) 캐시
         self.stock_stats_cache = {}
