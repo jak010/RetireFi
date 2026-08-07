@@ -161,6 +161,19 @@
             
             <!-- Tab Content 1: Grid View -->
             <div id="grid-view-container" style="display: flex; flex-direction: column; flex: 1; min-height: 0; width: 100%; overflow: hidden;">
+                <!-- Closing Price Betting Section -->
+                <div id="closing-bet-section" style="display: none; flex-direction: column; padding: 0 1.5rem 1rem 1.5rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.5rem; flex-shrink: 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem;">
+                        <h3 id="closing-bet-title" style="font-size: 1.05rem; font-weight: 800; color: #ef4444; letter-spacing: -0.02em; display: flex; align-items: center; gap: 0.4rem;">
+                            <span class="pulsing-dot" style="display: inline-block; width: 8px; height: 8px; background-color: #ef4444; border-radius: 50%; box-shadow: 0 0 8px #ef4444;"></span>
+                            🎯 실시간 종가베팅 후보군 (AI 알고리즘 추천)
+                        </h3>
+                    </div>
+                    <div id="closing-bet-cards-container" style="display: flex; gap: 1rem; overflow-x: auto; padding-bottom: 0.5rem; scrollbar-width: thin;">
+                        <!-- Cards injected via JS -->
+                    </div>
+                </div>
+
                 <div class="dashboard-grid" id="dashboard-grid-container">
                     <div class="no-data-msg">
                         <div class="no-data-icon">⏳</div>

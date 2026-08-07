@@ -712,6 +712,14 @@ function renderDashboard() {
     }
 
     updateSummary(processedThemes.length, totalBuyingTargets);
+    
+    // Evaluate and render closing bet candidates
+    if (!hasActiveFilters) {
+        renderClosingBetCandidates(processedThemes);
+    } else {
+        const cbSection = document.getElementById('closing-bet-section');
+        if (cbSection) cbSection.style.display = 'none';
+    }
 }
 
 // Toggle highlighting feature
@@ -2268,4 +2276,100 @@ async function showHoverChart(clientX, clientY, stockCode, stockName) {
     } catch (e) {
         console.error('Hover fetch failed:', e);
     }
+}
+
+// --- Closing Price Betting Algorithm & UI ---
+function renderClosingBetCandidates(themesData) {
+    const section = document.getElementById('closing-bet-section');
+    const container = document.getElementById('closing-bet-cards-container');
+    if (!section || !container) return;
+
+    const now = new Date();
+    const timeInMins = now.getHours() * 60 + now.getMinutes();
+    const isTargetTime = timeInMins >= (14 * 60 + 30) && timeInMins <= (15 * 60 + 30);
+    
+    // Get Top 8 themes by volume (themesData is already sorted)
+    const topThemes = themesData.slice(0, 8);
+    let candidates = [];
+    
+    topThemes.forEach((theme, themeIndex) => {
+        if (!theme.top_stocks) return;
+        const themeScore = 8 - themeIndex;
+        const themeVolumeNum = parseFloat(theme.total_volume_str.replace(/[^0-9.]/g, '')) || 1;
+        
+        // Pick top 2 stocks from the theme
+        const topStocks = theme.top_stocks.slice(0, 2);
+        topStocks.forEach((stock) => {
+            const rate = parseFloat(stock.rate) || 0;
+            const drop = parseFloat(stock.drop) || 0;
+            const volStr = stock.volume_str || '0';
+            const vol = parseFloat(volStr.replace(/[^0-9.]/g, '')) || 0;
+            
+            let dominance = 0;
+            if (themeVolumeNum > 0 && vol > 0) {
+                dominance = Math.min(100, (vol / themeVolumeNum) * 100);
+            }
+            
+            // Algorithm: Rate 7% ~ 25%, Drop 0 to -8%
+            if (rate >= 7.0 && rate <= 25.0 && drop >= -8.0) {
+                let score = rate + (dominance * 0.1) + themeScore;
+                if (drop >= -5.0) score += 3; // Bonus for strong holding power
+                if (vol > 300) score += 2; // Bonus for decent liquidity (>300억)
+                
+                candidates.push({ stock, themeName: theme.theme_name, score });
+            }
+        });
+    });
+    
+    candidates.sort((a, b) => b.score - a.score);
+    const finalCandidates = candidates.slice(0, 4);
+    
+    if (finalCandidates.length === 0) {
+        section.style.display = 'none';
+        return;
+    }
+    
+    section.style.display = 'flex';
+    container.innerHTML = '';
+    
+    finalCandidates.forEach(c => {
+        const s = c.stock;
+        const rateClass = parseFloat(s.rate) >= 0 ? 'up' : 'down';
+        const rateSign = parseFloat(s.rate) > 0 ? '+' : '';
+        const glowClass = isTargetTime ? 'glow' : '';
+        
+        const card = document.createElement('div');
+        card.className = `closing-bet-card ${glowClass}`;
+        
+        card.onmouseenter = (e) => handleStockHover(e, s.stock_code, s.stock_name);
+        card.onmouseleave = handleStockLeave;
+        
+        // Allow clicking the card to open toss order link
+        card.onclick = (e) => {
+            e.stopPropagation();
+            window.open(`https://www.tossinvest.com/stocks/A${s.stock_code}/order`, '_blank');
+        };
+        
+        card.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                <span style="font-size: 0.7rem; font-weight: 700; color: var(--accent-blue); background: rgba(29, 78, 216, 0.1); padding: 0.2rem 0.4rem; border-radius: 4px;">${c.themeName} 대장</span>
+                <span style="font-size: 0.7rem; color: var(--text-muted);">${s.volume_str || '-'}</span>
+            </div>
+            <div style="display: flex; align-items: baseline; gap: 0.5rem; margin-top: 0.2rem;">
+                <span style="font-size: 1.1rem; font-weight: 800; color: var(--text-primary);">${s.stock_name}</span>
+                <span style="font-size: 0.85rem; font-weight: 700;" class="${rateClass}">${rateSign}${s.rate}%</span>
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-secondary); display: flex; flex-direction: column; gap: 0.2rem; margin-top: 0.3rem;">
+                <div style="display: flex; justify-content: space-between;">
+                    <span>당일 고점 대비 낙폭:</span>
+                    <span style="font-weight: 700; color: ${parseFloat(s.drop) < -5 ? 'var(--accent-orange)' : 'var(--accent-green)'};">${s.drop}%</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; border-top: 1px dotted rgba(255,255,255,0.1); padding-top: 0.3rem; margin-top: 0.2rem;">
+                    <span>눌림목 1차 타점:</span>
+                    <span style="font-weight: 700; color: var(--text-muted);">${s.buy_zone_1 || '-'}</span>
+                </div>
+            </div>
+        `;
+        container.appendChild(card);
+    });
 }
