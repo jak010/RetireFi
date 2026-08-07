@@ -1690,3 +1690,89 @@ header {
 .row-new-entrant {
     animation: row-fade-in-new 0.8s ease-out forwards;
 }
+
+/* Hover Chart Tooltip */
+#stock-hover-tooltip {
+    position: fixed;
+    z-index: 9999;
+    width: 380px;
+    background: rgba(15, 23, 42, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    pointer-events: none;
+    padding: 0.75rem;
+    color: #f8fafc;
+    transform: translateY(10px);
+    opacity: 0;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+#stock-hover-tooltip.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+#stock-hover-tooltip .tooltip-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+#stock-hover-tooltip .tooltip-header span:last-child {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+#stock-hover-tooltip .tooltip-chart-container {
+    position: relative;
+    width: 100%;
+    height: 120px;
+}
+
+/* Tooltip Position Gauge */
+.position-gauge-container {
+    margin-top: 0.8rem;
+    padding-top: 0.6rem;
+    border-top: 1px dotted rgba(255, 255, 255, 0.1);
+}
+
+.gauge-track {
+    position: relative;
+    width: 100%;
+    height: 6px;
+    background: linear-gradient(to right, rgba(16, 185, 129, 0.7) 0%, rgba(16, 185, 129, 0.7) 35%, rgba(217, 119, 6, 0.7) 35%, rgba(217, 119, 6, 0.7) 70%, rgba(239, 68, 68, 0.7) 70%, rgba(239, 68, 68, 0.7) 100%);
+    border-radius: 3px;
+    margin-bottom: 0.4rem;
+}
+
+.gauge-marker {
+    position: absolute;
+    top: -4px;
+    left: 0%;
+    width: 2px;
+    height: 14px;
+    background: #ffffff;
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+    transform: translateX(-50%);
+    transition: left 0.3s ease-out;
+    z-index: 2;
+}
+
+.gauge-marker::after {
+    content: '';
+    position: absolute;
+    top: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 4px;
+    border-style: solid;
+    border-color: #ffffff transparent transparent transparent;
+}
+
+.gauge-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.65rem;
+    color: var(--text-muted);
+}

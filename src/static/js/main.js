@@ -570,7 +570,7 @@ function renderDashboard() {
                         <div class="stock-role-indicator">${roleIcon}</div>
                         <div class="stock-info-block">
                             <div class="stock-name-line">
-                                <span class="stock-name" style="cursor: pointer;" onclick="showStockNetworkMap('${stock.stock_name}', '${stock.stock_code}')" title="클릭 시 실시간 대장주 주가 차트 모니터링 탐색">${stock.stock_name}</span>
+                                <span class="stock-name" style="cursor: pointer;" onclick="showStockNetworkMap('${stock.stock_name}', '${stock.stock_code}')" onmouseenter="handleStockHover(event, '${stock.stock_code}', '${stock.stock_name}')" onmouseleave="handleStockLeave()">${stock.stock_name}</span>
                                 <a href="https://www.tossinvest.com/stocks/A${stock.stock_code}/order" target="_blank" class="stock-code">${stock.stock_code}</a>
                             </div>
                             <div style="font-size: 0.7rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.25rem; margin-top: 0.15rem;">
@@ -589,18 +589,6 @@ function renderDashboard() {
                             <span class="stock-drop ${dropColorClass}">${stock.drop_str}</span>
                         </div>
                         
-                        <!-- Tooltip displaying buy target bands on hover -->
-                        <div class="buy-band-tooltip">
-                            <div class="tooltip-row">3M 최고가: <span>${stock.three_month_high_str || '-'}</span></div>
-                            <div class="tooltip-row">이평선 상태: 
-                                <span class="ma-status-badge ${stock.ma10_above_ma20 ? 'golden' : 'dead'}" style="margin-left: 0.25rem;">
-                                    ${stock.ma10_above_ma20 ? '10MA > 20MA 🟢' : '10MA ≦ 20MA 🔴'}
-                                </span>
-                            </div>
-                            <div style="border-top: 1px dashed rgba(255,255,255,0.15); margin: 0.35rem 0;"></div>
-                            <div class="tooltip-row">1차 매수(-4.4%~-8%): <span>${stock.buy_zone_1}</span></div>
-                            <div class="tooltip-row">2차 매수(-8%~-12%): <span>${stock.buy_zone_2}</span></div>
-                        </div>
                     </div>
                 `;
             });
@@ -1338,7 +1326,7 @@ function renderConsolidatedStocks() {
 
         // Mapped Themes tags HTML
         const themeTagsHtml = stock.themes.map(themeName => {
-            return `<span class="theme-tag" onclick="triggerSearch('${themeName}')" style="display: inline-block; font-size: 0.65rem; background: #f1f5f9; color: var(--text-secondary); padding: 0.15rem 0.4rem; border-radius: 4px; margin-right: 0.3rem; margin-bottom: 0.3rem; cursor: pointer; font-weight: 600; border: 1px solid var(--border-color); transition: all 0.2s;" onmouseover="this.style.background='var(--accent-blue-glow)'; this.style.color='var(--accent-blue)';" onmouseout="this.style.background='#f1f5f9'; this.style.color='var(--text-secondary)';">${themeName}</span>`;
+            return `<span class="theme-tag" onclick="triggerSearch('${themeName}')" style="display: inline-block; font-size: 0.65rem; background: #f1f5f9; color: var(--text-secondary); padding: 0.15rem 0.4rem; border-radius: 4px; margin-right: 0.3rem; margin-bottom: 0.3rem; cursor: pointer; font-weight: 600; border: 1px solid var(--border-color); transition: all 0.2s;" onmouseover="this.style.background='var(--accent-blue-glow)'; this.style.color='var(--accent-blue)';" onmouseout="this.style.background='#f1f5f9'; this.style.color='var(--text-secondary)';" >${themeName}</span>`;
         }).join('');
 
         // Leader Badge
@@ -1365,7 +1353,7 @@ function renderConsolidatedStocks() {
         tr.innerHTML = `
             <td style="padding: 0.6rem 0.5rem; font-weight: 600; color: var(--text-primary);">
                 <div style="display: flex; align-items: center; gap: 0.2rem;">
-                    <span style="cursor: pointer; text-decoration: underline; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" onclick="showStockNetworkMap('${stock.name}', '${stock.code}')" title="클릭 시 실시간 대장주 주가 차트 모니터링 탐색">${stock.name}</span>
+                    <span style="cursor: pointer; text-decoration: underline; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" onclick="showStockNetworkMap('${stock.name}', '${stock.code}')">${stock.name}</span>
                     ${leaderBadgeHtml}
                 </div>
                 <div style="font-size: 0.65rem; color: var(--text-muted); margin-top: 0.1rem;">${stock.code}</div>
@@ -2138,5 +2126,146 @@ async function fetchAndRenderPriceBands(stockCode) {
         maBadge.style.background = good ? 'rgba(16, 185, 129, 0.08)' : 'rgba(100, 116, 139, 0.08)';
         maBadge.style.border = `1px solid ${good ? '#10b981' : 'var(--text-muted)'}`;
         maBadge.textContent = good ? '10MA ≥ 20MA' : '10MA < 20MA';
+    }
+}
+
+// --- Hover Chart Tooltip ---
+let hoverChartTimer = null;
+
+function handleStockHover(event, stockCode, stockName) {
+    clearTimeout(hoverChartTimer);
+    const clientX = event.clientX;
+    const clientY = event.clientY;
+    hoverChartTimer = setTimeout(() => {
+        showHoverChart(clientX, clientY, stockCode, stockName);
+    }, 700);
+}
+
+function handleStockLeave() {
+    clearTimeout(hoverChartTimer);
+    const tooltip = document.getElementById('stock-hover-tooltip');
+    if (tooltip) {
+        tooltip.classList.remove('visible');
+        setTimeout(() => {
+            if (!tooltip.classList.contains('visible')) {
+                tooltip.style.display = 'none';
+            }
+        }, 200);
+    }
+}
+
+async function showHoverChart(clientX, clientY, stockCode, stockName) {
+    const tooltip = document.getElementById('stock-hover-tooltip');
+    const nameEl = document.getElementById('hover-stock-name');
+    const codeEl = document.getElementById('hover-stock-code');
+    
+    if (!tooltip) return;
+    
+    nameEl.innerText = stockName;
+    codeEl.innerText = stockCode;
+    
+    let top = clientY + 15;
+    let left = clientX + 15;
+    if (left + 380 > window.innerWidth) left = clientX - 395;
+    if (top + 160 > window.innerHeight) top = clientY - 175;
+    
+    tooltip.style.top = `${top}px`;
+    tooltip.style.left = `${left}px`;
+    tooltip.style.display = 'block';
+    
+    setTimeout(() => tooltip.classList.add('visible'), 10);
+    
+    try {
+        const stats = await loadStock3mStats(stockCode);
+        
+        if (!tooltip.classList.contains('visible') || codeEl.innerText !== stockCode) return;
+        
+        let targetStock = null;
+        for (const theme of themesData) {
+            if (theme.top_stocks) {
+                targetStock = theme.top_stocks.find(s => s.stock_code === stockCode);
+                if (targetStock) break;
+            }
+        }
+        
+        if (targetStock) {
+            document.getElementById('hover-day-high').innerText = targetStock.day_high_str || '-';
+            const dropEl = document.getElementById('hover-day-drop');
+            dropEl.innerText = targetStock.drop_str || '-';
+            const dropVal = parseFloat(targetStock.drop);
+            dropEl.style.color = dropVal < -8.0 ? 'var(--accent-orange)' : (dropVal < -4.4 ? 'var(--accent-green)' : 'var(--text-muted)');
+            
+            document.getElementById('hover-zone-1').innerText = `1차: ${targetStock.buy_zone_1}`;
+            document.getElementById('hover-zone-2').innerText = `2차: ${targetStock.buy_zone_2}`;
+            
+            const curPriceEl = document.getElementById('hover-current-price');
+            if (curPriceEl) {
+                curPriceEl.innerText = targetStock.price_str || '-';
+            }
+        }
+        
+        const lvlEl = document.getElementById('hover-stock-level');
+        if (stats && lvlEl) {
+            const level = stats.price_level || '-';
+            const pos = stats.price_position_ratio !== undefined ? `${stats.price_position_ratio}%` : '';
+            lvlEl.innerText = `${level} ${pos}`;
+            if (level === '머리') { lvlEl.style.color = '#ef4444'; lvlEl.style.background = 'rgba(239, 68, 68, 0.08)'; lvlEl.style.border = '1px solid #ef4444'; }
+            else if (level === '어깨') { lvlEl.style.color = '#d97706'; lvlEl.style.background = 'rgba(245, 158, 11, 0.08)'; lvlEl.style.border = '1px solid #d97706'; }
+            else if (level === '무릎') { lvlEl.style.color = '#10b981'; lvlEl.style.background = 'rgba(16, 185, 129, 0.08)'; lvlEl.style.border = '1px solid #10b981'; }
+            else { lvlEl.style.color = 'var(--text-muted)'; lvlEl.style.background = 'rgba(100, 116, 139, 0.08)'; lvlEl.style.border = '1px solid var(--text-muted)'; }
+            
+            const maEl = document.getElementById('hover-stock-ma');
+            if (maEl) {
+                const good = !!stats.ma10_above_ma20;
+                maEl.innerText = good ? '10MA ≥ 20MA' : '10MA < 20MA';
+                maEl.style.color = good ? '#10b981' : 'var(--text-muted)';
+                maEl.style.background = good ? 'rgba(16, 185, 129, 0.08)' : 'rgba(100, 116, 139, 0.08)';
+                maEl.style.border = `1px solid ${good ? '#10b981' : 'var(--text-muted)'}`;
+            }
+            
+            const gaugeContainer = document.getElementById('hover-position-gauge-container');
+            const gaugeMarker = document.getElementById('hover-gauge-marker');
+            if (gaugeContainer && gaugeMarker && stats.price_position_ratio !== undefined) {
+                gaugeContainer.style.display = 'block';
+                gaugeMarker.style.transition = 'none';
+                gaugeMarker.style.left = '0%';
+                
+                const gaugePriceEl = document.getElementById('hover-gauge-price');
+                if (gaugePriceEl) {
+                    gaugePriceEl.innerText = targetStock ? targetStock.price_str : '-';
+                }
+                
+                setTimeout(() => {
+                    gaugeMarker.style.transition = 'left 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)';
+                    const ratio = Math.max(0, Math.min(100, stats.price_position_ratio));
+                    gaugeMarker.style.left = `${ratio}%`;
+                }, 10);
+            } else if (gaugeContainer) {
+                gaugeContainer.style.display = 'none';
+            }
+            
+            const band = compute3mBand(stats);
+            if (band) {
+                const hEl = document.getElementById('hover-gauge-head');
+                if (hEl) hEl.innerText = Math.round(band.headLow).toLocaleString();
+                const sEl = document.getElementById('hover-gauge-shoulder');
+                if (sEl) sEl.innerText = Math.round(band.shoulderLow).toLocaleString();
+                const kEl = document.getElementById('hover-gauge-knee');
+                if (kEl) kEl.innerText = Math.round(band.low).toLocaleString();
+                const tEl = document.getElementById('hover-gauge-top');
+                if (tEl) tEl.innerText = Math.round(band.high).toLocaleString();
+            } else {
+                const hEl = document.getElementById('hover-gauge-head');
+                if (hEl) hEl.innerText = '-';
+                const sEl = document.getElementById('hover-gauge-shoulder');
+                if (sEl) sEl.innerText = '-';
+                const kEl = document.getElementById('hover-gauge-knee');
+                if (kEl) kEl.innerText = '-';
+                const tEl = document.getElementById('hover-gauge-top');
+                if (tEl) tEl.innerText = '-';
+            }
+        }
+    } catch (e) {
+        console.error('Hover fetch failed:', e);
     }
 }
