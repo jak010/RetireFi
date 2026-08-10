@@ -2686,9 +2686,22 @@ function renderHeatmap() {
                     stockBlock.style.overflow = 'hidden';
                     stockBlock.style.transition = 'filter 0.1s';
                     
-                    stockBlock.onmouseover = () => stockBlock.style.filter = 'brightness(1.2)';
-                    stockBlock.onmouseout = () => stockBlock.style.filter = 'brightness(1)';
+                    stockBlock.onmouseenter = (e) => {
+                        stockBlock.style.filter = 'brightness(1.2)';
+                        handleStockHover(e, sNode.data.stock_code, sNode.data.stock_name);
+                    };
+                    stockBlock.onmouseleave = (e) => {
+                        stockBlock.style.filter = 'brightness(1)';
+                        handleStockLeave();
+                    };
                     stockBlock.onclick = () => window.open(`https://finance.naver.com/item/main.naver?code=${sNode.data.stock_code}`, '_blank');
+                    
+                    let tooltip = `${sNode.data.stock_name} | ${sNode.data.description || ''}`;
+                    if (sNode.data.role && sNode.data.role.includes('대장주')) {
+                        tooltip += `\n★ 대장주`;
+                    }
+                    tooltip += `\n4M 최고가: ${sNode.data.four_month_high_str || '-'}\n1차 타점: ${sNode.data.buy_zone_1 || '-'}\n2차 타점: ${sNode.data.buy_zone_2 || '-'}`;
+                    stockBlock.title = tooltip;
                     
                     if (sb.w > 40 && sb.h > 30) {
                         const fontSizeTitle = Math.max(0.6, Math.min(1.2, sb.w / 70));
