@@ -442,6 +442,7 @@ header {
     height: calc(100vh - 198px); /* Fill the screen perfectly down to the fixed bottom ticker bar */
     overflow: hidden;
     background: rgba(0, 0, 0, 0.01);
+    transition: grid-template-columns 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Left Side: Full Theme Rankings List */

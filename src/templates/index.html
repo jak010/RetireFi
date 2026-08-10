@@ -132,9 +132,9 @@
     <div class="dashboard-layout">
         <!-- Left Side: Total Themes & Leader Sectors Split View -->
         <div class="ranking-sidebar">
-            <div class="sidebar-tabs">
+            <div class="sidebar-tabs" style="display: flex; justify-content: space-between; align-items: center; padding-right: 0.5rem;">
                 <button class="sidebar-tab active" id="tab-theme-ranking" onclick="switchSidebarTab('theme')">테마 랭킹</button>
-                <button class="sidebar-tab" id="tab-leader-ranking" onclick="switchSidebarTab('leader')">주도 업종</button>
+                <button id="btn-toggle-sidebar-left" onclick="toggleSidebar()" style="background: none; border: none; font-size: 1.1rem; cursor: pointer; color: var(--text-muted); transition: color 0.2s;" title="사이드바 접기/펴기">◀</button>
             </div>
             <div class="ranking-sidebar-header" id="theme-ranking-header">
                 <span>전체 테마 수급 랭킹</span>
@@ -146,14 +146,7 @@
                 <span style="cursor: pointer; text-align: right;" onclick="setSidebarSort('rate')" title="평균 등락률 정렬">등락률</span>
                 <span style="cursor: pointer; text-align: right;" onclick="setSidebarSort('volume')" title="거래대금 점유율 정렬">점유율</span>
             </div>
-            <div class="ranking-sidebar-header" id="leader-ranking-header" style="display: none;">
-                <span>실시간 주도 업종 TOP 3</span>
-                <span style="font-size:0.65rem; color:var(--text-muted);">평균 등락률 순</span>
-            </div>
             <div class="ranking-list-container" id="ranking-list-container">
-                <!-- Injected via JS -->
-            </div>
-            <div class="ranking-list-container" id="leader-list-container" style="display: none;">
                 <!-- Injected via JS -->
             </div>
         </div>
@@ -169,6 +162,14 @@
             
             <!-- Tab Content 1: Grid View -->
             <div id="grid-view-container" style="display: flex; flex-direction: column; flex: 1; min-height: 0; width: 100%; overflow: hidden;">
+                <!-- Top 3 Leader Themes Banner -->
+                <div id="leader-banner-container" style="display: none; padding: 0.5rem 1.5rem 0.5rem 1.5rem; gap: 1rem; align-items: center; border-bottom: 1px solid var(--border-color); background: #fdfdfd;">
+                    <div style="font-size: 0.75rem; font-weight: 800; color: var(--accent-red); white-space: nowrap;">🔥 주도 업종 TOP 3</div>
+                    <div id="leader-list-horizontal" style="display: flex; gap: 0.5rem; overflow-x: auto; flex: 1; align-items: center;">
+                        <!-- Injected via JS -->
+                    </div>
+                </div>
+                
                 <!-- 1-A: Dashboard Detail Grid -->
                 <div class="dashboard-grid" id="dashboard-grid-container" style="display: grid;">
                     <div class="no-data-msg">
@@ -183,7 +184,7 @@
                 </div>
                 
                 <!-- 1-B: Heatmap Subview -->
-                <div id="heatmap-subview-container" style="display: none; flex-direction: column; flex: 1; min-height: 0; background: #ffffff; border-radius: 12px; border: 1px solid var(--border-color); position: relative; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); margin: 0 1.5rem 1.5rem 1.5rem; padding: 1.25rem;">
+                <div id="heatmap-subview-container" style="display: none; flex-direction: column; flex: 1; min-height: 0; background: #ffffff; border-radius: 12px; border: 1px solid var(--border-color); position: relative; overflow: auto; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); margin: 0 1.5rem 1.5rem 1.5rem; padding: 1.25rem;">
                     <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1rem; user-select: none;">
                         <div style="font-family: var(--font-outfit); font-size: 0.85rem; font-weight: 700; color: var(--accent-blue); text-transform: uppercase; letter-spacing: 0.05em;">시장 주도 테마 히트맵</div>
                         <div style="display: flex; gap: 0.5rem; align-items: center;">

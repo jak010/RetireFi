@@ -961,35 +961,45 @@ function updateTickerPreview() {
     }
 }
 
-// Sidebar Tab Switcher (Theme Ranking vs Leader Sectors)
-function switchSidebarTab(tabName) {
-    currentSidebarTab = tabName;
+// Toggle sidebar collapse/expand
+let isSidebarCollapsed = false;
+function toggleSidebar() {
+    isSidebarCollapsed = !isSidebarCollapsed;
+    const sidebar = document.querySelector('.ranking-sidebar');
+    const layout = document.querySelector('.dashboard-layout');
+    const btn = document.getElementById('btn-toggle-sidebar-left');
     
-    const tabTheme = document.getElementById('tab-theme-ranking');
-    const tabLeader = document.getElementById('tab-leader-ranking');
-    const headerTheme = document.getElementById('theme-ranking-header');
-    const headerLeader = document.getElementById('leader-ranking-header');
-    const containerTheme = document.getElementById('ranking-list-container');
-    const containerLeader = document.getElementById('leader-list-container');
-    const tableHeader = document.getElementById('theme-table-header');
-    
-    if (tabName === 'theme') {
-        if (tabTheme) tabTheme.classList.add('active');
-        if (tabLeader) tabLeader.classList.remove('active');
-        if (headerTheme) headerTheme.style.display = 'flex';
-        if (headerLeader) headerLeader.style.display = 'none';
-        if (containerTheme) containerTheme.style.display = 'flex';
-        if (containerLeader) containerLeader.style.display = 'none';
-        if (tableHeader) tableHeader.style.display = 'grid';
+    if (isSidebarCollapsed) {
+        layout.style.gridTemplateColumns = '0px 1fr';
+        btn.innerText = '▶';
+        btn.title = '사이드바 펴기';
+        btn.style.position = 'absolute';
+        btn.style.left = '0';
+        btn.style.top = '140px';
+        btn.style.zIndex = '100';
+        btn.style.background = '#fff';
+        btn.style.border = '1px solid var(--border-color)';
+        btn.style.padding = '0.3rem';
+        btn.style.borderRadius = '0 6px 6px 0';
+        btn.style.boxShadow = '2px 0 5px rgba(0,0,0,0.05)';
+        
+        // Append the button to the layout directly so it stays visible
+        layout.appendChild(btn);
     } else {
-        if (tabTheme) tabTheme.classList.remove('active');
-        if (tabLeader) tabLeader.classList.add('active');
-        if (headerTheme) headerTheme.style.display = 'none';
-        if (headerLeader) headerLeader.style.display = 'flex';
-        if (containerTheme) containerTheme.style.display = 'none';
-        if (containerLeader) containerLeader.style.display = 'flex';
-        if (tableHeader) tableHeader.style.display = 'none';
-        renderLeaderSectorsList(); // 즉시 로드
+        layout.style.gridTemplateColumns = '320px 1fr';
+        btn.innerText = '◀';
+        btn.title = '사이드바 접기';
+        btn.style.position = 'static';
+        btn.style.background = 'none';
+        btn.style.border = 'none';
+        btn.style.boxShadow = 'none';
+        btn.style.padding = '0';
+        
+        // Put the button back to the tabs container
+        const tabsContainer = document.querySelector('.sidebar-tabs');
+        if (tabsContainer) {
+            tabsContainer.appendChild(btn);
+        }
     }
 }
 
@@ -1183,38 +1193,56 @@ function focusConsolidatedStock(code) {
     setTimeout(() => { row.style.background = 'transparent'; }, 2500);
 }
 
-// Render Leader Sectors Top 3 List in sidebar container
+// Render Leader Sectors Top 3 List in horizontal banner
 function renderLeaderSectorsList() {
-    const container = document.getElementById('leader-list-container');
-    if (!container) return;
+    const bannerContainer = document.getElementById('leader-banner-container');
+    const container = document.getElementById('leader-list-horizontal');
+    if (!container || !bannerContainer) return;
     
     container.innerHTML = '';
     if (!Array.isArray(leaderSectors3) || leaderSectors3.length === 0) {
-        container.innerHTML = `<div style="text-align:center; padding:2rem; color:var(--text-muted); font-size:0.8rem;">주도 테마가 없습니다.</div>`;
+        bannerContainer.style.display = 'none';
         return;
     }
     
+    bannerContainer.style.display = 'flex';
+    
     leaderSectors3.forEach((theme, index) => {
         const item = document.createElement('div');
-        item.className = 'kiwoom-item';
+        item.style.cssText = `
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: #fff;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 0.25rem 0.6rem;
+            cursor: pointer;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+            transition: all 0.2s;
+            white-space: nowrap;
+        `;
         
         const rateVal = parseFloat(theme.avg_rate);
-        let rateClass = 'rate-flat';
-        if (rateVal > 0) rateClass = 'rate-up';
-        else if (rateVal < 0) rateClass = 'rate-down';
-        
-        // 거래대금 표시
-        const volStr = theme.total_volume_str || '-';
+        let rateColor = 'var(--text-muted)';
+        if (rateVal > 0) rateColor = 'var(--accent-red)';
+        else if (rateVal < 0) rateColor = 'var(--accent-blue)';
         
         item.innerHTML = `
-            <span class="kiwoom-rank">${index + 1}</span>
-            <div class="kiwoom-info">
-                <span class="kiwoom-name" title="${theme.theme_name}">${theme.theme_name}</span>
-                <span class="kiwoom-code">대장: ${theme.leader_stock || '-'}</span>
-            </div>
-            <span class="kiwoom-price">${volStr}</span>
-            <span class="kiwoom-rate ${rateClass}">${rateVal > 0 ? '+' : ''}${theme.avg_rate}%</span>
+            <div style="font-weight: 800; color: var(--text-secondary); font-size: 0.75rem;">${index + 1}</div>
+            <div style="font-weight: 700; color: var(--text-primary); font-size: 0.75rem;">${theme.theme_name}</div>
+            <div style="font-size: 0.7rem; color: var(--text-muted);">대장: ${theme.leader_stock || '-'}</div>
+            <div style="font-weight: 700; font-family: var(--font-outfit); font-size: 0.75rem; color: ${rateColor};">${rateVal > 0 ? '+' : ''}${theme.avg_rate}%</div>
         `;
+        
+        item.onmouseover = () => {
+            item.style.transform = 'translateY(-1px)';
+            item.style.boxShadow = '0 3px 5px rgba(0,0,0,0.05)';
+        };
+        item.onmouseout = () => {
+            item.style.transform = 'translateY(0)';
+            item.style.boxShadow = '0 1px 2px rgba(0,0,0,0.02)';
+        };
         
         item.onclick = () => {
             triggerSearch(theme.theme_name);
