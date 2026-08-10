@@ -2563,7 +2563,29 @@ function renderHeatmap() {
     let hThemes = [];
     Object.values(leaderGroups).forEach(group => {
         if (group.themes.length > 1) {
-            hThemes.push(...group.themes);
+            // Merge top_stocks and deduplicate
+            const stockMap = new Map();
+            group.themes.forEach(t => {
+                (t.top_stocks || []).forEach(s => {
+                    if (!stockMap.has(s.stock_code)) {
+                        stockMap.set(s.stock_code, s);
+                    }
+                });
+            });
+            const mergedStocks = Array.from(stockMap.values());
+            
+            // Sum volumes of the unique merged top stocks to avoid double-counting
+            const mergedVol = mergedStocks.reduce((sum, s) => sum + (s.volume || 0), 0);
+            const avgRate = mergedStocks.length > 0 ? mergedStocks.reduce((sum, s) => sum + (s.rate || 0), 0) / mergedStocks.length : 0;
+            const combinedThemeName = group.themes.map(t => t.theme_name).join(' / ');
+
+            hThemes.push({
+                theme_name: combinedThemeName,
+                total_volume: mergedVol,
+                avg_rate: avgRate,
+                leader_stock: group.themes[0].leader_stock,
+                top_stocks: mergedStocks
+            });
         }
     });
     
