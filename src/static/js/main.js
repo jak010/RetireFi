@@ -2477,10 +2477,12 @@ function renderHeatmap() {
 
     canvas.innerHTML = '';
     
-    if (heatmapMode === 'treemap') {
+        if (heatmapMode === 'treemap') {
         canvas.style.display = 'block';
         canvas.style.position = 'relative';
         canvas.style.padding = '0';
+        canvas.style.flex = '1';
+        canvas.style.overflow = 'hidden';
         
         // Wait for canvas to have dimensions
         const cw = canvas.clientWidth || 1000;
@@ -2593,6 +2595,9 @@ function renderHeatmap() {
     } else {
         // Grid mode
         canvas.style.display = 'grid';
+        canvas.style.flex = 'none';
+        canvas.style.height = 'auto';
+        canvas.style.overflow = 'visible';
         canvas.style.gridTemplateColumns = 'repeat(auto-fill, minmax(140px, 1fr))';
         canvas.style.gridAutoRows = 'minmax(90px, auto)';
         canvas.style.alignContent = 'start';
