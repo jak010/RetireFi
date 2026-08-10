@@ -34,7 +34,6 @@ async function loadAlertSettings() {
         console.error("알림 설정 로드 실패:", error);
     }
     renderAlertStocksList();
-    if (activeMainView === 'network') renderLeaderCharts();
 }
 
 async function saveAlertSettings() {
@@ -57,7 +56,6 @@ function onPullbackAlertChange(code, enabled) {
     }
     saveAlertSettings();
     renderAlertStocksList();
-    if (activeMainView === 'network') renderLeaderCharts();
 }
 
 // Track previous values for visual highlighting
@@ -136,8 +134,7 @@ async function fetchThemes() {
             renderDashboard();
             renderIndices();
 
-            if (activeMainView === 'network') renderLeaderCharts();
-            else if (activeMainView === 'stock') renderConsolidatedStocks();
+            if (activeMainView === 'stock') renderConsolidatedStocks();
             else if (activeMainView === 'sangtta') fetchAndRenderSangttaStocks();
 
             if (currentGridViewMode === 'heatmap') renderHeatmap();
@@ -1452,31 +1449,27 @@ function renderConsolidatedStocks() {
 }
 
 // ==========================================
-// 실시간 대장주 주가 변동 차트 모니터링
 // ==========================================
-let activeMainView = 'grid'; // 'grid', 'network', 'stock', 'sangtta'
-let currentNetworkStock = ''; // Track currently highlighted stock code
+let activeMainView = 'grid'; // 'grid', 'stock', 'sangtta'
 let chartInstances = {}; // To store Chart.js instances
 
 function switchMainView(viewType) {
     activeMainView = viewType;
     const tabGrid = document.getElementById('tab-grid-view');
-    const tabNetwork = document.getElementById('tab-network-view');
     const tabStock = document.getElementById('tab-stock-view');
     const tabSangtta = document.getElementById('tab-sangtta-view');
     const gridContainer = document.getElementById('grid-view-container');
-    const networkContainer = document.getElementById('network-view-container');
     const stockContainer = document.getElementById('stock-view-container');
     const sangttaContainer = document.getElementById('sangtta-view-container');
 
     // Reset styles
-    [tabGrid, tabNetwork, tabStock, tabSangtta].forEach(tab => {
+    [tabGrid, tabStock, tabSangtta].forEach(tab => {
         if (tab) {
             tab.classList.remove('active');
             tab.style.color = 'var(--text-muted)';
         }
     });
-    [gridContainer, networkContainer, stockContainer, sangttaContainer].forEach(c => {
+    [gridContainer, stockContainer, sangttaContainer].forEach(c => {
         if (c) c.style.display = 'none';
     });
 
@@ -1489,13 +1482,6 @@ function switchMainView(viewType) {
         
         if (currentGridViewMode === 'detail') renderDashboard();
         else renderHeatmap();
-    } else if (viewType === 'network') {
-        if (tabNetwork) {
-            tabNetwork.classList.add('active');
-            tabNetwork.style.color = 'var(--accent-blue)';
-        }
-        if (networkContainer) networkContainer.style.display = 'block';
-        renderLeaderCharts();
     } else if (viewType === 'stock') {
         if (tabStock) {
             tabStock.classList.add('active');
@@ -1809,146 +1795,12 @@ async function fetchAndRenderSangttaStocks(forceReorder = false, useLocalData = 
 }
 
 function showStockNetworkMap(stockName, stockCode) {
-    switchMainView('network');
-    
-    // Smooth scroll and flash highlight
-    setTimeout(() => {
-        const card = document.getElementById(`chart-card-${stockCode}`);
-        if (card) {
-            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            card.classList.add('flash-chart-card-active');
-            setTimeout(() => {
-                card.classList.remove('flash-chart-card-active');
-            }, 3000);
-        }
-    }, 300);
+    // Note: Network view removed. Redirecting to grid view instead.
+    switchMainView('grid');
 }
 
 function renderLeaderCharts() {
-    const container = document.getElementById('charts-grid-container');
-    if (!container) return;
-
-    // Destroy existing charts to prevent memory leaks
-    Object.values(chartInstances).forEach(chart => {
-        if (chart) chart.destroy();
-    });
-    chartInstances = {};
-    container.innerHTML = '';
-
-    if (!themesData || themesData.length === 0) {
-        container.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-muted); font-size: 0.9rem;">수집된 테마 데이터가 아직 없습니다.</div>';
-        return;
-    }
-
-    // Filter themes containing stock data, limit to top 8, then sort by 등락률 desc
-    // 동일 종목이 여러 테마의 대장주로 잡힌 경우 중복 카드 대신 테마명을 통합
-    const leaderMap = new Map();
-    themesData.slice(0, 8)
-        .map(theme => {
-            if (!theme.top_stocks || theme.top_stocks.length === 0) return null;
-            const stock = theme.top_stocks.find(s => s.role.includes("대장주") || s.role.includes("1등주")) || theme.top_stocks[0];
-            return { theme, stock };
-        })
-        .filter(Boolean)
-        .sort((a, b) => (parseFloat(b.stock.rate) || 0) - (parseFloat(a.stock.rate) || 0))
-        .forEach(entry => {
-            const key = entry.stock.stock_code;
-            const existing = leaderMap.get(key);
-            if (existing) {
-                if (existing.themes.indexOf(entry.theme.theme_name) === -1) existing.themes.push(entry.theme.theme_name);
-                return;
-            }
-            leaderMap.set(key, { theme: entry.theme, stock: entry.stock, themes: [entry.theme.theme_name] });
-        });
-
-    // 알림 종목으로 체크된 종목도 차트에 포함 (상위 8개 테마 밖이라도)
-    alertEnabledCodes.forEach(code => {
-        if (leaderMap.has(code)) return;
-        for (const theme of themesData) {
-            const stock = (theme.top_stocks || []).find(s => s.stock_code === code);
-            if (stock) {
-                leaderMap.set(code, { stock, themes: [theme.theme_name] });
-                return;
-            }
-        }
-    });
-
-    const leaders = [...leaderMap.values()];
-
-    leaders.forEach(({ theme, stock, themes }) => {
-        // Decide colors
-        const rateVal = parseFloat(stock.rate);
-        let rateColor = 'var(--text-muted)';
-        if (rateVal > 0) {
-            rateColor = 'var(--accent-red)';
-        } else if (rateVal < 0) {
-            rateColor = 'var(--accent-blue)';
-        }
-        const cleanRateStr = getFormattedRateStr(stock.rate_str, rateVal);
-
-        const drop = parseFloat(stock.drop);
-        let dropColor = 'var(--text-muted)';
-        if (drop < -8.0) dropColor = 'var(--accent-orange)';
-        else if (drop < -4.4) dropColor = 'var(--accent-green)';
-
-        // 4개월 수급 위치 (머리/어깨/무릎)
-        const level = stock.price_level || '-';
-        let levelColor = 'var(--text-muted)';
-        let levelBg = 'rgba(100, 116, 139, 0.08)';
-        if (level === '머리') { levelColor = '#ef4444'; levelBg = 'rgba(239, 68, 68, 0.08)'; }
-        else if (level === '어깨') { levelColor = '#d97706'; levelBg = 'rgba(245, 158, 11, 0.08)'; }
-        else if (level === '무릎') { levelColor = '#10b981'; levelBg = 'rgba(16, 185, 129, 0.08)'; }
-        const levelPos = stock.price_position_ratio !== undefined ? `${stock.price_position_ratio}%` : '';
-
-        // 10일/20일 이평선 정배열 여부
-        const maGood = !!stock.ma10_above_ma20;
-        const maColor = maGood ? '#10b981' : 'var(--text-muted)';
-        const maBg = maGood ? 'rgba(16, 185, 129, 0.08)' : 'rgba(100, 116, 139, 0.08)';
-        const maLabel = maGood ? '10MA ≥ 20MA' : '10MA < 20MA';
-
-        // Create card element
-        const card = document.createElement('div');
-        card.className = 'chart-card' + (alertEnabledCodes.has(stock.stock_code) ? ' chart-card-alert' : '');
-        card.id = `chart-card-${stock.stock_code}`;
-        card.innerHTML = `
-            <div class="chart-card-header">
-                <div>
-                    <span class="chart-theme-badge" title="${themes.join(' · ')}">${themes.join(' · ')}</span>
-                    <div class="chart-stock-title">${stock.stock_name} ${alertEnabledCodes.has(stock.stock_code) ? '<span style="font-size:0.7rem;" title="알림 수신 종목">🔔</span>' : ''} <span class="chart-stock-code">${stock.stock_code}</span></div>
-                    <div style="display: flex; gap: 0.3rem; margin-top: 0.35rem; flex-wrap: wrap;">
-                        <span id="level-badge-${stock.stock_code}" style="font-size: 0.6rem; font-weight: 700; padding: 0.1rem 0.4rem; border-radius: 4px; color: ${levelColor}; background: ${levelBg}; border: 1px solid ${levelColor};" title="최근 4개월 수급 위치: ${levelPos} (${stock.price_level_desc || ''})">${level} ${levelPos}</span>
-                        <span id="ma-badge-${stock.stock_code}" style="font-size: 0.6rem; font-weight: 700; padding: 0.1rem 0.4rem; border-radius: 4px; color: ${maColor}; background: ${maBg}; border: 1px solid ${maColor};" title="10일 vs 20일 이평선 정배열 여부">${maLabel}</span>
-                    </div>
-                </div>
-                <div style="text-align: right;">
-                    <div style="font-size: 0.95rem; font-weight: 700; color: ${rateColor};">${stock.price_str}</div>
-                    <div style="font-size: 0.72rem; font-weight: 600; color: ${rateColor};">${cleanRateStr}</div>
-                </div>
-            </div>
-            <div class="chart-canvas-container">
-                <canvas id="canvas-${stock.stock_code}"></canvas>
-                <div class="chart-spinner" id="spinner-${stock.stock_code}">
-                    <div class="spinner"></div>
-                </div>
-            </div>
-            <div class="chart-card-footer">
-                <div class="chart-day-info">
-                    <div>당일 고점: <span id="day-high-${stock.stock_code}" style="font-weight: 700;">${stock.day_high_str || '-'}</span></div>
-                    <div>당일 낙폭: <span id="day-drop-${stock.stock_code}" style="font-weight: 700; color: ${dropColor};">${stock.drop_str}</span></div>
-                </div>
-                <div class="chart-target-bands">
-                    <span id="zone-1-${stock.stock_code}" class="band-pill zone-1">1차: ${stock.buy_zone_1}</span>
-                    <span id="zone-2-${stock.stock_code}" class="band-pill zone-2">2차: ${stock.buy_zone_2}</span>
-                </div>
-            </div>
-        `;
-        container.appendChild(card);
-
-        // Load chart asynchronously
-        fetchAndDrawChart(stock.stock_code);
-        // 4개월 수급 구간 가격대는 야후 파이낸스 기준으로 보정 표시
-        fetchAndRenderPriceBands(stock.stock_code);
-    });
+    // Network view removed.
 }
 
 async function fetchAndDrawChart(stockCode) {

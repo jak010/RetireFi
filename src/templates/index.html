@@ -163,7 +163,6 @@
             <!-- Tabs Navigation -->
             <div class="main-tabs" style="display: flex; gap: 0.5rem; border-bottom: 2px solid var(--border-color); padding: 0.5rem 1.5rem; margin-bottom: 0.5rem; user-select: none;">
                 <button class="main-tab active" id="tab-grid-view" onclick="switchMainView('grid')" style="background: none; border: none; font-size: 0.85rem; font-weight: 700; color: var(--accent-blue); cursor: pointer; padding: 0.4rem 1rem; border-radius: 6px; transition: all 0.2s;">전광판 매트릭스</button>
-                <button class="main-tab" id="tab-network-view" onclick="switchMainView('network')" style="background: none; border: none; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); cursor: pointer; padding: 0.4rem 1rem; border-radius: 6px; transition: all 0.2s;">📈 대장주 주가 차트</button>
                 <button class="main-tab" id="tab-stock-view" onclick="switchMainView('stock')" style="background: none; border: none; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); cursor: pointer; padding: 0.4rem 1rem; border-radius: 6px; transition: all 0.2s;">종목 압축 관찰판</button>
                 <button class="main-tab" id="tab-sangtta-view" onclick="switchMainView('sangtta')" style="background: none; border: none; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); cursor: pointer; padding: 0.4rem 1rem; border-radius: 6px; transition: all 0.2s;">🔥 종가베팅 & 상따</button>
             </div>
@@ -202,18 +201,7 @@
                 </div>
             </div>
 
-            <!-- Tab Content 2: Leader Stocks Chart View -->
-            <div id="network-view-container" style="display: none; flex: 1; min-height: 0; position: relative; overflow-y: auto; margin: 0.5rem 1.5rem 1.5rem 1.5rem;">
-                <div id="charts-grid-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 1.25rem; width: 100%;">
-                    <!-- Injected dynamically via JS -->
-                </div>
-                
-                <!-- Loader inside chart view -->
-                <div id="network-loader" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-card); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 5; border-radius: 12px; border: 1px solid var(--border-color);">
-                    <div class="spinner" style="width: 40px; height: 40px; border: 4px solid rgba(59, 130, 246, 0.1); border-top-color: var(--accent-blue); border-radius: 50%; animation: spin 1s infinite linear; margin-bottom: 0.75rem;"></div>
-                    <div style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600;">실시간 대장주 주가 변동 차트를 불러오는 중...</div>
-                </div>
-            </div>
+
 
             <!-- Tab Content 3: Consolidated Stock View -->
             <div id="stock-view-container" style="display: none; flex-direction: column; flex: 1; min-height: 0; background: #ffffff; border-radius: 12px; border: 1px solid var(--border-color); position: relative; overflow-y: auto; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); margin: 0.5rem 1.5rem 1.5rem 1.5rem; padding: 1.25rem;">
