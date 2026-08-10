@@ -79,6 +79,14 @@
                 <option value="has-target">🟢 타점 도달 테마만</option>
             </select>
 
+            <!-- Source Filter Option -->
+            <select class="filter-select" id="filter-source" onchange="onFilterChange()">
+                <option value="all">🌐 데이터 출처: 전체</option>
+                <option value="naver">🟢 네이버 포함</option>
+                <option value="royal">🔵 로얄로더 포함</option>
+                <option value="both">🌟 네이버+로얄 통합만</option>
+            </select>
+
             <!-- Sorting Option -->
             <select class="filter-select" id="filter-sort" onchange="onFilterChange()">
                 <option value="volume">정렬: 거래대금</option>
@@ -111,6 +119,7 @@
                 </span>
                 <span>⚡ 변동 종목 강조</span>
             </label>
+            <button class="btn-toggle" id="btn-toggle-grid-mode" style="background: var(--accent-blue); color: white; border: none; font-weight: 700; margin-right: 0.5rem;" onclick="toggleGridMode()">🗺️ 히트맵 뷰</button>
             <button class="btn-toggle" id="btn-toggle-all" onclick="toggleAllCards()">📁 모두 접기</button>
             <button class="btn-download-briefing" id="btn-download-briefing" onclick="downloadBriefing()" title="실시간 대장주 요약 브리핑 파일 다운로드">📥 브리핑 다운로드</button>
             <div class="stats-summary" id="stats-summary-info">
@@ -156,25 +165,13 @@
                 <button class="main-tab active" id="tab-grid-view" onclick="switchMainView('grid')" style="background: none; border: none; font-size: 0.85rem; font-weight: 700; color: var(--accent-blue); cursor: pointer; padding: 0.4rem 1rem; border-radius: 6px; transition: all 0.2s;">전광판 매트릭스</button>
                 <button class="main-tab" id="tab-network-view" onclick="switchMainView('network')" style="background: none; border: none; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); cursor: pointer; padding: 0.4rem 1rem; border-radius: 6px; transition: all 0.2s;">📈 대장주 주가 차트</button>
                 <button class="main-tab" id="tab-stock-view" onclick="switchMainView('stock')" style="background: none; border: none; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); cursor: pointer; padding: 0.4rem 1rem; border-radius: 6px; transition: all 0.2s;">종목 압축 관찰판</button>
-                <button class="main-tab" id="tab-sangtta-view" onclick="switchMainView('sangtta')" style="background: none; border: none; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); cursor: pointer; padding: 0.4rem 1rem; border-radius: 6px; transition: all 0.2s;">🔥 상따 종목 (+24%↑)</button>
+                <button class="main-tab" id="tab-sangtta-view" onclick="switchMainView('sangtta')" style="background: none; border: none; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); cursor: pointer; padding: 0.4rem 1rem; border-radius: 6px; transition: all 0.2s;">🔥 종가베팅 & 상따</button>
             </div>
             
             <!-- Tab Content 1: Grid View -->
             <div id="grid-view-container" style="display: flex; flex-direction: column; flex: 1; min-height: 0; width: 100%; overflow: hidden;">
-                <!-- Closing Price Betting Section -->
-                <div id="closing-bet-section" style="display: none; flex-direction: column; padding: 0 1.5rem 1rem 1.5rem; border-bottom: 1px solid var(--border-color); margin-bottom: 0.5rem; flex-shrink: 0;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem;">
-                        <h3 id="closing-bet-title" style="font-size: 1.05rem; font-weight: 800; color: #ef4444; letter-spacing: -0.02em; display: flex; align-items: center; gap: 0.4rem;">
-                            <span class="pulsing-dot" style="display: inline-block; width: 8px; height: 8px; background-color: #ef4444; border-radius: 50%; box-shadow: 0 0 8px #ef4444;"></span>
-                            🎯 실시간 종가베팅 후보군 (AI 알고리즘 추천)
-                        </h3>
-                    </div>
-                    <div id="closing-bet-cards-container" style="display: flex; gap: 1rem; overflow-x: auto; padding-bottom: 0.5rem; scrollbar-width: thin;">
-                        <!-- Cards injected via JS -->
-                    </div>
-                </div>
-
-                <div class="dashboard-grid" id="dashboard-grid-container">
+                <!-- 1-A: Dashboard Detail Grid -->
+                <div class="dashboard-grid" id="dashboard-grid-container" style="display: grid;">
                     <div class="no-data-msg">
                         <div class="no-data-icon">⏳</div>
                         <h3>실시간 시장 데이터를 로딩하고 있습니다...</h3>
@@ -183,6 +180,24 @@
                             <div class="loading-progress-bar" id="loading-progress-bar"></div>
                         </div>
                         <div class="loading-progress-text" id="loading-progress-text">준비 중... (0%)</div>
+                    </div>
+                </div>
+                
+                <!-- 1-B: Heatmap Subview -->
+                <div id="heatmap-subview-container" style="display: none; flex-direction: column; flex: 1; min-height: 0; background: #ffffff; border-radius: 12px; border: 1px solid var(--border-color); position: relative; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); margin: 0 1.5rem 1.5rem 1.5rem; padding: 1.25rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1rem; user-select: none;">
+                        <div style="font-family: var(--font-outfit); font-size: 0.85rem; font-weight: 700; color: var(--accent-blue); text-transform: uppercase; letter-spacing: 0.05em;">시장 주도 테마 히트맵</div>
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: 600; margin-right: 0.5rem;">보기 모드:</span>
+                            <div style="display: flex; background: rgba(0,0,0,0.04); border-radius: 6px; padding: 2px;">
+                                <button id="heatmap-btn-treemap" onclick="switchHeatmapMode('treemap')" style="background: white; border: 1px solid var(--border-color); border-radius: 4px; padding: 0.2rem 0.6rem; font-size: 0.7rem; font-weight: 700; cursor: pointer; color: var(--text-primary); box-shadow: 0 1px 2px rgba(0,0,0,0.05);">면적 비례 (Treemap)</button>
+                                <button id="heatmap-btn-grid" onclick="switchHeatmapMode('grid')" style="background: transparent; border: 1px solid transparent; border-radius: 4px; padding: 0.2rem 0.6rem; font-size: 0.7rem; font-weight: 700; cursor: pointer; color: var(--text-muted);">균등 정렬 (Grid)</button>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- The actual heatmap canvas -->
+                    <div id="heatmap-canvas" style="flex: 1; width: 100%; position: relative; background: #f8fafc; border-radius: 8px; overflow: hidden;">
+                        <!-- Injected via JS -->
                     </div>
                 </div>
             </div>
@@ -241,6 +256,20 @@
 
             <!-- Tab Content 4: Sangtta (Limit-up Chasing) View -->
             <div id="sangtta-view-container" style="display: none; flex-direction: column; flex: 1; min-height: 0; background: #ffffff; border-radius: 12px; border: 1px solid var(--border-color); position: relative; overflow-y: auto; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); margin: 0.5rem 1.5rem 1.5rem 1.5rem; padding: 1.25rem;">
+                
+                <!-- Closing Price Betting Section -->
+                <div id="closing-bet-section" style="display: none; flex-direction: column; padding-bottom: 1.25rem; border-bottom: 1px dashed var(--border-color); margin-bottom: 1.25rem; flex-shrink: 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem;">
+                        <h3 id="closing-bet-title" style="font-size: 1.05rem; font-weight: 800; color: #ef4444; letter-spacing: -0.02em; display: flex; align-items: center; gap: 0.4rem;">
+                            <span class="pulsing-dot" style="display: inline-block; width: 8px; height: 8px; background-color: #ef4444; border-radius: 50%; box-shadow: 0 0 8px #ef4444;"></span>
+                            🎯 실시간 종가베팅 후보군 (AI 알고리즘 추천)
+                        </h3>
+                    </div>
+                    <div id="closing-bet-cards-container" style="display: flex; gap: 1rem; overflow-x: auto; padding-bottom: 0.5rem; scrollbar-width: thin;">
+                        <!-- Cards injected via JS -->
+                    </div>
+                </div>
+
                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1rem; user-select: none;">
                     <div>
                         <span style="font-family: var(--font-outfit); font-size: 0.95rem; font-weight: 800; color: #dc2626; text-transform: uppercase; letter-spacing: 0.03em;">🔥 통합 상따 (상한가 따라잡기) 후보 리스트</span>

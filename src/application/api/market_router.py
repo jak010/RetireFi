@@ -28,6 +28,12 @@ class MarketController:
         }
 
     @staticmethod
+    @market_entrypoint.get(path="/report",
+                           summary="[MARKET] : 현재 수급테마 대장주/1등주 및 종베 종목 리포트 데이터 조회")
+    def get_report():
+        return naver_theme_service.get_report_data()
+
+    @staticmethod
     @market_entrypoint.get(path="/naver-themes/{theme_name}/stocks",
                            summary="[MARKET] : 특정 네이버 테마의 소속 종목 실시간 상세 조회")
     def get_naver_theme_stocks(theme_name: str):
@@ -360,10 +366,10 @@ class MarketController:
         return naver_theme_service.fetch_stock_chart_data(stock_code)
 
     @staticmethod
-    @market_entrypoint.get(path="/stocks/{stock_code}/stats-3m",
-                           summary="[MARKET] : 특정 종목의 최근 3개월 수급 구간(머리/어깨/무릎) 가격대 조회 (야후 파이낸스)")
-    def get_stock_3month_stats(stock_code: str):
-        return naver_theme_service.fetch_stock_3month_stats(stock_code)
+    @market_entrypoint.get(path="/stocks/{stock_code}/stats-4m",
+                           summary="[MARKET] : 특정 종목의 최근 4개월 수급 구간(머리/어깨/무릎) 가격대 조회 (야후 파이낸스)")
+    def get_stock_4month_stats(stock_code: str):
+        return naver_theme_service.fetch_stock_4month_stats(stock_code)
 
     @staticmethod
     @market_entrypoint.get(path="/loading-progress",

@@ -65,7 +65,7 @@ class NaverThemeService:
         self.indices_cache_time = 0.0
         self.indices_cache_ttl = 7.0 # 지수 데이터 TTL: 7초
 
-        # 종목 통계 데이터 (종목별 3개월 최고가, 20일 평균 거래량) 캐시
+        # 종목 통계 데이터 (종목별 4개월 최고가, 20일 평균 거래량) 캐시
         self.stock_stats_cache = {}
         self.stock_stats_ttl = 3600.0 # 1시간 캐시
 
@@ -79,6 +79,11 @@ class NaverThemeService:
         self.naver_themes_summary_cache_time = 0.0
         self.naver_themes_summary_cache_ttl = 15.0 # 15초 캐시
 
+        # 리포트 데이터 캐시
+        self.report_cache = None
+        self.report_cache_time = 0.0
+        self.report_cache_ttl = 15.0 # 15초 캐시
+
         # 실시간 시세 및 로얄로더 종목 저장 캐시 (상따 종목 조회용)
         self.latest_naver_prices = {}
         self.latest_rr_stocks = {}
@@ -91,8 +96,8 @@ class NaverThemeService:
 
     def get_stock_stats(self, code: str) -> Dict[str, Any]:
         """
-        네이버 fchart API를 이용해 최근 60영업일(대략 3개월) 데이터를 가져와서
-        3개월 최고가, 20일 평균 거래량 및 10/20일 이평선 정배열(골든) 여부를 연산한 후 캐싱하여 반환합니다.
+        네이버 fchart API를 이용해 최근 60영업일(대략 4개월) 데이터를 가져와서
+        4개월 최고가, 20일 평균 거래량 및 10/20일 이평선 정배열(골든) 여부를 연산한 후 캐싱하여 반환합니다.
         """
         current_time = time.time()
         if code in self.stock_stats_cache:
@@ -100,10 +105,10 @@ class NaverThemeService:
             if current_time - ts < self.stock_stats_ttl:
                 return stats
 
-        stats = {"three_month_high": 0, "three_month_low": 0, "avg_vol_20": 0, "ma10_above_ma20": False, "today_high": 0}
+        stats = {"four_month_high": 0, "four_month_low": 0, "avg_vol_20": 0, "ma10_above_ma20": False, "today_high": 0}
         try:
-            # count=60 영업일 (대략 3개월)
-            url = f"https://fchart.stock.naver.com/sise.nhn?symbol={code}&timeframe=day&count=60&requestType=0"
+            # count=80 영업일 (대략 4개월)
+            url = f"https://fchart.stock.naver.com/sise.nhn?symbol={code}&timeframe=day&count=80&requestType=0"
             r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=3.0)
             if r.status_code == 200:
                 root = ET.fromstring(r.text.strip())
@@ -135,8 +140,8 @@ class NaverThemeService:
                             except ValueError:
                                 pass
                     
-                    stats["three_month_high"] = max(high_prices) if high_prices else 0
-                    stats["three_month_low"] = min(low_prices) if low_prices else 0
+                    stats["four_month_high"] = max(high_prices) if high_prices else 0
+                    stats["four_month_low"] = min(low_prices) if low_prices else 0
                     stats["today_high"] = high_prices[-1] if high_prices else 0
                     stats["avg_vol_20"] = sum(volumes) / len(volumes) if volumes else 0
                     
@@ -347,15 +352,15 @@ class NaverThemeService:
                     if not price_won:
                         continue
                         
-                    # 추가 통계 정보 (3개월 최고가, 20일 평균 거래량) 조회
+                    # 추가 통계 정보 (4개월 최고가, 20일 평균 거래량) 조회
                     stats = self.get_stock_stats(code)
                     
-                    three_month_high = stats.get("three_month_high", 0)
-                    three_month_low = stats.get("three_month_low", 0)
+                    four_month_high = stats.get("four_month_high", 0)
+                    four_month_low = stats.get("four_month_low", 0)
                     avg_vol_20 = stats.get("avg_vol_20", 0)
                     
-                    if three_month_high > three_month_low > 0:
-                        pos_ratio = ((price_won - three_month_low) / (three_month_high - three_month_low)) * 100
+                    if four_month_high > four_month_low > 0:
+                        pos_ratio = ((price_won - four_month_low) / (four_month_high - four_month_low)) * 100
                     else:
                         pos_ratio = 50.0
                     pos_ratio = max(0.0, min(100.0, pos_ratio))
@@ -391,10 +396,10 @@ class NaverThemeService:
                         "price_str": f"{price_won:,}원",
                         "volume": amount_won, # 기존 대금 (원 단위)
                         "volume_shares": volume_shares, # 누적거래량 (주 단위)
-                        "three_month_high": three_month_high,
-                        "three_month_high_str": f"{three_month_high:,}원" if three_month_high > 0 else "-",
-                        "three_month_low": three_month_low,
-                        "three_month_low_str": f"{three_month_low:,}원" if three_month_low > 0 else "-",
+                        "four_month_high": four_month_high,
+                        "four_month_high_str": f"{four_month_high:,}원" if four_month_high > 0 else "-",
+                        "four_month_low": four_month_low,
+                        "four_month_low_str": f"{four_month_low:,}원" if four_month_low > 0 else "-",
                         "price_level": price_level,
                         "price_level_desc": price_level_desc,
                         "price_position_ratio": round(pos_ratio, 1),
@@ -476,7 +481,7 @@ class NaverThemeService:
                     "total_volume_str": vol_str,
                     "mapped_count": mapped_count,
                     "total_count": len(group),
-                    "leader_stock": leader_stock or "N/A",
+                    "leader_stock": top_5_stocks[0]["stock_name"] if top_5_stocks else "N/A",
                     "top_stocks": top_5_stocks,
                     "source": "naver",
                     "up_count": up_count,
@@ -536,7 +541,7 @@ class NaverThemeService:
                 volume_shares = naver_data.get("volume") or 0
                 
                 stats = self.get_stock_stats(code)
-                three_month_high = stats.get("three_month_high", 0)
+                four_month_high = stats.get("four_month_high", 0)
                 avg_vol_20 = stats.get("avg_vol_20", 0)
                 volume_ratio = (volume_shares / avg_vol_20 * 100) if avg_vol_20 > 0 else 0.0
                 
@@ -544,19 +549,21 @@ class NaverThemeService:
                 total_volume += amount_won
                 mapped_count += 1
                 
-                drop = 0.0
-                if three_month_high > 0:
-                    drop = ((price_won - three_month_high) / three_month_high) * 100
+                safe_price = max(1, price_won)
+                day_high = naver_data.get("high") or stats.get("today_high", 0)
+                if day_high < safe_price:
+                    day_high = safe_price
+                day_high = max(1, day_high)
+
+                intraday_drop = ((safe_price - day_high) / day_high) * 100
+                drop = round(intraday_drop, 2)
                 
-                buy_zone_1 = "-"
-                buy_zone_2 = "-"
-                if three_month_high > 0:
-                    bz1_low = int(three_month_high * 0.92)
-                    bz1_high = int(three_month_high * 0.956)
-                    bz2_low = int(three_month_high * 0.88)
-                    bz2_high = int(three_month_high * 0.92)
-                    buy_zone_1 = f"{bz1_low:,} ~ {bz1_high:,}원"
-                    buy_zone_2 = f"{bz2_low:,} ~ {bz2_high:,}원"
+                high_minus_4pct = int(day_high * 0.956)
+                high_minus_8pct = int(day_high * 0.92)
+                high_minus_12pct = int(day_high * 0.88)
+
+                buy_zone_1 = f"{high_minus_8pct:,} ~ {high_minus_4pct:,}원"
+                buy_zone_2 = f"{high_minus_12pct:,} ~ {high_minus_8pct:,}원"
                 
                 s_trillion = int(amount_won // 1000000000000)
                 s_billion = int((amount_won % 1000000000000) // 100000000)
@@ -575,15 +582,18 @@ class NaverThemeService:
                     "price_str": f"{price_won:,}원",
                     "volume": amount_won,
                     "volume_shares": volume_shares,
-                    "three_month_high": three_month_high,
-                    "three_month_high_str": f"{three_month_high:,}원" if three_month_high > 0 else "-",
+                    "four_month_high": four_month_high,
+                    "four_month_high_str": f"{four_month_high:,}원" if four_month_high > 0 else "-",
                     "ma10_above_ma20": stats.get("ma10_above_ma20", False),
                     "avg_volume": avg_vol_20,
                     "avg_volume_str": f"{int(avg_vol_20):,}주" if avg_vol_20 > 0 else "-",
                     "volume_ratio": round(volume_ratio, 2),
                     "volume_ratio_str": f"{volume_ratio:.1f}%" if avg_vol_20 > 0 else "-",
+                    "naver_high": naver_data.get("high", 0),
+                    "day_high": day_high,
+                    "day_high_str": f"{day_high:,}원" if safe_price > 0 else "-",
                     "drop": drop,
-                    "drop_str": f"{drop:+.2f}%",
+                    "drop_str": f"{intraday_drop:.2f}%",
                     "buy_zone_1": buy_zone_1,
                     "buy_zone_2": buy_zone_2,
                     "volume_str": s_volume_str
@@ -652,12 +662,22 @@ class NaverThemeService:
                         existing_stock = stock_dict[code]
                         if not existing_stock.get("description") and s.get("description"):
                             existing_stock["description"] = s["description"]
-                        if "대장주" in s.get("role", "") or "1등주" in s.get("role", ""):
-                            existing_stock["role"] = s["role"]
                     else:
                         stock_dict[code] = s
                 
                 merged_stocks = sort_stocks_composite(list(stock_dict.values()))
+                
+                # 병합된 종목 리스트에서 순위(거래대금+등락률) 기반으로 대장주/1등주 역할을 재배정 (단일화)
+                for idx, s in enumerate(merged_stocks):
+                    if idx == 0:
+                        s["role"] = "👑 대장주"
+                    elif idx == 1:
+                        s["role"] = "🥇 1등주"
+                    elif idx == 2:
+                        s["role"] = "🥈 2등주"
+                    else:
+                        s["role"] = "관련주"
+                        
                 existing["top_stocks"] = merged_stocks[:5]
                 
                 unique_stocks = list(stock_dict.values())
@@ -676,7 +696,7 @@ class NaverThemeService:
                 existing["total_volume_str"] = vol_str
                 
                 if unique_stocks:
-                    existing["leader_stock"] = max(unique_stocks, key=lambda x: x["rate"])["stock_name"]
+                    existing["leader_stock"] = merged_stocks[0]["stock_name"] if merged_stocks else "N/A"
                     
                 existing["up_count"] = sum(1 for s in unique_stocks if s["rate"] > 0)
                 existing["down_count"] = sum(1 for s in unique_stocks if s["rate"] < 0)
@@ -728,6 +748,25 @@ class NaverThemeService:
         }
         self.naver_themes_summary_cache = result
         self.naver_themes_summary_cache_time = current_time
+
+        # API 전용 리포트 데이터 미리 계산하여 캐싱
+        leader_stocks = []
+        for theme in sorted_by_volume:
+            theme_name = theme.get("theme_name")
+            for stock in theme.get("top_stocks", []):
+                role = stock.get("role", "")
+                if "대장주" in role or "1등주" in role:
+                    stock_info = stock.copy()
+                    stock_info["theme_name"] = theme_name
+                    leader_stocks.append(stock_info)
+                    
+        self.report_cache = {
+            "status": "success",
+            "leader_stocks": leader_stocks,
+            "closing_bet_stocks": []
+        }
+        self.report_cache_time = current_time
+
         self.load_status = {"step": "done", "progress": 100}
         self.flush_pending_alerts()
         return result
@@ -967,14 +1006,14 @@ class NaverThemeService:
             # 실제 주 단위 거래량
             volume_shares = naver_data["volume"] if naver_data and "volume" in naver_data else 0
 
-            # 추가 통계 정보 (3개월 최고가, 20일 평균 거래량) 조회
+            # 추가 통계 정보 (4개월 최고가, 20일 평균 거래량) 조회
             stats = self.get_stock_stats(code)
-            three_month_high = stats.get("three_month_high", 0)
-            three_month_low = stats.get("three_month_low", 0)
+            four_month_high = stats.get("four_month_high", 0)
+            four_month_low = stats.get("four_month_low", 0)
             avg_vol_20 = stats.get("avg_vol_20", 0)
 
-            if three_month_high > three_month_low > 0:
-                pos_ratio = ((price_won - three_month_low) / (three_month_high - three_month_low)) * 100
+            if four_month_high > four_month_low > 0:
+                pos_ratio = ((price_won - four_month_low) / (four_month_high - four_month_low)) * 100
             else:
                 pos_ratio = 50.0
             pos_ratio = max(0.0, min(100.0, pos_ratio))
@@ -1023,10 +1062,10 @@ class NaverThemeService:
                 "volume": rr_amount,
                 "volume_str": volume_str if rr_amount > 0 else "-",
                 "volume_shares": volume_shares,
-                "three_month_high": three_month_high,
-                "three_month_high_str": f"{three_month_high:,}원" if three_month_high > 0 else "-",
-                "three_month_low": three_month_low,
-                "three_month_low_str": f"{three_month_low:,}원" if three_month_low > 0 else "-",
+                "four_month_high": four_month_high,
+                "four_month_high_str": f"{four_month_high:,}원" if four_month_high > 0 else "-",
+                "four_month_low": four_month_low,
+                "four_month_low_str": f"{four_month_low:,}원" if four_month_low > 0 else "-",
                 "price_level": price_level,
                 "price_level_desc": price_level_desc,
                 "price_position_ratio": round(pos_ratio, 1),
@@ -1313,15 +1352,15 @@ class NaverThemeService:
                     
         return {"status": "error", "message": "차트 데이터를 가져올 수 없거나 지원하지 않는 종목코드입니다."}
 
-    def fetch_stock_3month_stats(self, stock_code: str) -> Dict[str, Any]:
-        """특정 종목의 최근 3개월 일봉 데이터를 야후 파이낸스로 조회하여 수급 구간(머리/어깨/무릎) 가격대 및 이평 정보를 반환합니다."""
+    def fetch_stock_4month_stats(self, stock_code: str) -> Dict[str, Any]:
+        """특정 종목의 최근 4개월 일봉 데이터를 야후 파이낸스로 조회하여 수급 구간(머리/어깨/무릎) 가격대 및 이평 정보를 반환합니다."""
         code = stock_code.strip()
         if len(code) != 6 or not code.isdigit():
             return {"status": "error", "message": "잘못된 종목코드입니다."}
 
         for suffix in [".KS", ".KQ"]:
             symbol = f"{code}{suffix}"
-            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=3mo"
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=4mo"
             try:
                 r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=4.0)
                 if r.status_code != 200:
@@ -1338,12 +1377,12 @@ class NaverThemeService:
                 if not highs or not lows or not closes:
                     continue
 
-                three_month_high = max(highs)
-                three_month_low = min(lows)
+                four_month_high = max(highs)
+                four_month_low = min(lows)
                 last_close = closes[-1]
 
-                if three_month_high > three_month_low > 0:
-                    pos_ratio = ((last_close - three_month_low) / (three_month_high - three_month_low)) * 100
+                if four_month_high > four_month_low > 0:
+                    pos_ratio = ((last_close - four_month_low) / (four_month_high - four_month_low)) * 100
                 else:
                     pos_ratio = 50.0
                 pos_ratio = max(0.0, min(100.0, pos_ratio))
@@ -1368,8 +1407,8 @@ class NaverThemeService:
                 return {
                     "status": "success",
                     "symbol": symbol,
-                    "three_month_high": round(three_month_high, 2),
-                    "three_month_low": round(three_month_low, 2),
+                    "four_month_high": round(four_month_high, 2),
+                    "four_month_low": round(four_month_low, 2),
                     "last_close": round(last_close, 2),
                     "price_level": price_level,
                     "price_level_desc": price_level_desc,
@@ -1377,9 +1416,9 @@ class NaverThemeService:
                     "ma10_above_ma20": ma10_above_ma20,
                 }
             except Exception as e:
-                logger.warning(f"야후 파이낸스 3개월 통계 조회 에러 ({symbol}): {e}")
+                logger.warning(f"야후 파이낸스 4개월 통계 조회 에러 ({symbol}): {e}")
 
-        return {"status": "error", "message": "3개월 통계 데이터를 가져올 수 없거나 지원하지 않는 종목코드입니다."}
+        return {"status": "error", "message": "4개월 통계 데이터를 가져올 수 없거나 지원하지 않는 종목코드입니다."}
 
 
     def send_theme_leaders_summary_to_slack(self):
@@ -1582,8 +1621,8 @@ class NaverThemeService:
                         "price_str": f"{p_hynix:,}원",
                         "volume": 6500000000000,
                         "volume_shares": 35135135,
-                        "three_month_high": 210000,
-                        "three_month_high_str": "210,000원",
+                        "four_month_high": 210000,
+                        "four_month_high_str": "210,000원",
                         "avg_volume": 25000000,
                         "avg_volume_str": "25,000,000주",
                         "volume_ratio": 140.54,
@@ -1606,8 +1645,8 @@ class NaverThemeService:
                         "price_str": f"{p_samsung:,}원",
                         "volume": 4200000000000,
                         "volume_shares": 55408970,
-                        "three_month_high": 88000,
-                        "three_month_high_str": "88,000원",
+                        "four_month_high": 88000,
+                        "four_month_high_str": "88,000원",
                         "ma10_above_ma20": False,
                         "avg_volume": 45000000,
                         "avg_volume_str": "45,000,000주",
@@ -1645,8 +1684,8 @@ class NaverThemeService:
                         "price_str": f"{p_jeju:,}원",
                         "volume": 2500000000000,
                         "volume_shares": 102040816,
-                        "three_month_high": 32000,
-                        "three_month_high_str": "32,000원",
+                        "four_month_high": 32000,
+                        "four_month_high_str": "32,000원",
                         "ma10_above_ma20": True,
                         "avg_volume": 85000000,
                         "avg_volume_str": "85,000,000주",
@@ -1898,3 +1937,27 @@ class NaverThemeService:
             logger.error(f"네이버 속보 뉴스 크롤링 중 오류: {e}")
 
         return news_data
+
+    def get_report_data(self) -> Dict[str, Any]:
+        """
+        API 전용 리포트 데이터 생성
+        - 수급테마의 대장주 및 1등주
+        - 종베(종가베팅) 종목 (현재 조건 정의 전이므로 빈 리스트 반환)
+        """
+        # 백그라운드 스레드를 유발하거나 로딩 상태를 확인하기 위해 기존 summary 호출
+        summary = self.get_naver_themes_summary()
+        
+        # 만약 로딩 중이면 그대로 반환
+        if isinstance(summary, dict) and summary.get("status") == "loading":
+            return summary
+            
+        # _calculate_themes_summary에서 미리 계산된 캐시 반환 (첫 요청부터 연산 시간 O(1) 보장)
+        if self.report_cache:
+            return self.report_cache
+            
+        # Fallback (거의 발생하지 않음)
+        return {
+            "status": "success",
+            "leader_stocks": [],
+            "closing_bet_stocks": []
+        }

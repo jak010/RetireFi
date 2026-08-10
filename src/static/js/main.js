@@ -140,6 +140,8 @@ async function fetchThemes() {
             else if (activeMainView === 'stock') renderConsolidatedStocks();
             else if (activeMainView === 'sangtta') fetchAndRenderSangttaStocks();
 
+            if (currentGridViewMode === 'heatmap') renderHeatmap();
+
             if (currentSidebarTab === 'leader') {
                 renderLeaderSectorsList();
             }
@@ -154,7 +156,7 @@ async function fetchThemes() {
             if (step === 'mapping') {
                 stepText = '네이버 금융 테마 매핑 데이터 수집 중...';
             } else if (step === 'stats') {
-                stepText = '종목별 실시간 시세 및 3개월 통계 분석 중...';
+                stepText = '종목별 실시간 시세 및 4개월 통계 분석 중...';
             }
             
             updateProgressBar(progress);
@@ -250,6 +252,7 @@ function getProcessedThemes() {
     const rateFilter = document.getElementById('filter-rate').value;
     const volFilter = document.getElementById('filter-volume').value;
     const targetFilter = document.getElementById('filter-target').value;
+    const sourceFilter = document.getElementById('filter-source') ? document.getElementById('filter-source').value : 'all';
     const sortCriteria = document.getElementById('filter-sort').value;
 
     // 1. Search & select filtering
@@ -279,6 +282,11 @@ function getProcessedThemes() {
             });
             if (!hasBuyingTarget) return false;
         }
+
+        // Source filter
+        if (sourceFilter === 'naver' && (theme.source !== 'naver' && theme.source !== 'both')) return false;
+        if (sourceFilter === 'royal' && (theme.source !== 'royal' && theme.source !== 'both')) return false;
+        if (sourceFilter === 'both' && theme.source !== 'both') return false;
 
         return true;
     });
@@ -374,7 +382,8 @@ function onFilterChange() {
     if (activeMainView === 'stock') {
         renderConsolidatedStocks();
     } else if (activeMainView === 'grid') {
-        renderDashboard();
+        if (currentGridViewMode === 'detail') renderDashboard();
+        else renderHeatmap();
     }
     renderRankingSidebar();
     updateSidebarHeaderHighlight();
@@ -440,6 +449,7 @@ function renderDashboard() {
     const rateFilter = document.getElementById('filter-rate').value;
     const volFilter = document.getElementById('filter-volume').value;
     const targetFilter = document.getElementById('filter-target').value;
+    const sourceFilter = document.getElementById('filter-source') ? document.getElementById('filter-source').value : 'all';
     // 카드 UI에서는 매핑 종목 수가 2개 이하인 테마 제외 (3개 이상인 테마만 표출)
     const processedThemes = getProcessedThemes().filter(t => (t.mapped_count !== undefined ? t.mapped_count : (t.top_stocks ? t.top_stocks.length : 0)) > 2);
 
@@ -460,7 +470,7 @@ function renderDashboard() {
     let displayThemes = [];
     let headerMsg = '';
     
-    const hasActiveFilters = searchVal !== '' || rateFilter !== 'all' || volFilter !== 'all' || targetFilter !== 'all';
+    const hasActiveFilters = searchVal !== '' || rateFilter !== 'all' || volFilter !== 'all' || targetFilter !== 'all' || sourceFilter !== 'all';
 
     // Toggle search clear button based on active filter state
     const clearBtn = document.getElementById('search-clear-btn');
@@ -469,9 +479,9 @@ function renderDashboard() {
     }
 
     if (!hasActiveFilters) {
-        // If there are no active filters, only render top 8 volume themes
-        displayThemes = processedThemes.slice(0, 8);
-        headerMsg = `⚡ 실시간 거래대금 상위 TOP 8 테마군 (자동 펼침 모니터링)`;
+        // If there are no active filters, render top 20 themes to allow grouping
+        displayThemes = processedThemes.slice(0, 20);
+        headerMsg = `⚡ 실시간 거래대금 상위 TOP 20 테마군`;
     } else {
         // If filtering, render all matched results
         displayThemes = processedThemes;
@@ -618,8 +628,7 @@ function renderDashboard() {
             sourceBadgeHtml = `<span class="theme-source-badge naver" style="font-size: 0.65rem; background: rgba(16, 185, 129, 0.08); color: var(--accent-green); padding: 0.15rem 0.35rem; border-radius: 4px; font-weight: 700; border: 1px solid rgba(16, 185, 129, 0.2);">네이버</span>`;
         } else if (theme.source === 'both') {
             sourceBadgeHtml = `
-                <span class="theme-source-badge naver" style="font-size: 0.65rem; background: rgba(16, 185, 129, 0.08); color: var(--accent-green); padding: 0.15rem 0.35rem; border-radius: 4px; font-weight: 700; border: 1px solid rgba(16, 185, 129, 0.2); margin-right: 0.25rem;">네이버</span>
-                <span class="theme-source-badge royal" style="font-size: 0.65rem; background: var(--accent-blue-glow); color: var(--accent-blue); padding: 0.15rem 0.35rem; border-radius: 4px; font-weight: 700; border: 1px solid rgba(29, 78, 216, 0.2);">로얄</span>
+                <span class="theme-source-badge both" style="font-size: 0.65rem; background: linear-gradient(90deg, rgba(16, 185, 129, 0.15) 0%, rgba(29, 78, 216, 0.15) 100%); color: var(--text-primary); padding: 0.15rem 0.35rem; border-radius: 4px; font-weight: 800; border: 1px solid rgba(255, 255, 255, 0.15);">🟢 네이버 + 🔵 로얄</span>
             `;
         }
 
@@ -668,41 +677,67 @@ function renderDashboard() {
         container.appendChild(card);
     };
 
-    if (!hasActiveFilters) {
-        // 네이버 데이터 상단 배치 (TOP 8)
-        const naverThemes = processedThemes.filter(t => t.source === 'naver' || t.source === 'both').slice(0, 8);
-        const royalThemes = processedThemes.filter(t => t.source === 'royal' || t.source === 'both').slice(0, 8);
-
-        const naverSectionHeader = document.createElement('div');
-        naverSectionHeader.style.cssText = "grid-column: 1 / -1; font-size: 0.95rem; font-weight: 700; color: var(--accent-green); padding: 0.5rem 0 0.4rem 0; border-bottom: 2px solid rgba(16, 185, 129, 0.35); margin-top: 0.25rem; display: flex; align-items: center; gap: 0.5rem; letter-spacing: -0.02em;";
-        naverSectionHeader.innerHTML = `🟢 네이버 실시간 거래대금 상위 테마 (상단 TOP 8)`;
-        container.appendChild(naverSectionHeader);
-
-        if (naverThemes.length > 0) {
-            naverThemes.forEach(appendThemeCard);
-        } else {
-            const emptyNaver = document.createElement('div');
-            emptyNaver.style.cssText = "grid-column: 1 / -1; text-align: center; padding: 1.5rem; color: var(--text-muted); font-size: 0.85rem; background: var(--bg-card); border-radius: 8px; border: 1px dashed var(--border-color);";
-            emptyNaver.innerHTML = "수집된 네이버 테마 데이터가 없습니다.";
-            container.appendChild(emptyNaver);
+    // Grouping by leader_stock
+    const leaderGroups = {};
+    displayThemes.forEach(theme => {
+        const leader = theme.leader_stock || "N/A";
+        if (!leaderGroups[leader]) {
+            leaderGroups[leader] = {
+                leader: leader,
+                themes: [],
+                totalVolume: 0
+            };
         }
+        leaderGroups[leader].themes.push(theme);
+        leaderGroups[leader].totalVolume += theme.total_volume || 0;
+    });
 
-        // 로얄로더 데이터 하단 배치 (TOP 8)
-        const royalSectionHeader = document.createElement('div');
-        royalSectionHeader.style.cssText = "grid-column: 1 / -1; font-size: 0.95rem; font-weight: 700; color: var(--accent-blue); padding: 0.5rem 0 0.4rem 0; border-bottom: 2px solid rgba(29, 78, 216, 0.35); margin-top: 1.5rem; display: flex; align-items: center; gap: 0.5rem; letter-spacing: -0.02em;";
-        royalSectionHeader.innerHTML = `🔵 로얄로더 실시간 거래대금 상위 테마 (하단 TOP 8)`;
-        container.appendChild(royalSectionHeader);
-
-        if (royalThemes.length > 0) {
-            royalThemes.forEach(appendThemeCard);
-        } else {
-            const emptyRoyal = document.createElement('div');
-            emptyRoyal.style.cssText = "grid-column: 1 / -1; text-align: center; padding: 1.5rem; color: var(--text-muted); font-size: 0.85rem; background: var(--bg-card); border-radius: 8px; border: 1px dashed var(--border-color);";
-            emptyRoyal.innerHTML = "현재 수집된 로얄로더 테마 데이터가 없습니다.";
-            container.appendChild(emptyRoyal);
+    // Convert to array and sort
+    // 1순위: 테마 개수 (내림차순)
+    // 2순위: 그룹 내 테마들의 총 거래대금 (내림차순)
+    const sortedGroups = Object.values(leaderGroups).sort((a, b) => {
+        if (b.themes.length !== a.themes.length) {
+            return b.themes.length - a.themes.length;
         }
+        return b.totalVolume - a.totalVolume;
+    });
+
+    if (sortedGroups.length === 0) {
+        const emptyMsg = document.createElement('div');
+        emptyMsg.style.cssText = "grid-column: 1 / -1; text-align: center; padding: 1.5rem; color: var(--text-muted); font-size: 0.85rem; background: var(--bg-card); border-radius: 8px; border: 1px dashed var(--border-color);";
+        emptyMsg.innerHTML = "수집된 테마 데이터가 없습니다.";
+        container.appendChild(emptyMsg);
     } else {
-        displayThemes.forEach(appendThemeCard);
+        const multiGroups = sortedGroups.filter(g => g.themes.length > 1);
+        const singleGroups = sortedGroups.filter(g => g.themes.length === 1);
+        
+        let isFirstGroup = true;
+        
+        // 1. Render Multi Groups (핫 테마군)
+        multiGroups.forEach(group => {
+            const groupHeader = document.createElement('div');
+            groupHeader.style.cssText = `grid-column: 1 / -1; font-size: 0.95rem; font-weight: 700; color: var(--accent-blue); padding: 0.5rem 0 0.4rem 0; margin-top: ${isFirstGroup ? '0.25rem' : '1.5rem'}; display: flex; align-items: center; gap: 0.5rem; letter-spacing: -0.02em;`;
+            
+            const badgeHtml = `<span style="background: var(--accent-blue-glow); color: var(--accent-blue); padding: 0.1rem 0.4rem; border-radius: 12px; font-size: 0.75rem; font-weight: 800; margin-left: 0.25rem;">🔥 핫 테마군</span>`;
+                
+            groupHeader.innerHTML = `👑 대장주: <span style="color: var(--text-primary); font-size: 1.05rem;">${group.leader}</span> <span style="font-size: 0.8rem; font-weight: 500; color: var(--text-muted); margin-left: 0.5rem;">- 연관 테마 ${group.themes.length}개</span> ${badgeHtml}`;
+            container.appendChild(groupHeader);
+            isFirstGroup = false;
+
+            group.themes.forEach(appendThemeCard);
+        });
+
+        // 2. Render Single Groups (개별 테마)
+        if (singleGroups.length > 0) {
+            const singleHeader = document.createElement('div');
+            singleHeader.style.cssText = `grid-column: 1 / -1; font-size: 0.95rem; font-weight: 700; color: var(--accent-green); padding: 0.5rem 0 0.4rem 0; border-bottom: 2px solid rgba(16, 185, 129, 0.3); margin-top: ${isFirstGroup ? '0.25rem' : '1.5rem'}; display: flex; align-items: center; gap: 0.5rem; letter-spacing: -0.02em;`;
+            singleHeader.innerHTML = `💎 개별 주도 테마 <span style="font-size: 0.8rem; font-weight: 500; color: var(--text-muted); margin-left: 0.5rem;">- 단일 섹터 ${singleGroups.length}개</span>`;
+            container.appendChild(singleHeader);
+            
+            singleGroups.forEach(group => {
+                group.themes.forEach(appendThemeCard);
+            });
+        }
     }
 
     // Sync toggle all button state
@@ -735,6 +770,9 @@ function resetAllFilters() {
     document.getElementById('filter-rate').value = 'all';
     document.getElementById('filter-volume').value = 'all';
     document.getElementById('filter-target').value = 'all';
+    if (document.getElementById('filter-source')) {
+        document.getElementById('filter-source').value = 'all';
+    }
     document.getElementById('filter-sort').value = 'volume';
     
     onFilterChange();
@@ -796,7 +834,6 @@ window.onload = () => {
     fetchThemes();
     updateClock();
     setInterval(updateClock, 1000);
-    initNetworkSVGEvents();
     loadAlertSettings();
 };
 
@@ -1271,7 +1308,7 @@ function renderConsolidatedStocks() {
                         buy_zone_2: stock.buy_zone_2,
                         ma10_above_ma20: stock.ma10_above_ma20,
                         description: stock.description,
-                        three_month_high_str: stock.three_month_high_str,
+                        four_month_high_str: stock.four_month_high_str,
                         themes: [theme.theme_name],
                         leaderOfThemes: isLeader ? [theme.theme_name] : []
                     });
@@ -1407,7 +1444,7 @@ function renderConsolidatedStocks() {
         if (isStockLeader) {
             rowTooltip += `\n★ 대장 테마: ${leaderThemesStr}`;
         }
-        rowTooltip += `\n3M 최고가: ${stock.three_month_high_str || '-'}\n1차 타점: ${stock.buy_zone_1 || '-'}\n2차 타점: ${stock.buy_zone_2 || '-'}`;
+        rowTooltip += `\n4M 최고가: ${stock.four_month_high_str || '-'}\n1차 타점: ${stock.buy_zone_1 || '-'}\n2차 타점: ${stock.buy_zone_2 || '-'}`;
         tr.title = rowTooltip;
 
         tbody.appendChild(tr);
@@ -1448,8 +1485,10 @@ function switchMainView(viewType) {
             tabGrid.classList.add('active');
             tabGrid.style.color = 'var(--accent-blue)';
         }
-        if (gridContainer) gridContainer.style.display = 'block';
-        renderDashboard();
+        if (gridContainer) gridContainer.style.display = 'flex';
+        
+        if (currentGridViewMode === 'detail') renderDashboard();
+        else renderHeatmap();
     } else if (viewType === 'network') {
         if (tabNetwork) {
             tabNetwork.classList.add('active');
@@ -1852,7 +1891,7 @@ function renderLeaderCharts() {
         if (drop < -8.0) dropColor = 'var(--accent-orange)';
         else if (drop < -4.4) dropColor = 'var(--accent-green)';
 
-        // 3개월 수급 위치 (머리/어깨/무릎)
+        // 4개월 수급 위치 (머리/어깨/무릎)
         const level = stock.price_level || '-';
         let levelColor = 'var(--text-muted)';
         let levelBg = 'rgba(100, 116, 139, 0.08)';
@@ -1877,7 +1916,7 @@ function renderLeaderCharts() {
                     <span class="chart-theme-badge" title="${themes.join(' · ')}">${themes.join(' · ')}</span>
                     <div class="chart-stock-title">${stock.stock_name} ${alertEnabledCodes.has(stock.stock_code) ? '<span style="font-size:0.7rem;" title="알림 수신 종목">🔔</span>' : ''} <span class="chart-stock-code">${stock.stock_code}</span></div>
                     <div style="display: flex; gap: 0.3rem; margin-top: 0.35rem; flex-wrap: wrap;">
-                        <span id="level-badge-${stock.stock_code}" style="font-size: 0.6rem; font-weight: 700; padding: 0.1rem 0.4rem; border-radius: 4px; color: ${levelColor}; background: ${levelBg}; border: 1px solid ${levelColor};" title="최근 3개월 수급 위치: ${levelPos} (${stock.price_level_desc || ''})">${level} ${levelPos}</span>
+                        <span id="level-badge-${stock.stock_code}" style="font-size: 0.6rem; font-weight: 700; padding: 0.1rem 0.4rem; border-radius: 4px; color: ${levelColor}; background: ${levelBg}; border: 1px solid ${levelColor};" title="최근 4개월 수급 위치: ${levelPos} (${stock.price_level_desc || ''})">${level} ${levelPos}</span>
                         <span id="ma-badge-${stock.stock_code}" style="font-size: 0.6rem; font-weight: 700; padding: 0.1rem 0.4rem; border-radius: 4px; color: ${maColor}; background: ${maBg}; border: 1px solid ${maColor};" title="10일 vs 20일 이평선 정배열 여부">${maLabel}</span>
                     </div>
                 </div>
@@ -1907,7 +1946,7 @@ function renderLeaderCharts() {
 
         // Load chart asynchronously
         fetchAndDrawChart(stock.stock_code);
-        // 3개월 수급 구간 가격대는 야후 파이낸스 기준으로 보정 표시
+        // 4개월 수급 구간 가격대는 야후 파이낸스 기준으로 보정 표시
         fetchAndRenderPriceBands(stock.stock_code);
     });
 }
@@ -1920,7 +1959,7 @@ async function fetchAndDrawChart(stockCode) {
     try {
         const [chartRes, stats] = await Promise.all([
             fetch(`/api/v1/market/stocks/${stockCode}/chart`),
-            loadStock3mStats(stockCode)
+            loadStock4mStats(stockCode)
         ]);
         const result = await chartRes.json();
 
@@ -1939,7 +1978,7 @@ async function fetchAndDrawChart(stockCode) {
             const fillColor = isPositive ? 'rgba(239, 68, 68, 0.05)' : 'rgba(59, 130, 246, 0.05)';
 
             // 머리/어깨/무릎 구간 오버레이 (가능할 때만, 뒤에 깔림)
-            const band = compute3mBand(stats);
+            const band = compute4mBand(stats);
             const bandDatasets = buildBandDatasets(band, prices.length);
             const datasets = bandDatasets.concat({
                 label: '주가',
@@ -2068,26 +2107,26 @@ function drawEmptyChartMsg(canvas, msg) {
     ctx.fillText(msg, canvas.width / 2, canvas.height / 2);
 }
 
-const stock3mCache = new Map();
+const stock4mCache = new Map();
 
-async function loadStock3mStats(stockCode) {
-    if (stock3mCache.has(stockCode)) return stock3mCache.get(stockCode);
+async function loadStock4mStats(stockCode) {
+    if (stock4mCache.has(stockCode)) return stock4mCache.get(stockCode);
     try {
-        const response = await fetch(`/api/v1/market/stocks/${stockCode}/stats-3m`);
+        const response = await fetch(`/api/v1/market/stocks/${stockCode}/stats-4m`);
         const result = await response.json();
-        stock3mCache.set(stockCode, result.status === 'success' ? result : null);
+        stock4mCache.set(stockCode, result.status === 'success' ? result : null);
     } catch (e) {
         console.error(`Error loading 3-month stats for ${stockCode}:`, e);
-        stock3mCache.set(stockCode, null);
+        stock4mCache.set(stockCode, null);
     }
-    return stock3mCache.get(stockCode);
+    return stock4mCache.get(stockCode);
 }
 
-// 3개월 고가/저가로 머리·어깨 구간 경계(70%/35%)를 계산합니다. 데이터가 없으면 null.
-function compute3mBand(stats) {
-    if (!stats || !(stats.three_month_high > 0) || !(stats.three_month_low > 0)) return null;
-    const high = stats.three_month_high;
-    const low = stats.three_month_low;
+// 4개월 고가/저가로 머리·어깨 구간 경계(70%/35%)를 계산합니다. 데이터가 없으면 null.
+function compute4mBand(stats) {
+    if (!stats || !(stats.four_month_high > 0) || !(stats.four_month_low > 0)) return null;
+    const high = stats.four_month_high;
+    const low = stats.four_month_low;
     return {
         high: high,
         low: low,
@@ -2102,15 +2141,15 @@ function buildBandDatasets(band, n) {
     const base = { pointRadius: 0, pointHoverRadius: 0, borderWidth: 0, _isBand: true, fill: false };
     const fillArr = new Array(n).fill(null);
     return [
-        { ...base, label: '3M 구간', data: fillArr.map(() => band.low), backgroundColor: 'rgba(148, 163, 184, 0.07)', fill: { target: 1 } },
-        { ...base, label: '3M 상한', data: fillArr.map(() => band.high) },
+        { ...base, label: '4M 구간', data: fillArr.map(() => band.low), backgroundColor: 'rgba(148, 163, 184, 0.07)', fill: { target: 1 } },
+        { ...base, label: '4M 상한', data: fillArr.map(() => band.high) },
         { ...base, label: '머리 하한', data: fillArr.map(() => band.headLow), borderColor: 'rgba(239, 68, 68, 0.65)', borderWidth: 1, borderDash: [4, 4] },
         { ...base, label: '어깨 하한', data: fillArr.map(() => band.shoulderLow), borderColor: 'rgba(217, 119, 6, 0.65)', borderWidth: 1, borderDash: [4, 4] },
     ];
 }
 
 async function fetchAndRenderPriceBands(stockCode) {
-    const result = await loadStock3mStats(stockCode);
+    const result = await loadStock4mStats(stockCode);
     if (!result) return;
 
     // 헤더의 수급 위치 뱃지 및 이평 뱃지 갱신
@@ -2125,7 +2164,7 @@ async function fetchAndRenderPriceBands(stockCode) {
         levelBadge.style.background = lbg;
         levelBadge.style.border = `1px solid ${lc}`;
         levelBadge.textContent = `${lvl} ${result.price_position_ratio !== undefined ? result.price_position_ratio + '%' : ''}`;
-        levelBadge.title = `최근 3개월 수급 위치 (야후 파이낸스): ${result.price_position_ratio}% (${result.price_level_desc || ''})`;
+        levelBadge.title = `최근 4개월 수급 위치 (야후 파이낸스): ${result.price_position_ratio}% (${result.price_level_desc || ''})`;
     }
     const maBadge = document.getElementById(`ma-badge-${stockCode}`);
     if (maBadge) {
@@ -2184,7 +2223,7 @@ async function showHoverChart(clientX, clientY, stockCode, stockName) {
     setTimeout(() => tooltip.classList.add('visible'), 10);
     
     try {
-        const stats = await loadStock3mStats(stockCode);
+        const stats = await loadStock4mStats(stockCode);
         
         if (!tooltip.classList.contains('visible') || codeEl.innerText !== stockCode) return;
         
@@ -2252,7 +2291,7 @@ async function showHoverChart(clientX, clientY, stockCode, stockName) {
                 gaugeContainer.style.display = 'none';
             }
             
-            const band = compute3mBand(stats);
+            const band = compute4mBand(stats);
             if (band) {
                 const hEl = document.getElementById('hover-gauge-head');
                 if (hEl) hEl.innerText = Math.round(band.headLow).toLocaleString();
@@ -2316,7 +2355,20 @@ function renderClosingBetCandidates(themesData) {
                 if (drop >= -5.0) score += 3; // Bonus for strong holding power
                 if (vol > 300) score += 2; // Bonus for decent liquidity (>300억)
                 
-                candidates.push({ stock, themeName: theme.theme_name, score });
+                let reason = `주도 테마(${themeIndex + 1}위) 내 핵심주로 `;
+                if (drop >= -3.0) {
+                    reason += `고점 대비 낙폭(${drop.toFixed(2)}%)이 적어 매수세가 강력합니다.`;
+                } else if (drop >= -6.0) {
+                    reason += `안정적 낙폭(${drop.toFixed(2)}%)으로 종가 눌림목 공략이 유효합니다.`;
+                } else {
+                    reason += `지지선을 방어하며(${drop.toFixed(2)}%) 재반등 추세를 보입니다.`;
+                }
+                
+                if (dominance > 60) {
+                    reason += ` (테마 수급 독식 👑)`;
+                }
+                
+                candidates.push({ stock, themeName: theme.theme_name, score, reason });
             }
         });
     });
@@ -2338,6 +2390,28 @@ function renderClosingBetCandidates(themesData) {
         const rateSign = parseFloat(s.rate) > 0 ? '+' : '';
         const glowClass = isTargetTime ? 'glow' : '';
         
+        // Extract all themes for this stock from themesData
+        const allThemes = themesData
+            .filter(t => t.top_stocks && t.top_stocks.some(ts => ts.stock_code === s.stock_code))
+            .map(t => t.theme_name);
+            
+        const otherThemes = allThemes.filter(name => name !== c.themeName);
+        
+        let allTagElements = [];
+        allTagElements.push(`<span style="font-size: 0.7rem; font-weight: 700; color: var(--accent-blue); background: rgba(29, 78, 216, 0.1); padding: 0.2rem 0.4rem; border-radius: 4px; white-space: nowrap; cursor: pointer;" onclick="event.stopPropagation(); scrollToTheme('${c.themeName}')">👑 ${c.themeName} 대장</span>`);
+        
+        otherThemes.forEach((name, i) => {
+            const colors = ['#f59e0b', '#10b981', '#ec4899', '#8b5cf6', '#14b8a6'];
+            const cHex = colors[i % colors.length];
+            allTagElements.push(`<span style="font-size: 0.65rem; font-weight: 600; color: ${cHex}; background: ${cHex}15; border: 1px solid ${cHex}30; padding: 0.15rem 0.35rem; border-radius: 4px; white-space: nowrap; cursor: pointer;" onclick="event.stopPropagation(); scrollToTheme('${name}')">${name}</span>`);
+        });
+        
+        let chunkedRows = [];
+        for (let i = 0; i < allTagElements.length; i += 4) {
+            chunkedRows.push(`<div style="display: flex; gap: 0.3rem; margin-bottom: 0.2rem;">${allTagElements.slice(i, i + 4).join('')}</div>`);
+        }
+        let themeTagsHtml = `<div style="display: flex; flex-direction: column;">${chunkedRows.join('')}</div>`;
+        
         const card = document.createElement('div');
         card.className = `closing-bet-card ${glowClass}`;
         
@@ -2351,25 +2425,394 @@ function renderClosingBetCandidates(themesData) {
         };
         
         card.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                <span style="font-size: 0.7rem; font-weight: 700; color: var(--accent-blue); background: rgba(29, 78, 216, 0.1); padding: 0.2rem 0.4rem; border-radius: 4px;">${c.themeName} 대장</span>
-                <span style="font-size: 0.7rem; color: var(--text-muted);">${s.volume_str || '-'}</span>
+            <div style="display: flex; justify-content: flex-end; align-items: flex-start;">
+                <span style="font-size: 0.7rem; color: var(--text-muted); white-space: nowrap;">${s.volume_str || '-'}</span>
             </div>
-            <div style="display: flex; align-items: baseline; gap: 0.5rem; margin-top: 0.2rem;">
+            <div style="display: flex; align-items: baseline; gap: 0.5rem; margin-top: 0.1rem;">
                 <span style="font-size: 1.1rem; font-weight: 800; color: var(--text-primary);">${s.stock_name}</span>
                 <span style="font-size: 0.85rem; font-weight: 700;" class="${rateClass}">${rateSign}${s.rate}%</span>
             </div>
             <div style="font-size: 0.75rem; color: var(--text-secondary); display: flex; flex-direction: column; gap: 0.2rem; margin-top: 0.3rem;">
                 <div style="display: flex; justify-content: space-between;">
                     <span>당일 고점 대비 낙폭:</span>
-                    <span style="font-weight: 700; color: ${parseFloat(s.drop) < -5 ? 'var(--accent-orange)' : 'var(--accent-green)'};">${s.drop}%</span>
+                    <span style="font-weight: 700; color: ${parseFloat(s.drop) < -5 ? 'var(--accent-orange)' : 'var(--accent-green)'};">${parseFloat(s.drop || 0).toFixed(2)}%</span>
                 </div>
                 <div style="display: flex; justify-content: space-between; border-top: 1px dotted rgba(255,255,255,0.1); padding-top: 0.3rem; margin-top: 0.2rem;">
                     <span>눌림목 1차 타점:</span>
                     <span style="font-weight: 700; color: var(--text-muted);">${s.buy_zone_1 || '-'}</span>
                 </div>
             </div>
+            <div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed rgba(239, 68, 68, 0.2); font-size: 0.7rem; color: #94a3b8; line-height: 1.4; word-break: keep-all;">
+                <div style="margin-bottom: 0.4rem;">${themeTagsHtml}</div>
+                💡 <span style="font-weight: 500;">${c.reason}</span>
+            </div>
         `;
         container.appendChild(card);
     });
 }
+
+function scrollToTheme(themeName) {
+    // Hide hover tooltip since the mouseleave event might not trigger when view switches
+    handleStockLeave();
+
+    // Switch to grid view so the themes are visible
+    switchMainView('grid');
+
+    // Slight delay to allow DOM to render display change
+    setTimeout(() => {
+        const titles = document.querySelectorAll('.theme-card-title');
+        for (const title of titles) {
+            if (title.innerText.trim() === themeName.trim()) {
+                const card = title.closest('.theme-card');
+                if (card) {
+                    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    card.style.transition = 'box-shadow 0.3s ease';
+                    card.style.boxShadow = '0 0 15px 3px var(--accent-orange)';
+                    setTimeout(() => {
+                        card.style.boxShadow = '';
+                    }, 5000);
+                }
+                break;
+            }
+        }
+    }, 50);
+}
+// ==========================================
+// Stock Market Heatmap 
+// ==========================================
+let heatmapMode = 'treemap'; // 'treemap' or 'grid'
+let currentGridViewMode = 'detail'; // 'detail' or 'heatmap'
+
+function toggleGridMode() {
+    currentGridViewMode = currentGridViewMode === 'detail' ? 'heatmap' : 'detail';
+    
+    const btn = document.getElementById('btn-toggle-grid-mode');
+    const detailGrid = document.getElementById('dashboard-grid-container');
+    const heatmapSub = document.getElementById('heatmap-subview-container');
+    
+    if (currentGridViewMode === 'heatmap') {
+        btn.innerHTML = '📋 상세 리스트 뷰';
+        btn.style.background = '#0f172a';
+        detailGrid.style.display = 'none';
+        heatmapSub.style.display = 'flex';
+        renderHeatmap();
+    } else {
+        btn.innerHTML = '🗺️ 히트맵 뷰';
+        btn.style.background = 'var(--accent-blue)';
+        detailGrid.style.display = 'grid';
+        heatmapSub.style.display = 'none';
+        renderDashboard();
+    }
+}
+
+function switchHeatmapMode(mode) {
+    heatmapMode = mode;
+    
+    // Update button UI
+    const btnTreemap = document.getElementById('heatmap-btn-treemap');
+    const btnGrid = document.getElementById('heatmap-btn-grid');
+    
+    if (mode === 'treemap') {
+        btnTreemap.style.background = 'white';
+        btnTreemap.style.color = 'var(--text-primary)';
+        btnTreemap.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)';
+        btnGrid.style.background = 'transparent';
+        btnGrid.style.color = 'var(--text-muted)';
+        btnGrid.style.boxShadow = 'none';
+    } else {
+        btnGrid.style.background = 'white';
+        btnGrid.style.color = 'var(--text-primary)';
+        btnGrid.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)';
+        btnTreemap.style.background = 'transparent';
+        btnTreemap.style.color = 'var(--text-muted)';
+        btnTreemap.style.boxShadow = 'none';
+    }
+    
+    renderHeatmap();
+}
+
+function getHeatmapColor(rate) {
+    const val = parseFloat(rate) || 0;
+    if (val >= 15) return '#b91c1c'; // Strong Red
+    if (val >= 7) return '#dc2626';  // Red
+    if (val > 2) return '#ef4444';   // Light Red
+    if (val > 0) return '#fca5a5';   // Very Light Red
+    if (val === 0) return '#64748b'; // Gray
+    if (val >= -2) return '#93c5fd'; // Very Light Blue
+    if (val >= -7) return '#3b82f6'; // Blue
+    if (val >= -15) return '#2563eb';// Strong Blue
+    return '#1d4ed8'; // Dark Blue
+}
+
+function renderHeatmap() {
+    const canvas = document.getElementById('heatmap-canvas');
+    if (!canvas) return;
+    
+    // 1. Get processed themes
+    let processedThemes = getProcessedThemes();
+    
+    // 2. Identify 'Hot Theme Group' (themes that share the same leader stock)
+    const leaderGroups = {};
+    processedThemes.forEach(theme => {
+        const leader = theme.leader_stock;
+        if (!leader) return;
+        if (!leaderGroups[leader]) leaderGroups[leader] = { themes: [] };
+        leaderGroups[leader].themes.push(theme);
+    });
+    
+    let hThemes = [];
+    Object.values(leaderGroups).forEach(group => {
+        if (group.themes.length > 1) {
+            hThemes.push(...group.themes);
+        }
+    });
+    
+    // 3. Sort by total volume and get top 40
+    hThemes = hThemes.sort((a, b) => b.total_volume - a.total_volume).slice(0, 40);
+    
+    if (hThemes.length === 0) {
+        canvas.innerHTML = '<div style="display:flex; justify-content:center; align-items:center; height:100%; color:var(--text-muted);">조건에 맞는 핫 테마군 데이터가 없습니다.</div>';
+        return;
+    }
+
+    canvas.innerHTML = '';
+    
+    if (heatmapMode === 'treemap') {
+        canvas.style.display = 'block';
+        canvas.style.position = 'relative';
+        canvas.style.padding = '0';
+        
+        // Wait for canvas to have dimensions
+        const cw = canvas.clientWidth || 1000;
+        const ch = canvas.clientHeight || 800;
+        
+        let themeNodes = hThemes.map(t => ({
+            data: t,
+            value: Math.max(t.total_volume || 1, 1)
+        }));
+        
+        computeTreemap(themeNodes, 0, 0, cw, ch);
+        
+        themeNodes.forEach(tNode => {
+            const tb = tNode.bounds;
+            if (!tb || tb.w <= 0 || tb.h <= 0) return;
+            
+            const themeBlock = document.createElement('div');
+            themeBlock.style.position = 'absolute';
+            themeBlock.style.left = tb.x + 'px';
+            themeBlock.style.top = tb.y + 'px';
+            themeBlock.style.width = tb.w + 'px';
+            themeBlock.style.height = tb.h + 'px';
+            themeBlock.style.border = '1px solid #0f172a';
+            themeBlock.style.boxSizing = 'border-box';
+            themeBlock.style.overflow = 'hidden';
+            themeBlock.style.backgroundColor = '#0f172a';
+            
+            const headerH = 22;
+            const header = document.createElement('div');
+            header.style.position = 'absolute';
+            header.style.top = '0';
+            header.style.left = '0';
+            header.style.width = '100%';
+            header.style.height = headerH + 'px';
+            header.style.background = 'rgba(0,0,0,0.85)';
+            header.style.color = '#f1f5f9';
+            header.style.fontSize = '0.75rem';
+            header.style.fontWeight = '700';
+            header.style.textAlign = 'center';
+            header.style.lineHeight = headerH + 'px';
+            header.style.cursor = 'pointer';
+            header.style.zIndex = '10';
+            header.style.whiteSpace = 'nowrap';
+            header.style.overflow = 'hidden';
+            header.style.textOverflow = 'ellipsis';
+            header.innerText = tNode.data.theme_name;
+            
+            header.onclick = () => {
+                if (currentGridViewMode === 'heatmap') toggleGridMode();
+                triggerSearch(tNode.data.theme_name);
+            };
+            themeBlock.appendChild(header);
+            
+            if (tb.h > headerH) {
+                let stocks = tNode.data.top_stocks || [];
+                let stockNodes = stocks.map(s => ({
+                    data: s,
+                    value: Math.max(s.volume || 1, 1)
+                }));
+                
+                computeTreemap(stockNodes, 0, headerH, tb.w, tb.h - headerH);
+                
+                stockNodes.forEach(sNode => {
+                    const sb = sNode.bounds;
+                    if (!sb || sb.w <= 0 || sb.h <= 0) return;
+                    
+                    const stockBlock = document.createElement('div');
+                    stockBlock.style.position = 'absolute';
+                    stockBlock.style.left = sb.x + 'px';
+                    stockBlock.style.top = sb.y + 'px';
+                    stockBlock.style.width = sb.w + 'px';
+                    stockBlock.style.height = sb.h + 'px';
+                    stockBlock.style.backgroundColor = getHeatmapColor(sNode.data.rate);
+                    stockBlock.style.border = '1px solid rgba(255,255,255,0.15)';
+                    stockBlock.style.boxSizing = 'border-box';
+                    stockBlock.style.cursor = 'pointer';
+                    stockBlock.style.display = 'flex';
+                    stockBlock.style.flexDirection = 'column';
+                    stockBlock.style.justifyContent = 'center';
+                    stockBlock.style.alignItems = 'center';
+                    stockBlock.style.overflow = 'hidden';
+                    stockBlock.style.transition = 'filter 0.1s';
+                    
+                    stockBlock.onmouseover = () => stockBlock.style.filter = 'brightness(1.2)';
+                    stockBlock.onmouseout = () => stockBlock.style.filter = 'brightness(1)';
+                    stockBlock.onclick = () => window.open(`https://finance.naver.com/item/main.naver?code=${sNode.data.stock_code}`, '_blank');
+                    
+                    if (sb.w > 40 && sb.h > 30) {
+                        const fontSizeTitle = Math.max(0.6, Math.min(1.2, sb.w / 70));
+                        const fontSizeRate = Math.max(0.55, Math.min(0.9, sb.w / 90));
+                        stockBlock.innerHTML = `
+                            <div style="font-size: ${fontSizeTitle}rem; font-weight: 800; color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 95%; line-height: 1.2;">${sNode.data.stock_name}</div>
+                            <div style="font-size: ${fontSizeRate}rem; font-weight: 700; color: rgba(255,255,255,0.9); text-shadow: 0 1px 2px rgba(0,0,0,0.6); margin-top: 2px;">${sNode.data.rate > 0 ? '+'+sNode.data.rate : sNode.data.rate}%</div>
+                        `;
+                    }
+                    themeBlock.appendChild(stockBlock);
+                });
+            }
+            
+            canvas.appendChild(themeBlock);
+        });
+        
+    } else {
+        // Grid mode
+        canvas.style.display = 'grid';
+        canvas.style.gridTemplateColumns = 'repeat(auto-fill, minmax(140px, 1fr))';
+        canvas.style.gap = '4px';
+        canvas.style.padding = '4px';
+        
+        hThemes.forEach((t) => {
+            const tile = document.createElement('div');
+            tile.style.cssText = `
+                background-color: ${getHeatmapColor(t.avg_rate)};
+                border-radius: 6px;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                color: white;
+                cursor: pointer;
+                padding: 1rem 0.5rem;
+                text-align: center;
+                transition: transform 0.1s, filter 0.1s;
+                overflow: hidden;
+            `;
+            
+            tile.onmouseover = () => {
+                tile.style.filter = 'brightness(1.15)';
+                tile.style.transform = 'translateY(-2px)';
+            };
+            tile.onmouseout = () => {
+                tile.style.filter = 'brightness(1)';
+                tile.style.transform = 'translateY(0)';
+            };
+            tile.onclick = () => {
+                if (currentGridViewMode === 'heatmap') toggleGridMode();
+                triggerSearch(t.theme_name);
+            };
+            
+            const leaderName = t.leader_stock || "N/A";
+            
+            tile.innerHTML = `
+                <div style="font-size: 0.85rem; font-weight: 800; margin-bottom: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 2px rgba(0,0,0,0.3);">${t.theme_name}</div>
+                <div style="font-size: 0.85rem; font-weight: 700; text-shadow: 0 1px 2px rgba(0,0,0,0.3); margin-bottom: 4px;">${t.avg_rate > 0 ? '+'+t.avg_rate : t.avg_rate}%</div>
+                <div style="font-size: 0.7rem; opacity: 0.9; text-shadow: 0 1px 2px rgba(0,0,0,0.3); margin-bottom: 4px;">${t.total_volume_str}</div>
+                <div style="font-size: 0.7rem; background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 4px;">👑 ${leaderName}</div>
+            `;
+            canvas.appendChild(tile);
+        });
+    }
+}
+function computeTreemap(nodes, x, y, width, height) {
+    if (nodes.length === 0) return;
+    
+    function squarify(children, row, w, rx, ry, rw, rh) {
+        if (children.length === 0) {
+            if (row.length > 0) layoutRow(row, w, rx, ry, rw, rh);
+            return;
+        }
+        
+        const c = children[0];
+        if (row.length === 0 || worst(row, w) >= worst([...row, c], w)) {
+            squarify(children.slice(1), [...row, c], w, rx, ry, rw, rh);
+        } else {
+            const newBounds = layoutRow(row, w, rx, ry, rw, rh);
+            squarify(children, [], Math.min(newBounds.width, newBounds.height), newBounds.x, newBounds.y, newBounds.width, newBounds.height);
+        }
+    }
+
+    function worst(row, w) {
+        if (row.length === 0) return Infinity;
+        let minArea = Infinity, maxArea = 0, sumArea = 0;
+        for (const item of row) {
+            if (item.value < minArea) minArea = item.value;
+            if (item.value > maxArea) maxArea = item.value;
+            sumArea += item.value;
+        }
+        return Math.max(
+            (w * w * maxArea) / (sumArea * sumArea),
+            (sumArea * sumArea) / (w * w * minArea)
+        );
+    }
+
+    function layoutRow(row, w, rx, ry, rw, rh) {
+        let sumArea = row.reduce((sum, c) => sum + c.value, 0);
+        let rowWidth = sumArea / w;
+        
+        let curX = rx, curY = ry;
+        for (const item of row) {
+            let itemW, itemH;
+            if (rw >= rh) { // vertical layout inside row
+                itemW = rowWidth;
+                itemH = item.value / rowWidth;
+                item.bounds = { x: curX, y: curY, w: itemW, h: itemH };
+                curY += itemH;
+            } else { // horizontal layout inside row
+                itemH = rowWidth;
+                itemW = item.value / rowWidth;
+                item.bounds = { x: curX, y: curY, w: itemW, h: itemH };
+                curX += itemW;
+            }
+        }
+        
+        if (rw >= rh) {
+            return { x: rx + rowWidth, y: ry, width: Math.max(0, rw - rowWidth), height: rh };
+        } else {
+            return { x: rx, y: ry + rowWidth, width: rw, height: Math.max(0, rh - rowWidth) };
+        }
+    }
+    
+    // Normalize values to match total area
+    const totalValue = nodes.reduce((sum, n) => sum + n.value, 0);
+    if (totalValue === 0) return;
+    const totalArea = width * height;
+    
+    // Create a working copy so we don't mutate original values if called multiple times
+    const workingNodes = nodes.map(n => ({...n, value: (n.value / totalValue) * totalArea}));
+    workingNodes.sort((a, b) => b.value - a.value);
+    
+    squarify(workingNodes, [], Math.min(width, height), x, y, width, height);
+    
+    // Copy bounds back
+    workingNodes.forEach((wn, idx) => {
+        nodes.find(n => n.data === wn.data).bounds = wn.bounds;
+    });
+}
+
+window.addEventListener('resize', () => {
+    if (activeMainView === 'grid' && currentGridViewMode === 'heatmap') {
+        const canvas = document.getElementById('heatmap-canvas');
+        if (canvas && canvas.clientWidth > 0) {
+            renderHeatmap();
+        }
+    }
+});
