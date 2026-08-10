@@ -184,7 +184,7 @@
                 </div>
                 
                 <!-- 1-B: Heatmap Subview -->
-                <div id="heatmap-subview-container" style="display: none; flex-direction: column; flex: 1; min-height: 0; background: #ffffff; border-radius: 12px; border: 1px solid var(--border-color); position: relative; overflow: auto; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); margin: 0 1.5rem 1.5rem 1.5rem; padding: 1.25rem;">
+                <div id="heatmap-subview-container" style="display: none; flex-direction: column; flex: 1; min-height: 0; background: #ffffff; border-radius: 12px; border: 1px solid var(--border-color); position: relative; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); margin: 0 1.5rem 1.5rem 1.5rem; padding: 1.25rem;">
                     <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1rem; user-select: none;">
                         <div style="font-family: var(--font-outfit); font-size: 0.85rem; font-weight: 700; color: var(--accent-blue); text-transform: uppercase; letter-spacing: 0.05em;">시장 주도 테마 히트맵</div>
                         <div style="display: flex; gap: 0.5rem; align-items: center;">
@@ -196,7 +196,7 @@
                         </div>
                     </div>
                     <!-- The actual heatmap canvas -->
-                    <div id="heatmap-canvas" style="flex: 1; width: 100%; position: relative; background: #f8fafc; border-radius: 8px; overflow-y: auto; overflow-x: hidden;">
+                    <div id="heatmap-canvas" style="flex: 1; min-height: 0; width: 100%; position: relative; background: #f8fafc; border-radius: 8px; overflow-y: auto; overflow-x: hidden;">
                         <!-- Injected via JS -->
                     </div>
                 </div>
