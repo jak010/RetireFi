@@ -2548,12 +2548,6 @@ function renderHeatmap() {
                     };
                     stockBlock.onclick = () => window.open(`https://finance.naver.com/item/main.naver?code=${sNode.data.stock_code}`, '_blank');
                     
-                    let tooltip = `${sNode.data.stock_name} | ${sNode.data.description || ''}`;
-                    if (sNode.data.role && sNode.data.role.includes('대장주')) {
-                        tooltip += `\n★ 대장주`;
-                    }
-                    tooltip += `\n4M 최고가: ${sNode.data.four_month_high_str || '-'}\n1차 타점: ${sNode.data.buy_zone_1 || '-'}\n2차 타점: ${sNode.data.buy_zone_2 || '-'}`;
-                    stockBlock.title = tooltip;
                     
                     if (sb.w > 40 && sb.h > 30) {
                         const fontSizeTitle = Math.max(0.6, Math.min(1.2, sb.w / 70));
