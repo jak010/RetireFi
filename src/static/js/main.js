@@ -139,9 +139,7 @@ async function fetchThemes() {
 
             if (currentGridViewMode === 'heatmap') renderHeatmap();
 
-            if (currentSidebarTab === 'leader') {
-                renderLeaderSectorsList();
-            }
+            renderLeaderSectorsList();
 
             fetchTossRanking();
         } else if (result.status === 'loading') {
@@ -2596,6 +2594,8 @@ function renderHeatmap() {
         // Grid mode
         canvas.style.display = 'grid';
         canvas.style.gridTemplateColumns = 'repeat(auto-fill, minmax(140px, 1fr))';
+        canvas.style.gridAutoRows = 'minmax(90px, auto)';
+        canvas.style.alignContent = 'start';
         canvas.style.gap = '4px';
         canvas.style.padding = '4px';
         
