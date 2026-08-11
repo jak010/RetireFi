@@ -355,7 +355,19 @@ function renderRankingSidebar() {
         `;
         
         item.onclick = () => {
-            triggerSearch(theme.theme_name);
+            const escapedName = theme.theme_name.replace(/"/g, '\\"');
+            const targetCard = document.querySelector(`.theme-card[data-theme-name="${escapedName}"]`);
+            if (targetCard) {
+                targetCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                
+                // Highlight the card temporarily
+                const originalBoxShadow = targetCard.style.boxShadow;
+                targetCard.style.transition = 'box-shadow 0.4s ease';
+                targetCard.style.boxShadow = '0 0 0 3px var(--accent-blue)';
+                setTimeout(() => {
+                    targetCard.style.boxShadow = originalBoxShadow;
+                }, 1500);
+            }
         };
         
         container.appendChild(item);
@@ -603,14 +615,11 @@ function renderDashboard() {
 
         // Determine folding state
         // If there's an active buy signal, always expand.
-        // If it is the default screen (no active filters) and it's within the top 9, default to expanded (true).
-        // Otherwise check cache. Default to collapsed (false).
+        // Otherwise check cache. Default to expanded (true).
         if (hasAlert1 || hasAlert2) {
             expandedStateMap[theme.theme_name] = true;
-        } else if (!hasActiveFilters && expandedStateMap[theme.theme_name] === undefined) {
-            expandedStateMap[theme.theme_name] = true; // 기본 Top 9는 펼친 상태로 초기 로드
         } else if (expandedStateMap[theme.theme_name] === undefined) {
-            expandedStateMap[theme.theme_name] = false;
+            expandedStateMap[theme.theme_name] = true; // 모든 카드를 기본적으로 펼친 상태로 유지
         }
 
         const isExpanded = expandedStateMap[theme.theme_name];
@@ -638,6 +647,7 @@ function renderDashboard() {
         // Create Card element
         const card = document.createElement('div');
         card.className = `theme-card ${isExpanded ? 'expanded' : ''} ${hasAlert1 ? 'has-alert-1' : ''} ${hasAlert2 ? 'has-alert-2' : ''}`;
+        card.setAttribute('data-theme-name', theme.theme_name);
 
         card.innerHTML = `
             <div class="theme-card-header" onclick="toggleCard('${theme.theme_name}')">
@@ -705,6 +715,13 @@ function renderDashboard() {
     } else {
         const multiGroups = sortedGroups.filter(g => g.themes.length > 1);
         const singleGroups = sortedGroups.filter(g => g.themes.length === 1);
+        
+        // 당일 등락률이 높은 순서대로 개별 주도테마 정렬
+        singleGroups.sort((a, b) => {
+            const rateA = parseFloat(a.themes[0].avg_rate) || 0;
+            const rateB = parseFloat(b.themes[0].avg_rate) || 0;
+            return rateB - rateA;
+        });
         
         let isFirstGroup = true;
         
