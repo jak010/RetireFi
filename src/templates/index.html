@@ -183,17 +183,10 @@
         <div class="main-content-area"
             style="flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; overflow: hidden;">
             <!-- Tabs Navigation -->
-            <div class="main-tabs"
-                style="display: flex; gap: 0.5rem; border-bottom: 2px solid var(--border-color); padding: 0.5rem 1.5rem; margin-bottom: 0.5rem; user-select: none;">
-                <button class="main-tab active" id="tab-grid-view" onclick="switchMainView('grid')"
-                    style="background: none; border: none; font-size: 0.85rem; font-weight: 700; color: var(--accent-blue); cursor: pointer; padding: 0.4rem 1rem; border-radius: 6px; transition: all 0.2s;">전광판
-                    매트릭스</button>
-                <button class="main-tab" id="tab-stock-view" onclick="switchMainView('stock')"
-                    style="background: none; border: none; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); cursor: pointer; padding: 0.4rem 1rem; border-radius: 6px; transition: all 0.2s;">종목
-                    압축 관찰판</button>
-                <button class="main-tab" id="tab-sangtta-view" onclick="switchMainView('sangtta')"
-                    style="background: none; border: none; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); cursor: pointer; padding: 0.4rem 1rem; border-radius: 6px; transition: all 0.2s;">🔥
-                    종가베팅 & 상따</button>
+            <div class="main-tabs">
+                <button class="main-tab active" id="tab-grid-view" onclick="switchMainView('grid')">전광판 매트릭스</button>
+                <button class="main-tab" id="tab-stock-view" onclick="switchMainView('stock')">종목 압축 관찰판</button>
+                <button class="main-tab" id="tab-sangtta-view" onclick="switchMainView('sangtta')">🔥 종가베팅 & 상따</button>
             </div>
 
             <!-- Tab Content 1: Grid View -->

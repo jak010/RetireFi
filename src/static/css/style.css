@@ -1,25 +1,53 @@
-/* CSS variables for Premium Light Mode Design System */
+/* CSS variables for Premium Clean Light Mode Design System */
 :root {
-    --bg-dark: #e2e8f0; /* Darker Slate 200 background for extreme card contrast */
-    --bg-card: #ffffff; /* Fully solid white for index cards */
+    --bg-dark: #f4f4f5; /* Very soft light gray background */
+    --bg-card: #ffffff; /* Crisp white for cards */
     --bg-card-hover: #ffffff;
-    --border-color: rgba(15, 23, 42, 0.22); /* Sharp, highly visible slate border */
+    --border-color: rgba(0, 0, 0, 0.08); /* Very subtle, elegant border */
     
-    --text-primary: #0f172a; /* Slate 900 (Dark text) */
-    --text-secondary: #475569; /* Slate 600 */
-    --text-muted: #94a3b8; /* Slate 400 */
+    --text-primary: #18181b; /* Zinc 900 */
+    --text-secondary: #52525b; /* Zinc 600 */
+    --text-muted: #a1a1aa; /* Zinc 400 */
     
-    --accent-blue: #1d4ed8; /* Strong Royal Blue */
-    --accent-blue-glow: rgba(29, 78, 216, 0.08);
-    --accent-green: #10b981;
-    --accent-green-glow: rgba(16, 185, 129, 0.08);
-    --accent-orange: #d97706; /* Dark Orange */
-    --accent-orange-glow: rgba(217, 119, 6, 0.08);
-    --accent-red: #ef4444;
-    --accent-gold: #b45309; /* Deep Gold/Brown */
+    --accent-blue: #2563eb; /* Clean modern blue */
+    --accent-blue-glow: rgba(37, 99, 235, 0.08);
+    --accent-green: #059669; /* Emerald */
+    --accent-green-glow: rgba(5, 150, 105, 0.08);
+    --accent-orange: #ea580c;
+    --accent-orange-glow: rgba(234, 88, 12, 0.08);
+    --accent-red: #e11d48; /* Rose red */
+    --accent-gold: #b45309;
     
     --font-outfit: 'Outfit', 'Inter', sans-serif;
     --font-inter: 'Inter', sans-serif;
+    
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.03), 0 2px 4px rgba(0, 0, 0, 0.02);
+    --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.02);
+    --shadow-card-hover: 0 16px 40px rgba(0, 0, 0, 0.08), 0 8px 16px rgba(0, 0, 0, 0.03);
+    
+    --transition-smooth: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); /* Apple-like snappiness */
+    --transition-fast: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Elegant Custom Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.25);
+    border: 2px solid transparent;
+    background-clip: padding-box;
 }
 
 * {
@@ -588,16 +616,16 @@ header {
     display: flex;
     flex-direction: column;
     gap: 0.85rem;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: var(--transition-smooth);
     position: relative;
-    box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.08), 0 2px 4px -2px rgba(15, 23, 42, 0.06);
+    box-shadow: var(--shadow-sm);
 }
 
 .theme-card:hover {
     background: var(--bg-card-hover);
-    border-color: var(--accent-blue); /* Clear accent blue border highlight on hover */
-    box-shadow: 0 12px 20px -6px rgba(15, 23, 42, 0.15), 0 4px 8px -2px rgba(15, 23, 42, 0.1);
-    transform: translateY(-3px);
+    border-color: var(--accent-blue);
+    box-shadow: var(--shadow-card-hover);
+    transform: translateY(-2px);
 }
 
 .theme-card.expanded {
@@ -739,8 +767,8 @@ header {
 
 /* Stock Row Item */
 .stock-row-item {
-    background: rgba(0, 0, 0, 0.01);
-    border: 1px solid rgba(0, 0, 0, 0.03);
+    background: rgba(0, 0, 0, 0.015);
+    border: 1px solid rgba(0, 0, 0, 0.04);
     border-radius: 8px;
     padding: 0.5rem 0.75rem;
     display: grid;
@@ -748,14 +776,14 @@ header {
     align-items: center;
     gap: 0.6rem;
     position: relative;
-    transition: all 0.2s ease;
+    transition: var(--transition-fast);
 }
 
 .stock-row-item:hover {
-    background: rgba(255, 255, 255, 0.95);
+    background: var(--bg-card);
     border-color: rgba(0, 0, 0, 0.08);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.05);
-    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
     z-index: 10;
 }
 
@@ -1844,4 +1872,60 @@ header {
     0% { border-color: rgba(239, 68, 68, 0.3); }
     50% { border-color: rgba(239, 68, 68, 0.8); }
     100% { border-color: rgba(239, 68, 68, 0.3); }
+}
+
+/* Main Tabs Navigation */
+.main-tabs {
+    display: flex;
+    gap: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+    padding: 0.5rem 1.5rem;
+    margin-bottom: 0.5rem;
+    user-select: none;
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(12px);
+    position: relative;
+    z-index: 10;
+}
+
+.main-tab {
+    background: transparent;
+    border: none;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0.5rem 1.25rem;
+    border-radius: 8px;
+    transition: var(--transition-smooth);
+    position: relative;
+    overflow: hidden;
+}
+
+.main-tab:hover {
+    color: var(--text-primary);
+    background: rgba(0, 0, 0, 0.02);
+}
+
+.main-tab.active {
+    color: var(--accent-blue);
+    background: var(--accent-blue-glow);
+}
+
+.main-tab::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 2px;
+    background-color: var(--accent-blue);
+    transition: var(--transition-smooth);
+    opacity: 0;
+}
+
+.main-tab.active::after {
+    width: 80%;
+    opacity: 1;
 }
