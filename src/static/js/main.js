@@ -2225,6 +2225,7 @@ function renderClosingBetCandidates(themesData) {
     // Get Top 8 themes by volume (themesData is already sorted)
     const topThemes = themesData.slice(0, 8);
     let candidates = [];
+    let seenStocks = new Set();
     
     topThemes.forEach((theme, themeIndex) => {
         if (!theme.top_stocks) return;
@@ -2234,6 +2235,9 @@ function renderClosingBetCandidates(themesData) {
         // Pick top 2 stocks from the theme
         const topStocks = theme.top_stocks.slice(0, 2);
         topStocks.forEach((stock) => {
+            if (seenStocks.has(stock.stock_code)) return;
+            seenStocks.add(stock.stock_code);
+            
             const rate = parseFloat(stock.rate) || 0;
             const drop = parseFloat(stock.drop) || 0;
             const volStr = stock.volume_str || '0';
@@ -2244,11 +2248,11 @@ function renderClosingBetCandidates(themesData) {
                 dominance = Math.min(100, (vol / themeVolumeNum) * 100);
             }
             
-            // Algorithm: Rate 7% ~ 25%, Drop 0 to -8%
-            if (rate >= 7.0 && rate <= 25.0 && drop >= -8.0) {
+            // Algorithm: Rate 7% ~ 25%, Drop 0 to -8%, Volume >= 1500억
+            if (rate >= 7.0 && rate <= 25.0 && drop >= -8.0 && vol >= 1500) {
                 let score = rate + (dominance * 0.1) + themeScore;
                 if (drop >= -5.0) score += 3; // Bonus for strong holding power
-                if (vol > 300) score += 2; // Bonus for decent liquidity (>300억)
+                if (vol >= 3000) score += 2; // Bonus for decent liquidity (>3000억)
                 
                 let reason = `주도 테마(${themeIndex + 1}위) 내 핵심주로 `;
                 if (drop >= -3.0) {
@@ -2301,11 +2305,7 @@ function renderClosingBetCandidates(themesData) {
             allTagElements.push(`<span style="font-size: 0.65rem; font-weight: 600; color: ${cHex}; background: ${cHex}15; border: 1px solid ${cHex}30; padding: 0.15rem 0.35rem; border-radius: 4px; white-space: nowrap; cursor: pointer;" onclick="event.stopPropagation(); scrollToTheme('${name}')">${name}</span>`);
         });
         
-        let chunkedRows = [];
-        for (let i = 0; i < allTagElements.length; i += 4) {
-            chunkedRows.push(`<div style="display: flex; gap: 0.3rem; margin-bottom: 0.2rem;">${allTagElements.slice(i, i + 4).join('')}</div>`);
-        }
-        let themeTagsHtml = `<div style="display: flex; flex-direction: column;">${chunkedRows.join('')}</div>`;
+        let themeTagsCompactHtml = `<div style="display: flex; gap: 0.2rem; overflow: hidden; white-space: nowrap;">${allTagElements.slice(0, 3).join('')}</div>`;
         
         const card = document.createElement('div');
         card.className = `closing-bet-card ${glowClass}`;
@@ -2320,26 +2320,33 @@ function renderClosingBetCandidates(themesData) {
         };
         
         card.innerHTML = `
-            <div style="display: flex; justify-content: flex-end; align-items: flex-start;">
-                <span style="font-size: 0.7rem; color: var(--text-muted); white-space: nowrap;">${s.volume_str || '-'}</span>
-            </div>
-            <div style="display: flex; align-items: baseline; gap: 0.5rem; margin-top: 0.1rem;">
-                <span style="font-size: 1.1rem; font-weight: 800; color: var(--text-primary);">${s.stock_name}</span>
-                <span style="font-size: 0.85rem; font-weight: 700;" class="${rateClass}">${rateSign}${s.rate}%</span>
-            </div>
-            <div style="font-size: 0.75rem; color: var(--text-secondary); display: flex; flex-direction: column; gap: 0.2rem; margin-top: 0.3rem;">
-                <div style="display: flex; justify-content: space-between;">
-                    <span>당일 고점 대비 낙폭:</span>
-                    <span style="font-weight: 700; color: ${parseFloat(s.drop) < -5 ? 'var(--accent-orange)' : 'var(--accent-green)'};">${parseFloat(s.drop || 0).toFixed(2)}%</span>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.1rem;">
+                <div style="display: flex; align-items: baseline; gap: 0.3rem;">
+                    <span style="font-size: 0.95rem; font-weight: 800; color: var(--text-primary);">${s.stock_name}</span>
+                    <span style="font-size: 0.75rem; font-weight: 800;" class="${rateClass}">${rateSign}${s.rate}%</span>
                 </div>
-                <div style="display: flex; justify-content: space-between; border-top: 1px dotted rgba(255,255,255,0.1); padding-top: 0.3rem; margin-top: 0.2rem;">
-                    <span>눌림목 1차 타점:</span>
-                    <span style="font-weight: 700; color: var(--text-muted);">${s.buy_zone_1 || '-'}</span>
+                <div style="display: flex; gap: 0.2rem;">
+                    <span style="font-size: 0.6rem; font-weight: 800; color: #ef4444; background: rgba(239, 68, 68, 0.1); padding: 0.1rem 0.25rem; border-radius: 4px; border: 1px solid rgba(239, 68, 68, 0.2);">AI PICK</span>
+                    <span style="font-size: 0.6rem; font-weight: 700; color: var(--text-muted); background: rgba(0,0,0,0.03); padding: 0.1rem 0.25rem; border-radius: 4px;">${s.volume_str || '-'}</span>
                 </div>
             </div>
-            <div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed rgba(239, 68, 68, 0.2); font-size: 0.7rem; color: #94a3b8; line-height: 1.4; word-break: keep-all;">
-                <div style="margin-bottom: 0.4rem;">${themeTagsHtml}</div>
-                💡 <span style="font-weight: 500;">${c.reason}</span>
+            
+            <div style="display: flex; gap: 0.3rem; margin-bottom: 0.1rem;">
+                <div style="flex: 1; font-size: 0.65rem; color: var(--text-secondary); background: rgba(248, 250, 252, 0.6); padding: 0.15rem 0.3rem; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(0,0,0,0.02);">
+                    <span style="font-weight: 600;">당일낙폭</span>
+                    <span style="font-weight: 800; color: ${parseFloat(s.drop) < -5 ? 'var(--accent-orange)' : 'var(--accent-green)'};">${parseFloat(s.drop || 0).toFixed(2)}%</span>
+                </div>
+                <div style="flex: 1; font-size: 0.65rem; color: var(--text-secondary); background: rgba(248, 250, 252, 0.6); padding: 0.15rem 0.3rem; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(0,0,0,0.02);">
+                    <span style="font-weight: 600;">1차타점</span>
+                    <span style="font-weight: 800; color: var(--text-primary);">${s.buy_zone_1 || '-'}</span>
+                </div>
+            </div>
+
+            <div style="font-size: 0.6rem; display: flex; flex-direction: column; gap: 0.2rem;">
+                ${themeTagsCompactHtml}
+                <div style="background: rgba(239, 68, 68, 0.04); border-left: 2px solid rgba(239, 68, 68, 0.4); padding: 0.15rem 0.3rem; border-radius: 0 4px 4px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.6rem; color: var(--text-secondary);">
+                    <span style="font-weight: 700; color: #ef4444;">추천사유:</span> <span style="font-weight: 600;">${c.reason}</span>
+                </div>
             </div>
         `;
         container.appendChild(card);

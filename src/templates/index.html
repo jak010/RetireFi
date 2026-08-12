@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,13 +8,16 @@
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
     <!-- External Premium Light Mode Stylesheet -->
     <link rel="stylesheet" href="/static/css/style.css">
     <!-- Chart.js for High-Fidelity Intraday Charts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
+
 <body>
     <header>
         <div class="header-title-container">
@@ -21,27 +25,16 @@
             <p>실시간 테마 수급 분석 및 분할 매수 타점 전광판</p>
         </div>
 
-        <!-- 실시간 글로벌 지수 보드 -->
-        <div class="header-indices-container" id="header-indices-container">
-            <div class="index-item" id="index-kospi">
-                <span class="index-label">코스피</span>
-                <span class="index-val">-</span>
-                <span class="index-rate">-</span>
-            </div>
-            <div class="index-item" id="index-nasdaq">
-                <span class="index-label">나스닥100 선물</span>
-                <span class="index-val">-</span>
-                <span class="index-rate">-</span>
-            </div>
-            <div class="index-item" id="index-sox">
-                <span class="index-label">필라델피아 반도체</span>
-                <span class="index-val">-</span>
-                <span class="index-rate">-</span>
-            </div>
+        <!-- Core Principle Text (Moved to Header) -->
+        <div style="display: flex; align-items: center; gap: 0.7rem; user-select: none; background: linear-gradient(180deg, #1e293b, #0f172a); border: 1px solid rgba(255, 255, 255, 0.1); padding: 0.45rem 1.25rem; border-radius: 9999px; box-shadow: 0 6px 16px rgba(15, 23, 42, 0.25), inset 0 1px 1px rgba(255,255,255,0.15); margin: 0 1rem; position: relative; overflow: hidden;">
+            <div style="position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: radial-gradient(circle at 50% -20%, rgba(16, 185, 129, 0.3), transparent 70%); pointer-events: none;"></div>
+            <span style="position: relative; font-size: 0.75rem; font-weight: 800; background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 0.2rem 0.65rem; border-radius: 9999px; letter-spacing: 0.05em; box-shadow: 0 0 12px rgba(16,185,129,0.5);">원칙</span>
+            <span style="position: relative; font-size: 1.1rem; font-weight: 900; color: #ffffff; font-family: var(--font-outfit); letter-spacing: -0.01em; text-shadow: 0 2px 4px rgba(0,0,0,0.8);">"무릎에서 사서 어깨에서 판다"</span>
         </div>
 
         <div class="header-meta">
-            <div class="refresh-badge" id="time-badge" style="background: rgba(0, 0, 0, 0.02); margin-right: 0.5rem; font-weight: 600;">
+            <div class="refresh-badge" id="time-badge"
+                style="background: rgba(0, 0, 0, 0.02); margin-right: 0.5rem; font-weight: 600;">
                 🕒 &nbsp;<span id="current-time-display">00:00:00</span>
             </div>
             <div class="refresh-badge" id="refresh-indicator">
@@ -101,15 +94,37 @@
                 <option value="asc">오름차순</option>
             </select>
 
+            <!-- 실시간 글로벌 지수 보드 (Moved to Control Bar) -->
+            <div class="header-indices-container" id="header-indices-container" style="display: flex; gap: 0.5rem; margin-left: 0.5rem; padding-left: 0.75rem; border-left: 1px solid rgba(0,0,0,0.1);">
+                <div class="index-item" id="index-kospi" style="background: rgba(255, 255, 255, 0.9); border: 1px solid var(--border-color); padding: 0.35rem 0.6rem; border-radius: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.02); font-size: 0.7rem; display: flex; align-items: center; gap: 0.35rem;">
+                    <span class="index-label" style="color: var(--text-muted); font-weight: 700;">KOSPI</span>
+                    <span class="index-val" style="font-weight: 800; color: var(--text-primary);">-</span>
+                    <span class="index-rate" style="font-weight: 800;">-</span>
+                </div>
+                <div class="index-item" id="index-nasdaq" style="background: rgba(255, 255, 255, 0.9); border: 1px solid var(--border-color); padding: 0.35rem 0.6rem; border-radius: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.02); font-size: 0.7rem; display: flex; align-items: center; gap: 0.35rem;">
+                    <span class="index-label" style="color: var(--text-muted); font-weight: 700;">NASDAQ</span>
+                    <span class="index-val" style="font-weight: 800; color: var(--text-primary);">-</span>
+                    <span class="index-rate" style="font-weight: 800;">-</span>
+                </div>
+                <div class="index-item" id="index-sox" style="background: rgba(255, 255, 255, 0.9); border: 1px solid var(--border-color); padding: 0.35rem 0.6rem; border-radius: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.02); font-size: 0.7rem; display: flex; align-items: center; gap: 0.35rem;">
+                    <span class="index-label" style="color: var(--text-muted); font-weight: 700;">SOX</span>
+                    <span class="index-val" style="font-weight: 800; color: var(--text-primary);">-</span>
+                    <span class="index-rate" style="font-weight: 800;">-</span>
+                </div>
+            </div>
+
             <div class="search-wrapper">
-                <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                    xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                 </svg>
                 <input type="text" class="search-input" id="search-box" placeholder="테마 또는 종목명 검색...">
-                <button class="search-clear-btn" id="search-clear-btn" onclick="resetAllFilters()" style="display: none;" title="필터 및 검색 초기화">✖</button>
+                <button class="search-clear-btn" id="search-clear-btn" onclick="resetAllFilters()"
+                    style="display: none;" title="필터 및 검색 초기화">✖</button>
             </div>
         </div>
-        
+
         <div class="control-actions">
             <!-- 실시간 변동 하이라이트 토글 -->
             <label class="toggle-highlight-container" title="실시간 시세 업데이트 시 변동이 있는 종목을 강조 표시합니다.">
@@ -119,11 +134,15 @@
                 </span>
                 <span>⚡ 변동 종목 강조</span>
             </label>
-            <button class="btn-toggle" id="btn-toggle-grid-mode" style="background: var(--accent-blue); color: white; border: none; font-weight: 700; margin-right: 0.5rem;" onclick="toggleGridMode()">🗺️ 히트맵 뷰</button>
+            <button class="btn-toggle" id="btn-toggle-grid-mode"
+                style="background: var(--accent-blue); color: white; border: none; font-weight: 700; margin-right: 0.5rem;"
+                onclick="toggleGridMode()">🗺️ 히트맵 뷰</button>
             <button class="btn-toggle" id="btn-toggle-all" onclick="toggleAllCards()">📁 모두 접기</button>
-            <button class="btn-download-briefing" id="btn-download-briefing" onclick="downloadBriefing()" title="실시간 대장주 요약 브리핑 파일 다운로드">📥 브리핑 다운로드</button>
+            <button class="btn-download-briefing" id="btn-download-briefing" onclick="downloadBriefing()"
+                title="실시간 대장주 요약 브리핑 파일 다운로드">📥 브리핑 다운로드</button>
             <div class="stats-summary" id="stats-summary-info">
-                수집 테마: <span id="themes-count">0</span>개 | 매수 진입 타점: <span id="buying-targets-count" style="color:var(--accent-green)">0</span>개
+                수집 테마: <span id="themes-count">0</span>개 | 매수 진입 타점: <span id="buying-targets-count"
+                    style="color:var(--accent-green)">0</span>개
             </div>
         </div>
     </div>
@@ -132,19 +151,28 @@
     <div class="dashboard-layout">
         <!-- Left Side: Total Themes & Leader Sectors Split View -->
         <div class="ranking-sidebar">
-            <div class="sidebar-tabs" style="display: flex; justify-content: space-between; align-items: center; padding-right: 0.5rem;">
-                <button class="sidebar-tab active" id="tab-theme-ranking" onclick="switchSidebarTab('theme')">테마 랭킹</button>
-                <button id="btn-toggle-sidebar-left" onclick="toggleSidebar()" style="background: none; border: none; font-size: 1.1rem; cursor: pointer; color: var(--text-muted); transition: color 0.2s;" title="사이드바 접기/펴기">◀</button>
+            <div class="sidebar-tabs"
+                style="display: flex; justify-content: space-between; align-items: center; padding-right: 0.5rem;">
+                <button class="sidebar-tab active" id="tab-theme-ranking" onclick="switchSidebarTab('theme')">테마
+                    랭킹</button>
+                <button id="btn-toggle-sidebar-left" onclick="toggleSidebar()"
+                    style="background: none; border: none; font-size: 1.1rem; cursor: pointer; color: var(--text-muted); transition: color 0.2s;"
+                    title="사이드바 접기/펴기">◀</button>
             </div>
             <div class="ranking-sidebar-header" id="theme-ranking-header">
                 <span>전체 테마 수급 랭킹</span>
                 <span style="font-size:0.65rem; color:var(--text-muted);" id="ranking-sort-label">거래대금 순</span>
             </div>
-            <div class="ranking-table-header" id="theme-table-header" style="display: grid; grid-template-columns: 28px 1fr 55px 42px; gap: 0.5rem; padding: 0.4rem 0.75rem; font-size: 0.65rem; color: var(--text-muted); border-bottom: 1px solid var(--border-color); font-weight: 700; background: rgba(0, 0, 0, 0.02); user-select: none;">
-                <span style="cursor: pointer; text-align: center;" onclick="setSidebarSort('composite')" title="종합 순위 정렬">순위</span>
-                <span style="cursor: pointer; text-align: left;" onclick="setSidebarSort('mapped_count')" title="매핑 종목수 정렬">테마군 (종목수)</span>
-                <span style="cursor: pointer; text-align: right;" onclick="setSidebarSort('rate')" title="평균 등락률 정렬">등락률</span>
-                <span style="cursor: pointer; text-align: right;" onclick="setSidebarSort('volume')" title="거래대금 점유율 정렬">점유율</span>
+            <div class="ranking-table-header" id="theme-table-header"
+                style="display: grid; grid-template-columns: 28px 1fr 55px 42px; gap: 0.5rem; padding: 0.4rem 0.75rem; font-size: 0.65rem; color: var(--text-muted); border-bottom: 1px solid var(--border-color); font-weight: 700; background: rgba(0, 0, 0, 0.02); user-select: none;">
+                <span style="cursor: pointer; text-align: center;" onclick="setSidebarSort('composite')"
+                    title="종합 순위 정렬">순위</span>
+                <span style="cursor: pointer; text-align: left;" onclick="setSidebarSort('mapped_count')"
+                    title="매핑 종목수 정렬">테마군 (종목수)</span>
+                <span style="cursor: pointer; text-align: right;" onclick="setSidebarSort('rate')"
+                    title="평균 등락률 정렬">등락률</span>
+                <span style="cursor: pointer; text-align: right;" onclick="setSidebarSort('volume')"
+                    title="거래대금 점유율 정렬">점유율</span>
             </div>
             <div class="ranking-list-container" id="ranking-list-container">
                 <!-- Injected via JS -->
@@ -152,24 +180,36 @@
         </div>
 
         <!-- Right Side: Tabbed Container -->
-        <div class="main-content-area" style="flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; overflow: hidden;">
+        <div class="main-content-area"
+            style="flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; overflow: hidden;">
             <!-- Tabs Navigation -->
-            <div class="main-tabs" style="display: flex; gap: 0.5rem; border-bottom: 2px solid var(--border-color); padding: 0.5rem 1.5rem; margin-bottom: 0.5rem; user-select: none;">
-                <button class="main-tab active" id="tab-grid-view" onclick="switchMainView('grid')" style="background: none; border: none; font-size: 0.85rem; font-weight: 700; color: var(--accent-blue); cursor: pointer; padding: 0.4rem 1rem; border-radius: 6px; transition: all 0.2s;">전광판 매트릭스</button>
-                <button class="main-tab" id="tab-stock-view" onclick="switchMainView('stock')" style="background: none; border: none; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); cursor: pointer; padding: 0.4rem 1rem; border-radius: 6px; transition: all 0.2s;">종목 압축 관찰판</button>
-                <button class="main-tab" id="tab-sangtta-view" onclick="switchMainView('sangtta')" style="background: none; border: none; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); cursor: pointer; padding: 0.4rem 1rem; border-radius: 6px; transition: all 0.2s;">🔥 종가베팅 & 상따</button>
+            <div class="main-tabs"
+                style="display: flex; gap: 0.5rem; border-bottom: 2px solid var(--border-color); padding: 0.5rem 1.5rem; margin-bottom: 0.5rem; user-select: none;">
+                <button class="main-tab active" id="tab-grid-view" onclick="switchMainView('grid')"
+                    style="background: none; border: none; font-size: 0.85rem; font-weight: 700; color: var(--accent-blue); cursor: pointer; padding: 0.4rem 1rem; border-radius: 6px; transition: all 0.2s;">전광판
+                    매트릭스</button>
+                <button class="main-tab" id="tab-stock-view" onclick="switchMainView('stock')"
+                    style="background: none; border: none; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); cursor: pointer; padding: 0.4rem 1rem; border-radius: 6px; transition: all 0.2s;">종목
+                    압축 관찰판</button>
+                <button class="main-tab" id="tab-sangtta-view" onclick="switchMainView('sangtta')"
+                    style="background: none; border: none; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); cursor: pointer; padding: 0.4rem 1rem; border-radius: 6px; transition: all 0.2s;">🔥
+                    종가베팅 & 상따</button>
             </div>
-            
+
             <!-- Tab Content 1: Grid View -->
-            <div id="grid-view-container" style="display: flex; flex-direction: column; flex: 1; min-height: 0; width: 100%; overflow: hidden;">
+            <div id="grid-view-container"
+                style="display: flex; flex-direction: column; flex: 1; min-height: 0; width: 100%; overflow: hidden;">
                 <!-- Top 3 Leader Themes Banner -->
-                <div id="leader-banner-container" style="display: none; flex-shrink: 0; min-height: 45px; padding: 0.5rem 1.5rem; gap: 1rem; align-items: center; border-bottom: 1px solid var(--border-color); background: #fdfdfd;">
-                    <div style="font-size: 0.75rem; font-weight: 800; color: var(--accent-red); white-space: nowrap;">🔥 주도 업종 TOP 3</div>
-                    <div id="leader-list-horizontal" style="display: flex; gap: 0.5rem; overflow-x: auto; flex: 1; align-items: center;">
+                <div id="leader-banner-container"
+                    style="display: none; flex-shrink: 0; min-height: 45px; padding: 0.5rem 1.5rem; gap: 1rem; align-items: center; border-bottom: 1px solid var(--border-color); background: #fdfdfd;">
+                    <div style="font-size: 0.75rem; font-weight: 800; color: var(--accent-red); white-space: nowrap;">🔥
+                        주도 업종 TOP 3</div>
+                    <div id="leader-list-horizontal"
+                        style="display: flex; gap: 0.5rem; overflow-x: auto; flex: 1; align-items: center;">
                         <!-- Injected via JS -->
                     </div>
                 </div>
-                
+
                 <!-- 1-A: Dashboard Detail Grid -->
                 <div class="dashboard-grid" id="dashboard-grid-container" style="display: grid;">
                     <div class="no-data-msg">
@@ -182,22 +222,58 @@
                         <div class="loading-progress-text" id="loading-progress-text">준비 중... (0%)</div>
                     </div>
                 </div>
-                
+
                 <!-- 1-B: Heatmap Subview -->
-                <div id="heatmap-subview-container" style="display: none; flex-direction: column; flex: 1; min-height: 0; background: #ffffff; border-radius: 12px; border: 1px solid var(--border-color); position: relative; overflow-y: auto; overflow-x: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); margin: 0 1.5rem 1.5rem 1.5rem; padding: 1.25rem;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1rem; user-select: none;">
-                        <div style="font-family: var(--font-outfit); font-size: 0.85rem; font-weight: 700; color: var(--accent-blue); text-transform: uppercase; letter-spacing: 0.05em;">시장 주도 테마 히트맵</div>
+                <div id="heatmap-subview-container"
+                    style="display: none; flex-direction: column; flex: 1; min-height: 0; background: #ffffff; border-radius: 12px; border: 1px solid var(--border-color); position: relative; overflow-y: auto; overflow-x: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); margin: 0 1.5rem 1.5rem 1.5rem; padding: 1.25rem;">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1rem; user-select: none;">
+                        <div
+                            style="font-family: var(--font-outfit); font-size: 0.85rem; font-weight: 700; color: var(--accent-blue); text-transform: uppercase; letter-spacing: 0.05em;">
+                            시장 주도 테마 히트맵</div>
                         <div style="display: flex; gap: 0.5rem; align-items: center;">
-                            <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: 600; margin-right: 0.5rem;">보기 모드:</span>
+                            <span
+                                style="font-size: 0.7rem; color: var(--text-muted); font-weight: 600; margin-right: 0.5rem;">보기
+                                모드:</span>
                             <div style="display: flex; background: rgba(0,0,0,0.04); border-radius: 6px; padding: 2px;">
-                                <button id="heatmap-btn-treemap" onclick="switchHeatmapMode('treemap')" style="background: white; border: 1px solid var(--border-color); border-radius: 4px; padding: 0.2rem 0.6rem; font-size: 0.7rem; font-weight: 700; cursor: pointer; color: var(--text-primary); box-shadow: 0 1px 2px rgba(0,0,0,0.05);">면적 비례 (Treemap)</button>
-                                <button id="heatmap-btn-grid" onclick="switchHeatmapMode('grid')" style="background: transparent; border: 1px solid transparent; border-radius: 4px; padding: 0.2rem 0.6rem; font-size: 0.7rem; font-weight: 700; cursor: pointer; color: var(--text-muted);">균등 정렬 (Grid)</button>
+                                <button id="heatmap-btn-treemap" onclick="switchHeatmapMode('treemap')"
+                                    style="background: white; border: 1px solid var(--border-color); border-radius: 4px; padding: 0.2rem 0.6rem; font-size: 0.7rem; font-weight: 700; cursor: pointer; color: var(--text-primary); box-shadow: 0 1px 2px rgba(0,0,0,0.05);">면적
+                                    비례 (Treemap)</button>
+                                <button id="heatmap-btn-grid" onclick="switchHeatmapMode('grid')"
+                                    style="background: transparent; border: 1px solid transparent; border-radius: 4px; padding: 0.2rem 0.6rem; font-size: 0.7rem; font-weight: 700; cursor: pointer; color: var(--text-muted);">균등
+                                    정렬 (Grid)</button>
                             </div>
                         </div>
                     </div>
                     <!-- The actual heatmap canvas -->
-                    <div id="heatmap-canvas" style="flex: 1; min-height: 0; width: 100%; position: relative; background: #f8fafc; border-radius: 8px;">
+                    <div id="heatmap-canvas"
+                        style="flex: 1; min-height: 0; width: 100%; position: relative; background: #f8fafc; border-radius: 8px;">
                         <!-- Injected via JS -->
+                    </div>
+                </div>
+
+                <!-- Closing Price Betting Section (Fixed at bottom) -->
+                <div id="closing-bet-section"
+                    style="display: none; flex-direction: column; padding: 0.4rem 1.5rem 0.3rem 1.5rem; border-top: 1px solid rgba(239, 68, 68, 0.2); background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); flex-shrink: 0; box-shadow: 0 -8px 30px rgba(239, 68, 68, 0.05); z-index: 10; margin-top: auto; position: relative;">
+                    <!-- Top accent line -->
+                    <div style="position: absolute; top: -1px; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent 0%, rgba(239, 68, 68, 0.8) 50%, transparent 100%); opacity: 0.7;"></div>
+                    
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem;">
+                        <h3 id="closing-bet-title"
+                            style="font-size: 0.85rem; font-weight: 800; letter-spacing: -0.02em; display: flex; align-items: center; gap: 0.4rem; background: linear-gradient(90deg, #ef4444, #f97316); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-shadow: 0px 1px 5px rgba(239,68,68,0.2);">
+                            <span class="pulsing-dot"
+                                style="display: inline-block; width: 6px; height: 6px; background-color: #ef4444; border-radius: 50%; box-shadow: 0 0 8px #ef4444;"></span>
+                            🎯 실시간 종가베팅 후보군 <span style="font-size: 0.65rem; font-weight: 700; color: #fff; background: linear-gradient(135deg, #ef4444, #f97316); padding: 0.1rem 0.4rem; border-radius: 12px; margin-left: 0.2rem; -webkit-text-fill-color: initial; box-shadow: 0 2px 4px rgba(239,68,68,0.3);">AI PICK</span>
+                        </h3>
+                        <div style="font-size: 0.65rem; color: var(--text-muted); font-weight: 600; display: flex; align-items: center; gap: 0.3rem;">
+                            <span style="display: inline-block; width: 5px; height: 5px; border-radius: 50%; background-color: #10b981;"></span>
+                            알고리즘 연산 중
+                        </div>
+                    </div>
+                    <div id="closing-bet-cards-container"
+                        style="display: flex; gap: 0.8rem; overflow-x: auto; padding-bottom: 0.4rem; scrollbar-width: thin; scroll-behavior: smooth;">
+                        <!-- Cards injected via JS -->
                     </div>
                 </div>
             </div>
@@ -205,29 +281,53 @@
 
 
             <!-- Tab Content 3: Consolidated Stock View -->
-            <div id="stock-view-container" style="display: none; flex-direction: column; flex: 1; min-height: 0; background: #ffffff; border-radius: 12px; border: 1px solid var(--border-color); position: relative; overflow-y: auto; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); margin: 0.5rem 1.5rem 1.5rem 1.5rem; padding: 1.25rem;">
-                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1rem; user-select: none;">
-                    <div style="font-family: var(--font-outfit); font-size: 0.85rem; font-weight: 700; color: var(--accent-blue); text-transform: uppercase; letter-spacing: 0.05em;">종목 중심 압축 관찰판</div>
-                    <div style="font-size: 0.7rem; color: var(--text-muted); font-weight: 600;">대장주만 표기되며, 중복이 제거된 고유 종목 목록입니다.</div>
+            <div id="stock-view-container"
+                style="display: none; flex-direction: column; flex: 1; min-height: 0; background: #ffffff; border-radius: 12px; border: 1px solid var(--border-color); position: relative; overflow-y: auto; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); margin: 0.5rem 1.5rem 1.5rem 1.5rem; padding: 1.25rem;">
+                <div
+                    style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1rem; user-select: none;">
+                    <div
+                        style="font-family: var(--font-outfit); font-size: 0.85rem; font-weight: 700; color: var(--accent-blue); text-transform: uppercase; letter-spacing: 0.05em;">
+                        종목 중심 압축 관찰판</div>
+                    <div style="font-size: 0.7rem; color: var(--text-muted); font-weight: 600;">대장주만 표기되며, 중복이 제거된 고유 종목
+                        목록입니다.</div>
                 </div>
                 <div style="overflow-x: auto; width: 100%;">
-                    <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.75rem; min-width: 700px;">
+                    <table
+                        style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.75rem; min-width: 700px;">
                         <thead>
-                            <tr style="border-bottom: 2px solid var(--border-color); color: var(--text-secondary); font-weight: 700; font-family: var(--font-outfit); background: rgba(0, 0, 0, 0.01); user-select: none;">
+                            <tr
+                                style="border-bottom: 2px solid var(--border-color); color: var(--text-secondary); font-weight: 700; font-family: var(--font-outfit); background: rgba(0, 0, 0, 0.01); user-select: none;">
                                 <th style="padding: 0.75rem 0.5rem; width: 130px;">종목명</th>
-                                <th style="padding: 0.75rem 0.5rem; width: 95px; text-align: right; cursor: pointer; user-select: none; transition: all 0.2s;" onclick="sortConsolidatedStocks('price')" title="클릭하여 현재가 기준으로 오름차순/내림차순 정렬" onmouseover="this.style.background='rgba(0,0,0,0.03)';" onmouseout="this.style.background='transparent';">
-                                    <span>현재가</span> <span id="sort-arrow-c-price" style="display: inline-block; width: 18px; text-align: center; font-size: 0.65rem; opacity: 0.35; color: var(--text-muted);">▲▼</span>
+                                <th style="padding: 0.75rem 0.5rem; width: 95px; text-align: right; cursor: pointer; user-select: none; transition: all 0.2s;"
+                                    onclick="sortConsolidatedStocks('price')" title="클릭하여 현재가 기준으로 오름차순/내림차순 정렬"
+                                    onmouseover="this.style.background='rgba(0,0,0,0.03)';"
+                                    onmouseout="this.style.background='transparent';">
+                                    <span>현재가</span> <span id="sort-arrow-c-price"
+                                        style="display: inline-block; width: 18px; text-align: center; font-size: 0.65rem; opacity: 0.35; color: var(--text-muted);">▲▼</span>
                                 </th>
-                                <th style="padding: 0.75rem 0.5rem; width: 100px; text-align: right; cursor: pointer; user-select: none; transition: all 0.2s; color: #dc2626;" onclick="sortConsolidatedStocks('rate')" title="클릭하여 당일 등락률 기준으로 오름차순/내림차순 정렬" onmouseover="this.style.background='rgba(220, 38, 38, 0.04)';" onmouseout="this.style.background='transparent';">
-                                    <span>당일 등락률</span> <span id="sort-arrow-c-rate" style="display: inline-block; width: 18px; text-align: center; font-size: 0.8rem; color: #dc2626; opacity: 1;">▼</span>
+                                <th style="padding: 0.75rem 0.5rem; width: 100px; text-align: right; cursor: pointer; user-select: none; transition: all 0.2s; color: #dc2626;"
+                                    onclick="sortConsolidatedStocks('rate')" title="클릭하여 당일 등락률 기준으로 오름차순/내림차순 정렬"
+                                    onmouseover="this.style.background='rgba(220, 38, 38, 0.04)';"
+                                    onmouseout="this.style.background='transparent';">
+                                    <span>당일 등락률</span> <span id="sort-arrow-c-rate"
+                                        style="display: inline-block; width: 18px; text-align: center; font-size: 0.8rem; color: #dc2626; opacity: 1;">▼</span>
                                 </th>
-                                <th style="padding: 0.75rem 0.5rem; width: 95px; text-align: right; cursor: pointer; user-select: none; transition: all 0.2s;" onclick="sortConsolidatedStocks('volume')" title="클릭하여 거래대금 기준으로 오름차순/내림차순 정렬" onmouseover="this.style.background='rgba(0,0,0,0.03)';" onmouseout="this.style.background='transparent';">
-                                    <span>거래대금</span> <span id="sort-arrow-c-volume" style="display: inline-block; width: 18px; text-align: center; font-size: 0.65rem; opacity: 0.35; color: var(--text-muted);">▲▼</span>
+                                <th style="padding: 0.75rem 0.5rem; width: 95px; text-align: right; cursor: pointer; user-select: none; transition: all 0.2s;"
+                                    onclick="sortConsolidatedStocks('volume')" title="클릭하여 거래대금 기준으로 오름차순/내림차순 정렬"
+                                    onmouseover="this.style.background='rgba(0,0,0,0.03)';"
+                                    onmouseout="this.style.background='transparent';">
+                                    <span>거래대금</span> <span id="sort-arrow-c-volume"
+                                        style="display: inline-block; width: 18px; text-align: center; font-size: 0.65rem; opacity: 0.35; color: var(--text-muted);">▲▼</span>
                                 </th>
-                                <th style="padding: 0.75rem 0.5rem; width: 105px; text-align: right; cursor: pointer; user-select: none; transition: all 0.2s;" onclick="sortConsolidatedStocks('drop')" title="클릭하여 고점대비 낙폭 기준으로 오름차순/내림차순 정렬" onmouseover="this.style.background='rgba(0,0,0,0.03)';" onmouseout="this.style.background='transparent';">
-                                    <span>고점대비 낙폭</span> <span id="sort-arrow-c-drop" style="display: inline-block; width: 18px; text-align: center; font-size: 0.65rem; opacity: 0.35; color: var(--text-muted);">▲▼</span>
+                                <th style="padding: 0.75rem 0.5rem; width: 105px; text-align: right; cursor: pointer; user-select: none; transition: all 0.2s;"
+                                    onclick="sortConsolidatedStocks('drop')" title="클릭하여 고점대비 낙폭 기준으로 오름차순/내림차순 정렬"
+                                    onmouseover="this.style.background='rgba(0,0,0,0.03)';"
+                                    onmouseout="this.style.background='transparent';">
+                                    <span>고점대비 낙폭</span> <span id="sort-arrow-c-drop"
+                                        style="display: inline-block; width: 18px; text-align: center; font-size: 0.65rem; opacity: 0.35; color: var(--text-muted);">▲▼</span>
                                 </th>
-                                <th style="padding: 0.75rem 0.5rem; text-align: left; padding-left: 1.5rem;">연계 테마 목록</th>
+                                <th style="padding: 0.75rem 0.5rem; text-align: left; padding-left: 1.5rem;">연계 테마 목록
+                                </th>
                                 <th style="padding: 0.75rem 0.5rem; width: 85px; text-align: center;">타점 신호</th>
                                 <th style="padding: 0.75rem 0.5rem; width: 105px; text-align: center;">알림 설정</th>
                                 <th style="padding: 0.75rem 0.5rem; width: 90px; text-align: center;">바로가기</th>
@@ -238,59 +338,79 @@
                         </tbody>
                     </table>
                 </div>
-                <div id="stock-view-empty-msg" style="display: none; text-align: center; padding: 3rem; color: var(--text-muted); font-weight: 600; user-select: none;">
+                <div id="stock-view-empty-msg"
+                    style="display: none; text-align: center; padding: 3rem; color: var(--text-muted); font-weight: 600; user-select: none;">
                     조건에 맞는 종목이 없습니다.
                 </div>
             </div>
 
             <!-- Tab Content 4: Sangtta (Limit-up Chasing) View -->
-            <div id="sangtta-view-container" style="display: none; flex-direction: column; flex: 1; min-height: 0; background: #ffffff; border-radius: 12px; border: 1px solid var(--border-color); position: relative; overflow-y: auto; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); margin: 0.5rem 1.5rem 1.5rem 1.5rem; padding: 1.25rem;">
-                
-                <!-- Closing Price Betting Section -->
-                <div id="closing-bet-section" style="display: none; flex-direction: column; padding-bottom: 1.25rem; border-bottom: 1px dashed var(--border-color); margin-bottom: 1.25rem; flex-shrink: 0;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem;">
-                        <h3 id="closing-bet-title" style="font-size: 1.05rem; font-weight: 800; color: #ef4444; letter-spacing: -0.02em; display: flex; align-items: center; gap: 0.4rem;">
-                            <span class="pulsing-dot" style="display: inline-block; width: 8px; height: 8px; background-color: #ef4444; border-radius: 50%; box-shadow: 0 0 8px #ef4444;"></span>
-                            🎯 실시간 종가베팅 후보군 (AI 알고리즘 추천)
-                        </h3>
-                    </div>
-                    <div id="closing-bet-cards-container" style="display: flex; gap: 1rem; overflow-x: auto; padding-bottom: 0.5rem; scrollbar-width: thin;">
-                        <!-- Cards injected via JS -->
-                    </div>
-                </div>
+            <div id="sangtta-view-container"
+                style="display: none; flex-direction: column; flex: 1; min-height: 0; background: #ffffff; border-radius: 12px; border: 1px solid var(--border-color); position: relative; overflow-y: auto; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); margin: 0.5rem 1.5rem 1.5rem 1.5rem; padding: 1.25rem;">
 
-                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1rem; user-select: none;">
+                <div
+                    style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1rem; user-select: none;">
                     <div>
-                        <span style="font-family: var(--font-outfit); font-size: 0.95rem; font-weight: 800; color: #dc2626; text-transform: uppercase; letter-spacing: 0.03em;">🔥 통합 상따 (상한가 따라잡기) 후보 리스트</span>
-                        <span style="display: inline-block; margin-left: 0.5rem; background: #fee2e2; color: #b91c1c; font-size: 0.7rem; font-weight: 700; padding: 0.2rem 0.6rem; border-radius: 9999px;">네이버 · 로얄로더 · 토스 당일 +24%↑</span>
+                        <span
+                            style="font-family: var(--font-outfit); font-size: 0.95rem; font-weight: 800; color: #dc2626; text-transform: uppercase; letter-spacing: 0.03em;">🔥
+                            통합 상따 (상한가 따라잡기) 후보 리스트</span>
+                        <span
+                            style="display: inline-block; margin-left: 0.5rem; background: #fee2e2; color: #b91c1c; font-size: 0.7rem; font-weight: 700; padding: 0.2rem 0.6rem; border-radius: 9999px;">네이버
+                            · 로얄로더 · 토스 당일 +24%↑</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-                        <div id="sangtta-lock-wrapper" style="display: flex; align-items: center; gap: 0.4rem; background: #fff1f2; padding: 0.35rem 0.65rem; border-radius: 8px; border: 1px solid #fecdd3; cursor: pointer;" onclick="toggleSangttaOrderLock(event)" title="실시간 자동 갱신 중 행 위치가 뒤바뀌거나 사라지지 않고 주가만 제자리에 부드럽게 표시되어 눈으로 모니터링하기 쉽도록 고정합니다.">
-                            <input type="checkbox" id="sangtta-lock-checkbox" checked style="cursor: pointer; accent-color: #dc2626; width: 15px; height: 15px;" onclick="event.stopPropagation(); toggleSangttaOrderLock(null);">
-                            <span id="sangtta-lock-label" style="font-size: 0.75rem; font-weight: 700; color: #e11d48; cursor: pointer;">🔒 위치 고정 (눈고정 모드 ON)</span>
+                        <div id="sangtta-lock-wrapper"
+                            style="display: flex; align-items: center; gap: 0.4rem; background: #fff1f2; padding: 0.35rem 0.65rem; border-radius: 8px; border: 1px solid #fecdd3; cursor: pointer;"
+                            onclick="toggleSangttaOrderLock(event)"
+                            title="실시간 자동 갱신 중 행 위치가 뒤바뀌거나 사라지지 않고 주가만 제자리에 부드럽게 표시되어 눈으로 모니터링하기 쉽도록 고정합니다.">
+                            <input type="checkbox" id="sangtta-lock-checkbox" checked
+                                style="cursor: pointer; accent-color: #dc2626; width: 15px; height: 15px;"
+                                onclick="event.stopPropagation(); toggleSangttaOrderLock(null);">
+                            <span id="sangtta-lock-label"
+                                style="font-size: 0.75rem; font-weight: 700; color: #e11d48; cursor: pointer;">🔒 위치 고정
+                                (눈고정 모드 ON)</span>
                         </div>
-                        <button onclick="fetchAndRenderSangttaStocks(true)" style="padding: 0.35rem 0.65rem; background: #ffffff; border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 0.75rem; font-weight: 700; border-radius: 8px; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.25rem; box-shadow: 0 1px 2px rgba(0,0,0,0.04);" onmouseover="this.style.borderColor='#94a3b8'; this.style.color='var(--text-primary)';" onmouseout="this.style.borderColor='var(--border-color)'; this.style.color='var(--text-secondary)';" title="현재 등락률 및 순위 기준으로 리스트를 즉시 재정렬합니다">
+                        <button onclick="fetchAndRenderSangttaStocks(true)"
+                            style="padding: 0.35rem 0.65rem; background: #ffffff; border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 0.75rem; font-weight: 700; border-radius: 8px; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.25rem; box-shadow: 0 1px 2px rgba(0,0,0,0.04);"
+                            onmouseover="this.style.borderColor='#94a3b8'; this.style.color='var(--text-primary)';"
+                            onmouseout="this.style.borderColor='var(--border-color)'; this.style.color='var(--text-secondary)';"
+                            title="현재 등락률 및 순위 기준으로 리스트를 즉시 재정렬합니다">
                             <span>🔄 순위 즉시 재정렬</span>
                         </button>
                         <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 600;">⚡ 3중 실시간 연동</div>
                     </div>
                 </div>
                 <div style="overflow-x: auto; width: 100%;">
-                    <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.78rem; min-width: 700px;">
+                    <table
+                        style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.78rem; min-width: 700px;">
                         <thead>
-                            <tr style="border-bottom: 2px solid var(--border-color); color: var(--text-secondary); font-weight: 700; font-family: var(--font-outfit); background: rgba(0, 0, 0, 0.01); user-select: none;">
+                            <tr
+                                style="border-bottom: 2px solid var(--border-color); color: var(--text-secondary); font-weight: 700; font-family: var(--font-outfit); background: rgba(0, 0, 0, 0.01); user-select: none;">
                                 <th style="padding: 0.75rem 0.5rem; width: 60px; text-align: center;">순위</th>
                                 <th style="padding: 0.75rem 0.5rem; width: 160px;">종목명 (코드)</th>
-                                <th style="padding: 0.75rem 0.5rem; width: 110px; text-align: right; cursor: pointer; user-select: none; transition: all 0.2s;" onclick="sortSangttaStocks('price')" title="클릭하여 현재가 기준으로 오름차순/내림차순 정렬" onmouseover="this.style.background='rgba(0,0,0,0.03)';" onmouseout="this.style.background='transparent';">
-                                    <span>현재가</span> <span id="sort-arrow-price" style="display: inline-block; width: 18px; text-align: center; font-size: 0.65rem; opacity: 0.35; color: var(--text-muted);">▲▼</span>
+                                <th style="padding: 0.75rem 0.5rem; width: 110px; text-align: right; cursor: pointer; user-select: none; transition: all 0.2s;"
+                                    onclick="sortSangttaStocks('price')" title="클릭하여 현재가 기준으로 오름차순/내림차순 정렬"
+                                    onmouseover="this.style.background='rgba(0,0,0,0.03)';"
+                                    onmouseout="this.style.background='transparent';">
+                                    <span>현재가</span> <span id="sort-arrow-price"
+                                        style="display: inline-block; width: 18px; text-align: center; font-size: 0.65rem; opacity: 0.35; color: var(--text-muted);">▲▼</span>
                                 </th>
-                                <th style="padding: 0.75rem 0.5rem; width: 110px; text-align: right; cursor: pointer; user-select: none; transition: all 0.2s; color: #dc2626;" onclick="sortSangttaStocks('rate')" title="클릭하여 당일 등락률 기준으로 오름차순/내림차순 정렬" onmouseover="this.style.background='rgba(220, 38, 38, 0.04)';" onmouseout="this.style.background='transparent';">
-                                    <span>당일 등락률</span> <span id="sort-arrow-rate" style="display: inline-block; width: 18px; text-align: center; font-size: 0.8rem; color: #dc2626; opacity: 1;">▼</span>
+                                <th style="padding: 0.75rem 0.5rem; width: 110px; text-align: right; cursor: pointer; user-select: none; transition: all 0.2s; color: #dc2626;"
+                                    onclick="sortSangttaStocks('rate')" title="클릭하여 당일 등락률 기준으로 오름차순/내림차순 정렬"
+                                    onmouseover="this.style.background='rgba(220, 38, 38, 0.04)';"
+                                    onmouseout="this.style.background='transparent';">
+                                    <span>당일 등락률</span> <span id="sort-arrow-rate"
+                                        style="display: inline-block; width: 18px; text-align: center; font-size: 0.8rem; color: #dc2626; opacity: 1;">▼</span>
                                 </th>
-                                <th style="padding: 0.75rem 0.5rem; width: 120px; text-align: right; cursor: pointer; user-select: none; transition: all 0.2s;" onclick="sortSangttaStocks('volume')" title="클릭하여 거래대금 기준으로 오름차순/내림차순 정렬" onmouseover="this.style.background='rgba(0,0,0,0.03)';" onmouseout="this.style.background='transparent';">
-                                    <span>거래대금</span> <span id="sort-arrow-volume" style="display: inline-block; width: 18px; text-align: center; font-size: 0.65rem; opacity: 0.35; color: var(--text-muted);">▲▼</span>
+                                <th style="padding: 0.75rem 0.5rem; width: 120px; text-align: right; cursor: pointer; user-select: none; transition: all 0.2s;"
+                                    onclick="sortSangttaStocks('volume')" title="클릭하여 거래대금 기준으로 오름차순/내림차순 정렬"
+                                    onmouseover="this.style.background='rgba(0,0,0,0.03)';"
+                                    onmouseout="this.style.background='transparent';">
+                                    <span>거래대금</span> <span id="sort-arrow-volume"
+                                        style="display: inline-block; width: 18px; text-align: center; font-size: 0.65rem; opacity: 0.35; color: var(--text-muted);">▲▼</span>
                                 </th>
-                                <th style="padding: 0.75rem 0.7rem; text-align: left; padding-left: 1.5rem;">출처 및 연계 테마 속성</th>
+                                <th style="padding: 0.75rem 0.7rem; text-align: left; padding-left: 1.5rem;">출처 및 연계 테마
+                                    속성</th>
                                 <th style="padding: 0.75rem 0.5rem; width: 120px; text-align: center;">토스 주문 바로가기</th>
                             </tr>
                         </thead>
@@ -299,7 +419,8 @@
                         </tbody>
                     </table>
                 </div>
-                <div id="sangtta-view-empty-msg" style="display: none; text-align: center; padding: 3.5rem; color: var(--text-muted); font-weight: 600; user-select: none;">
+                <div id="sangtta-view-empty-msg"
+                    style="display: none; text-align: center; padding: 3.5rem; color: var(--text-muted); font-weight: 600; user-select: none;">
                     <div style="font-size: 2rem; margin-bottom: 0.5rem;">🧘</div>
                     현재 네이버/로얄로더/토스 데이터 내 당일 +24% 이상 급등한 종목이 없습니다.
                 </div>
@@ -326,7 +447,8 @@
                 </span>
             </span>
             <button class="ticker-tab-btn" id="ticker-tab-news" onclick="onTickerTabClick('news')">📰 주요 속보</button>
-            <button class="ticker-tab-btn" id="ticker-tab-toss" onclick="onTickerTabClick('toss')">💙 Toss 인기 거래</button>
+            <button class="ticker-tab-btn" id="ticker-tab-toss" onclick="onTickerTabClick('toss')">💙 Toss 인기
+                거래</button>
             <button class="ticker-tab-btn" id="ticker-tab-alerts" onclick="onTickerTabClick('alerts')">🔔 알림 종목</button>
         </div>
 
@@ -335,7 +457,8 @@
             <div class="popup-header">
                 <span class="popup-title" id="popup-title">💙 Toss 실시간 거래대금 상위</span>
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <button class="popup-pin-btn" id="popup-pin-btn" onclick="togglePinTickerPopup()" title="화면 핀 고정">📌</button>
+                    <button class="popup-pin-btn" id="popup-pin-btn" onclick="togglePinTickerPopup()"
+                        title="화면 핀 고정">📌</button>
                     <button class="popup-close-btn" onclick="closeTickerPopup()">✕</button>
                 </div>
             </div>
@@ -368,42 +491,55 @@
                 <span id="hover-stock-code" style="font-size: 0.8rem; color: var(--text-muted);"></span>
             </div>
             <div style="display: flex; gap: 0.3rem;">
-                <span id="hover-stock-level" style="font-size: 0.65rem; font-weight: 700; padding: 0.1rem 0.3rem; border-radius: 4px;"></span>
-                <span id="hover-stock-ma" style="font-size: 0.65rem; font-weight: 700; padding: 0.1rem 0.3rem; border-radius: 4px;"></span>
+                <span id="hover-stock-level"
+                    style="font-size: 0.65rem; font-weight: 700; padding: 0.1rem 0.3rem; border-radius: 4px;"></span>
+                <span id="hover-stock-ma"
+                    style="font-size: 0.65rem; font-weight: 700; padding: 0.1rem 0.3rem; border-radius: 4px;"></span>
             </div>
         </div>
-        
+
         <div style="padding-top: 0.5rem; border-top: 1px dashed rgba(255,255,255,0.15);">
             <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">
-                <div class="chart-day-info" style="font-size: 0.8rem; display: flex; flex-direction: column; gap: 0.3rem;">
+                <div class="chart-day-info"
+                    style="font-size: 0.8rem; display: flex; flex-direction: column; gap: 0.3rem;">
                     <div>당일 고점: <span id="hover-day-high" style="font-weight: 700;">-</span></div>
                     <div>당일 낙폭: <span id="hover-day-drop" style="font-weight: 700;">-</span></div>
                 </div>
                 <div class="chart-target-bands" style="display: flex; flex-direction: column; gap: 0.3rem;">
-                    <span id="hover-zone-1" class="band-pill zone-1" style="font-size: 0.75rem; padding: 0.2rem 0.5rem;">1차: -</span>
-                    <span id="hover-zone-2" class="band-pill zone-2" style="font-size: 0.75rem; padding: 0.2rem 0.5rem;">2차: -</span>
+                    <span id="hover-zone-1" class="band-pill zone-1"
+                        style="font-size: 0.75rem; padding: 0.2rem 0.5rem;">1차: -</span>
+                    <span id="hover-zone-2" class="band-pill zone-2"
+                        style="font-size: 0.75rem; padding: 0.2rem 0.5rem;">2차: -</span>
                 </div>
             </div>
             <div class="position-gauge-container" id="hover-position-gauge-container" style="display: none;">
                 <div class="gauge-track">
                     <div class="gauge-marker" id="hover-gauge-marker">
-                        <span id="hover-gauge-price" style="position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 0.65rem; font-weight: 700; color: #f8fafc; white-space: nowrap; background: rgba(15, 23, 42, 0.8); padding: 0.1rem 0.3rem; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.5);"></span>
+                        <span id="hover-gauge-price"
+                            style="position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 0.65rem; font-weight: 700; color: #f8fafc; white-space: nowrap; background: rgba(15, 23, 42, 0.8); padding: 0.1rem 0.3rem; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.5);"></span>
                     </div>
                 </div>
                 <div class="gauge-labels" style="position: relative; height: 26px; margin-top: 0.3rem;">
-                    <div style="position: absolute; left: 0%; transform: translateX(0%); text-align: left; display: flex; flex-direction: column; gap: 0.1rem;">
+                    <div
+                        style="position: absolute; left: 0%; transform: translateX(0%); text-align: left; display: flex; flex-direction: column; gap: 0.1rem;">
                         <span style="color: rgba(16, 185, 129, 0.9);">무릎</span>
-                        <span id="hover-gauge-knee" style="font-size: 0.6rem; color: #10b981; font-weight: 600;">-</span>
+                        <span id="hover-gauge-knee"
+                            style="font-size: 0.6rem; color: #10b981; font-weight: 600;">-</span>
                     </div>
-                    <div style="position: absolute; left: 35%; transform: translateX(-50%); text-align: center; display: flex; flex-direction: column; gap: 0.1rem;">
+                    <div
+                        style="position: absolute; left: 35%; transform: translateX(-50%); text-align: center; display: flex; flex-direction: column; gap: 0.1rem;">
                         <span style="color: rgba(217, 119, 6, 0.9);">어깨</span>
-                        <span id="hover-gauge-shoulder" style="font-size: 0.6rem; color: #d97706; font-weight: 600;">-</span>
+                        <span id="hover-gauge-shoulder"
+                            style="font-size: 0.6rem; color: #d97706; font-weight: 600;">-</span>
                     </div>
-                    <div style="position: absolute; left: 70%; transform: translateX(-50%); text-align: center; display: flex; flex-direction: column; gap: 0.1rem;">
+                    <div
+                        style="position: absolute; left: 70%; transform: translateX(-50%); text-align: center; display: flex; flex-direction: column; gap: 0.1rem;">
                         <span style="color: rgba(239, 68, 68, 0.9);">머리</span>
-                        <span id="hover-gauge-head" style="font-size: 0.6rem; color: #ef4444; font-weight: 600;">-</span>
+                        <span id="hover-gauge-head"
+                            style="font-size: 0.6rem; color: #ef4444; font-weight: 600;">-</span>
                     </div>
-                    <div style="position: absolute; left: 100%; transform: translateX(-100%); text-align: right; display: flex; flex-direction: column; gap: 0.1rem;">
+                    <div
+                        style="position: absolute; left: 100%; transform: translateX(-100%); text-align: right; display: flex; flex-direction: column; gap: 0.1rem;">
                         <span>최고</span>
                         <span id="hover-gauge-top" style="font-size: 0.6rem; font-weight: 600;">-</span>
                     </div>
@@ -415,4 +551,5 @@
     <!-- External App Business Logic Script -->
     <script src="/static/js/main.js"></script>
 </body>
+
 </html>

@@ -1797,23 +1797,44 @@ header {
 
 .closing-bet-card {
     min-width: 260px;
-    background: var(--bg-card);
-    border: 1px solid rgba(239, 68, 68, 0.3);
-    border-radius: 8px;
-    padding: 0.8rem 1rem;
+    background: linear-gradient(180deg, #ffffff 0%, #fffcfc 100%);
+    border: 1px solid rgba(239, 68, 68, 0.15);
+    border-radius: 10px;
+    padding: 0.45rem 0.6rem;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-    transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+    gap: 0.2rem;
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.04), inset 0 1px 0 rgba(255,255,255,1);
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
     cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+.closing-bet-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #ef4444, #f97316);
+    opacity: 0;
+    transition: opacity 0.3s;
 }
 .closing-bet-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 12px rgba(239, 68, 68, 0.15);
-    border-color: rgba(239, 68, 68, 0.6);
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 12px 24px rgba(239, 68, 68, 0.12), inset 0 1px 0 rgba(255,255,255,1);
+    border-color: rgba(239, 68, 68, 0.4);
+    background: linear-gradient(180deg, #ffffff 0%, #fef2f2 100%);
+}
+.closing-bet-card:hover::before {
+    opacity: 1;
 }
 .closing-bet-card.glow {
-    box-shadow: 0 0 15px rgba(239, 68, 68, 0.2);
-    border-color: rgba(239, 68, 68, 0.8);
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.5);
+    animation: pulse-border 3s infinite;
+}
+@keyframes pulse-border {
+    0% { border-color: rgba(239, 68, 68, 0.3); }
+    50% { border-color: rgba(239, 68, 68, 0.8); }
+    100% { border-color: rgba(239, 68, 68, 0.3); }
 }
