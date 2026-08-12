@@ -505,9 +505,66 @@ function renderDashboard() {
 
     let totalBuyingTargets = 0;
 
-    const appendThemeCard = (theme) => {
-        // Card header styling based on avg_rate
-        const rateVal = parseFloat(theme.avg_rate);
+    const getRoleWeight = (role) => {
+        if (!role) return 0;
+        if (role.includes("대장주")) return 3;
+        if (role === "🥇 1등주") return 2;
+        if (role === "🥈 2등주") return 1;
+        return 0;
+    };
+
+    const formatVolume = (vol) => {
+        if (vol >= 1000000000000) return (vol / 1000000000000).toFixed(1) + '조';
+        if (vol >= 100000000) return Math.floor(vol / 100000000).toLocaleString() + '억';
+        return vol.toLocaleString();
+    };
+
+    const appendThemeGroupCard = (group, isMultiGroup) => {
+        const leader = group.leader;
+        const themes = group.themes;
+        
+        let sumRate = 0;
+        let sumVolume = 0;
+        let sumMapped = 0;
+        let sumTotal = 0;
+        let sumUp = 0;
+        let sumDown = 0;
+        let sumFlat = 0;
+        let sumVolShare = 0;
+        
+        let hasNaver = false;
+        let hasRoyal = false;
+        
+        let hasAlert1 = false;
+        let hasAlert2 = false;
+
+        themes.forEach(theme => {
+            sumRate += parseFloat(theme.avg_rate) || 0;
+            sumVolume += theme.total_volume || 0;
+            sumMapped += theme.mapped_count || 0;
+            sumTotal += theme.total_count || 0;
+            sumUp += theme.up_count || 0;
+            sumDown += theme.down_count || 0;
+            sumFlat += theme.flat_count || 0;
+            sumVolShare += parseFloat(theme.volume_share) || 0;
+            
+            if (theme.source === 'naver') hasNaver = true;
+            if (theme.source === 'royal') hasRoyal = true;
+            if (theme.source === 'both') { hasNaver = true; hasRoyal = true; }
+            
+            if (theme.top_stocks) {
+                theme.top_stocks.forEach(stock => {
+                    const drop = parseFloat(stock.drop);
+                    if (stock.role.includes("대장주") || stock.role === "🥇 1등주") {
+                        if (drop >= -8.0 && drop <= -4.4) hasAlert1 = true;
+                        else if (drop >= -12.0 && drop < -8.0) hasAlert2 = true;
+                    }
+                });
+            }
+        });
+        
+        const avgRate = (sumRate / themes.length).toFixed(2);
+        const rateVal = parseFloat(avgRate);
         let rateClass = 'flat';
         let rateSign = '';
         if (rateVal > 0) {
@@ -517,126 +574,136 @@ function renderDashboard() {
             rateClass = 'down';
         }
 
-        // Check for buy targets in this theme
-        let hasAlert1 = false;
-        let hasAlert2 = false;
-        let stocksHtml = '';
+        // Render Themes inside Body
+        let themesHtml = '';
+        themes.forEach((theme, index) => {
+            let stocksHtml = '';
+            if (theme.top_stocks && theme.top_stocks.length > 0) {
+                // Limit to top 3 stocks per nested theme
+                theme.top_stocks.slice(0, 3).forEach(stock => {
+                    const isLeader = stock.role && stock.role.includes("대장주");
+                    const is1st = stock.role === "🥇 1등주";
+                    
+                    let roleIcon = '▪️';
+                    if (isLeader) roleIcon = '👑';
+                    else if (is1st) roleIcon = '🥇';
+                    else if (stock.role === "🥈 2등주") roleIcon = '🥈';
 
-        if (theme.top_stocks && theme.top_stocks.length > 0) {
-            theme.top_stocks.slice(0, 3).forEach(stock => { // 대장주/1등주/2등주 까지만 표시
-                const isLeader = stock.role.includes("대장주");
-                const is1st = stock.role === "🥇 1등주";
-                
-                let roleIcon = '▪️';
-                if (isLeader) roleIcon = '👑';
-                else if (is1st) roleIcon = '🥇';
-                else if (stock.role === "🥈 2등주") roleIcon = '🥈';
+                    let rowClass = '';
+                    if (isLeader) rowClass = 'leader';
+                    else if (is1st) rowClass = 'first';
 
-                // Stock highlights
-                let rowClass = '';
-                if (isLeader) rowClass = 'leader';
-                else if (is1st) rowClass = 'first';
-
-                // Highlighting check on price change
-                const oldPrice = prevPricesMap[stock.stock_code];
-                let flashClass = '';
-                let changeIndicatorHtml = '';
-                if (oldPrice !== undefined && oldPrice !== stock.price && stock.price > 0) {
-                    const priceDiff = stock.price - oldPrice;
-                    if (enableHighlighting) {
-                        flashClass = priceDiff > 0 ? 'flash-up-active' : 'flash-down-active';
-                        const diffColor = priceDiff > 0 ? 'var(--accent-red)' : 'var(--accent-blue)';
-                        const diffSign = priceDiff > 0 ? '▲' : '▼';
-                        changeIndicatorHtml = `<span class="price-diff-badge" style="font-size: 0.62rem; line-height: 1; color: ${diffColor}; font-weight: 700; background: ${priceDiff > 0 ? 'rgba(239, 68, 68, 0.08)' : 'rgba(29, 78, 216, 0.08)'}; padding: 0.1rem 0.2rem; border-radius: 3px; border: 1px solid ${priceDiff > 0 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(29, 78, 216, 0.15)'}; display: inline-flex; align-items: center; align-self: center;">${diffSign}${Math.abs(priceDiff).toLocaleString()}</span>`;
+                    const oldPrice = prevPricesMap[stock.stock_code];
+                    let flashClass = '';
+                    let changeIndicatorHtml = '';
+                    if (oldPrice !== undefined && oldPrice !== stock.price && stock.price > 0) {
+                        const priceDiff = stock.price - oldPrice;
+                        if (enableHighlighting) {
+                            flashClass = priceDiff > 0 ? 'flash-up-active' : 'flash-down-active';
+                            const diffColor = priceDiff > 0 ? 'var(--accent-red)' : 'var(--accent-blue)';
+                            const diffSign = priceDiff > 0 ? '▲' : '▼';
+                            changeIndicatorHtml = `<span class="price-diff-badge" style="font-size: 0.62rem; line-height: 1; color: ${diffColor}; font-weight: 700; background: ${priceDiff > 0 ? 'rgba(239, 68, 68, 0.08)' : 'rgba(29, 78, 216, 0.08)'}; padding: 0.1rem 0.2rem; border-radius: 3px; border: 1px solid ${priceDiff > 0 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(29, 78, 216, 0.15)'}; display: inline-flex; align-items: center; align-self: center;">${diffSign}${Math.abs(priceDiff).toLocaleString()}</span>`;
+                        }
                     }
-                }
-                prevPricesMap[stock.stock_code] = stock.price;
+                    prevPricesMap[stock.stock_code] = stock.price;
 
-                // Drop checks for buy target colors (aligned with backend: 1st zone is -4% ~ -8%, 2nd zone is -8% ~ -12%)
-                const drop = parseFloat(stock.drop);
-                let buyZoneClass = '';
-                
-                if (isLeader || is1st) {
-                    if (drop >= -8.0 && drop <= -4.4) {
-                        buyZoneClass = 'zone-1';
-                        hasAlert1 = true;
-                        totalBuyingTargets++;
-                    } else if (drop >= -12.0 && drop < -8.0) {
-                        buyZoneClass = 'zone-2';
-                        hasAlert2 = true;
-                        totalBuyingTargets++;
+                    const drop = parseFloat(stock.drop);
+                    let buyZoneClass = '';
+                    
+                    if (isLeader || is1st) {
+                        if (drop >= -8.0 && drop <= -4.4) {
+                            buyZoneClass = 'zone-1';
+                            totalBuyingTargets++;
+                        } else if (drop >= -12.0 && drop < -8.0) {
+                            buyZoneClass = 'zone-2';
+                            totalBuyingTargets++;
+                        }
                     }
-                }
 
-                let dropColorClass = 'neutral';
-                if (drop < -8.0) dropColorClass = 'warning';
-                else if (drop < -4.4) dropColorClass = 'success';
+                    let dropColorClass = 'neutral';
+                    if (drop < -8.0) dropColorClass = 'warning';
+                    else if (drop < -4.4) dropColorClass = 'success';
 
-                const rateStockVal = parseFloat(stock.rate);
-                let stockRateClass = 'flat';
-                let stockRateSign = '';
-                if (rateStockVal > 0) {
-                    stockRateClass = 'up';
-                    stockRateSign = '+';
-                } else if (rateStockVal < 0) {
-                    stockRateClass = 'down';
-                }
+                    const rateStockVal = parseFloat(stock.rate);
+                    let stockRateClass = 'flat';
+                    let stockRateSign = '';
+                    if (rateStockVal > 0) {
+                        stockRateClass = 'up';
+                        stockRateSign = '+';
+                    } else if (rateStockVal < 0) {
+                        stockRateClass = 'down';
+                    }
 
-                stocksHtml += `
-                    <div class="stock-row-item ${rowClass} ${buyZoneClass} ${flashClass}" title="${stock.description || ''}">
-                        <div class="stock-role-indicator">${roleIcon}</div>
-                        <div class="stock-info-block">
-                            <div class="stock-name-line">
-                                <span class="stock-name" style="cursor: pointer;" onclick="showStockNetworkMap('${stock.stock_name}', '${stock.stock_code}')" onmouseenter="handleStockHover(event, '${stock.stock_code}', '${stock.stock_name}')" onmouseleave="handleStockLeave()">${stock.stock_name}</span>
-                                <a href="https://www.tossinvest.com/stocks/A${stock.stock_code}/order" target="_blank" class="stock-code">${stock.stock_code}</a>
+                    stocksHtml += `
+                        <div class="stock-row-item ${rowClass} ${buyZoneClass} ${flashClass}" title="${stock.description || ''}">
+                            <div class="stock-role-indicator">${roleIcon}</div>
+                            <div class="stock-info-block">
+                                <div class="stock-name-line">
+                                    <span class="stock-name" style="cursor: pointer;" onclick="showStockNetworkMap('${stock.stock_name}', '${stock.stock_code}')" onmouseenter="handleStockHover(event, '${stock.stock_code}', '${stock.stock_name}')" onmouseleave="handleStockLeave()">${stock.stock_name}</span>
+                                    <a href="https://www.tossinvest.com/stocks/A${stock.stock_code}/order" target="_blank" class="stock-code">${stock.stock_code}</a>
+                                </div>
+                                <div style="font-size: 0.7rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.25rem; margin-top: 0.15rem;">
+                                    <span style="color: var(--text-muted);">대금:</span>
+                                    <span style="font-weight: 500;">${stock.volume_str || '-'}</span>
+                                </div>
                             </div>
-                            <div style="font-size: 0.7rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.25rem; margin-top: 0.15rem;">
-                                <span style="color: var(--text-muted);">대금:</span>
-                                <span style="font-weight: 500;">${stock.volume_str || '-'}</span>
+                            <div class="stock-price-block">
+                                <div class="stock-price" style="display: flex; align-items: center; justify-content: flex-end; gap: 0.25rem;">
+                                    ${changeIndicatorHtml}
+                                    <span>${stock.price_str}</span>
+                                </div>
+                                <div class="stock-rate ${stockRateClass}">${stockRateSign}${stock.rate_str}</div>
+                            </div>
+                            <div class="stock-drop-block">
+                                <span class="stock-drop ${dropColorClass}">${stock.drop_str}</span>
                             </div>
                         </div>
-                        <div class="stock-price-block">
-                            <div class="stock-price" style="display: flex; align-items: center; justify-content: flex-end; gap: 0.25rem;">
-                                ${changeIndicatorHtml}
-                                <span>${stock.price_str}</span>
-                            </div>
-                            <div class="stock-rate ${stockRateClass}">${stockRateSign}${stock.rate_str}</div>
+                    `;
+                });
+            } else {
+                stocksHtml = `<div style="text-align:center; padding:0.5rem; color:var(--text-muted); font-size:0.75rem;">활성 종목이 존재하지 않습니다.</div>`;
+            }
+
+            const themeRateVal = parseFloat(theme.avg_rate);
+            let tRateClass = 'flat';
+            let tRateSign = '';
+            if (themeRateVal > 0) { tRateClass = 'up'; tRateSign = '+'; }
+            else if (themeRateVal < 0) { tRateClass = 'down'; }
+            
+            themesHtml += `
+                <div class="nested-theme-section" style="${index > 0 ? 'margin-top: 1rem; padding-top: 1rem; border-top: 1px dashed var(--border-color);' : ''}">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
+                        <span style="font-size: 0.85rem; font-weight: 800; color: var(--text-primary); border-left: 3px solid var(--accent-blue); padding-left: 0.4rem;">${theme.theme_name}</span>
+                        <div style="display: flex; align-items: baseline; gap: 0.5rem; font-size: 0.75rem;">
+                            <span class="${tRateClass}" style="font-weight: 700;">${tRateSign}${theme.avg_rate}%</span>
+                            <span style="color: var(--text-muted); font-size: 0.7rem;">${theme.total_volume_str.split(" ")[0]}</span>
                         </div>
-                        <div class="stock-drop-block">
-                            <span class="stock-drop ${dropColorClass}">${stock.drop_str}</span>
-                        </div>
-                        
                     </div>
-                `;
-            });
-        } else {
-            stocksHtml = `<div style="text-align:center; padding:1.5rem; color:var(--text-muted); font-size:0.8rem;">활성 종목이 존재하지 않습니다.</div>`;
-        }
-
-        // Determine folding state
-        // If there's an active buy signal, always expand.
-        // Otherwise check cache. Default to expanded (true).
-        if (hasAlert1 || hasAlert2) {
-            expandedStateMap[theme.theme_name] = true;
-        } else if (expandedStateMap[theme.theme_name] === undefined) {
-            expandedStateMap[theme.theme_name] = true; // 모든 카드를 기본적으로 펼친 상태로 유지
-        }
-
-        const isExpanded = expandedStateMap[theme.theme_name];
-
-        // Generate source badge if present
-        let sourceBadgeHtml = '';
-        if (theme.source === 'royal') {
-            sourceBadgeHtml = `<span class="theme-source-badge royal" style="font-size: 0.65rem; background: var(--accent-blue-glow); color: var(--accent-blue); padding: 0.15rem 0.35rem; border-radius: 4px; font-weight: 700; border: 1px solid rgba(29, 78, 216, 0.2);">로얄</span>`;
-        } else if (theme.source === 'naver') {
-            sourceBadgeHtml = `<span class="theme-source-badge naver" style="font-size: 0.65rem; background: rgba(16, 185, 129, 0.08); color: var(--accent-green); padding: 0.15rem 0.35rem; border-radius: 4px; font-weight: 700; border: 1px solid rgba(16, 185, 129, 0.2);">네이버</span>`;
-        } else if (theme.source === 'both') {
-            sourceBadgeHtml = `
-                <span class="theme-source-badge both" style="font-size: 0.65rem; background: linear-gradient(90deg, rgba(16, 185, 129, 0.15) 0%, rgba(29, 78, 216, 0.15) 100%); color: var(--text-primary); padding: 0.15rem 0.35rem; border-radius: 4px; font-weight: 800; border: 1px solid rgba(255, 255, 255, 0.15);">🟢 네이버 + 🔵 로얄</span>
+                    <div style="display: flex; flex-direction: column; gap: 0.45rem;">
+                        ${stocksHtml}
+                    </div>
+                </div>
             `;
+        });
+
+        const cardId = isMultiGroup ? `group-${leader}` : `theme-${themes[0].theme_name}`;
+
+        if (hasAlert1 || hasAlert2) {
+            expandedStateMap[cardId] = true;
+        } else if (expandedStateMap[cardId] === undefined) {
+            expandedStateMap[cardId] = true;
+        }
+        const isExpanded = expandedStateMap[cardId];
+
+        let sourceBadgeHtml = '';
+        if (hasRoyal && !hasNaver) {
+            sourceBadgeHtml = `<span class="theme-source-badge royal" style="font-size: 0.65rem; background: var(--accent-blue-glow); color: var(--accent-blue); padding: 0.15rem 0.35rem; border-radius: 4px; font-weight: 700; border: 1px solid rgba(29, 78, 216, 0.2);">로얄</span>`;
+        } else if (hasNaver && !hasRoyal) {
+            sourceBadgeHtml = `<span class="theme-source-badge naver" style="font-size: 0.65rem; background: rgba(16, 185, 129, 0.08); color: var(--accent-green); padding: 0.15rem 0.35rem; border-radius: 4px; font-weight: 700; border: 1px solid rgba(16, 185, 129, 0.2);">네이버</span>`;
+        } else if (hasNaver && hasRoyal) {
+            sourceBadgeHtml = `<span class="theme-source-badge both" style="font-size: 0.65rem; background: linear-gradient(90deg, rgba(16, 185, 129, 0.15) 0%, rgba(29, 78, 216, 0.15) 100%); color: var(--text-primary); padding: 0.15rem 0.35rem; border-radius: 4px; font-weight: 800; border: 1px solid rgba(255, 255, 255, 0.15);">🟢 네이버 + 🔵 로얄</span>`;
         }
 
-        // Generate alert badge if present
         let alertBadgeHtml = '';
         if (hasAlert1) {
             alertBadgeHtml = `<span class="theme-alert-badge alert-1" style="font-size: 0.65rem; background: rgba(16, 185, 129, 0.12); color: var(--accent-green); padding: 0.15rem 0.35rem; border-radius: 4px; font-weight: 700; border: 1px solid rgba(16, 185, 129, 0.25); margin-left: 0.25rem; display: inline-flex; align-items: center; gap: 2px;">🟢 1차 낙폭</span>`;
@@ -644,38 +711,42 @@ function renderDashboard() {
             alertBadgeHtml = `<span class="theme-alert-badge alert-2" style="font-size: 0.65rem; background: rgba(217, 119, 6, 0.12); color: var(--accent-orange); padding: 0.15rem 0.35rem; border-radius: 4px; font-weight: 700; border: 1px solid rgba(217, 119, 6, 0.25); margin-left: 0.25rem; display: inline-flex; align-items: center; gap: 2px;">🟠 2차 낙폭</span>`;
         }
 
-        // Create Card element
+        const themeNames = themes.map(t => t.theme_name).join(', ');
+        const cardTitle = isMultiGroup ? `👑 ${leader} 주도 그룹` : themes[0].theme_name;
+        const cardSubtitleHtml = isMultiGroup ? `<div style="font-size:0.75rem; color:var(--text-secondary); margin-top:0.35rem; word-break: keep-all; line-height: 1.3;"><span style="font-weight:600; color:var(--text-primary);">포함 테마 (${themes.length}개):</span> ${themeNames}</div>` : '';
+
         const card = document.createElement('div');
         card.className = `theme-card ${isExpanded ? 'expanded' : ''} ${hasAlert1 ? 'has-alert-1' : ''} ${hasAlert2 ? 'has-alert-2' : ''}`;
-        card.setAttribute('data-theme-name', theme.theme_name);
+        card.setAttribute('data-theme-name', cardId);
 
         card.innerHTML = `
-            <div class="theme-card-header" onclick="toggleCard('${theme.theme_name}')">
-                <div class="theme-title-block">
+            <div class="theme-card-header" onclick="toggleCard('${cardId}')">
+                <div class="theme-title-block" style="flex: 1; padding-right: 1rem;">
                     <div style="display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap;">
-                        <span class="theme-card-title">${theme.theme_name}</span>
+                        <span class="theme-card-title">${cardTitle}</span>
                         ${sourceBadgeHtml}
                         ${alertBadgeHtml}
                     </div>
-                    <span class="theme-card-subtitle" style="display: flex; flex-direction: column; gap: 0.15rem; margin-top: 0.15rem;">
-                        <span>매핑 종목 수: ${theme.mapped_count} / ${theme.total_count}</span>
+                    <span class="theme-card-subtitle" style="display: flex; flex-direction: column; gap: 0.15rem; margin-top: 0.25rem;">
+                        <span>종목 매핑: ${sumMapped} / ${sumTotal} (누적)</span>
                         <span style="font-size: 0.72rem; color: var(--text-muted);">
-                            상승 <span style="color: var(--accent-red); font-weight: 600;">▲${theme.up_count || 0}</span> | 
-                            하락 <span style="color: var(--accent-blue); font-weight: 600;">▼${theme.down_count || 0}</span>
-                            ${theme.flat_count ? ` | 보합 ${theme.flat_count}` : ''}
+                            상승 <span style="color: var(--accent-red); font-weight: 600;">▲${sumUp}</span> | 
+                            하락 <span style="color: var(--accent-blue); font-weight: 600;">▼${sumDown}</span>
+                            ${sumFlat ? ` | 보합 ${sumFlat}` : ''}
                         </span>
                     </span>
+                    ${cardSubtitleHtml}
                 </div>
-                <div class="theme-card-metrics">
-                    <span class="theme-card-rate ${rateClass}">${rateSign}${theme.avg_rate}%</span>
+                <div class="theme-card-metrics" style="align-items: flex-end;">
+                    <span class="theme-card-rate ${rateClass}">${rateSign}${avgRate}%</span>
                     <span class="theme-card-volume">
-                        ${theme.total_volume_str.split(" ")[0]}
-                        <span class="theme-share-badge">${theme.volume_share}%</span>
+                        ${formatVolume(sumVolume)}
+                        <span class="theme-share-badge">${sumVolShare.toFixed(1)}%</span>
                     </span>
                 </div>
             </div>
-            <div class="theme-card-body">
-                ${stocksHtml}
+            <div class="theme-card-body" style="max-height: 380px; overflow-y: auto; overflow-x: hidden; padding-right: 0.5rem;">
+                ${themesHtml}
             </div>
         `;
 
@@ -686,15 +757,18 @@ function renderDashboard() {
     const leaderGroups = {};
     displayThemes.forEach(theme => {
         const leader = theme.leader_stock || "N/A";
-        if (!leaderGroups[leader]) {
-            leaderGroups[leader] = {
+        // Prevent grouping unrelated themes that happen to have no leader stock
+        const groupKey = (leader === "N/A" || !leader.trim() || leader === "-") ? `_unique_${theme.theme_name}` : leader;
+        
+        if (!leaderGroups[groupKey]) {
+            leaderGroups[groupKey] = {
                 leader: leader,
                 themes: [],
                 totalVolume: 0
             };
         }
-        leaderGroups[leader].themes.push(theme);
-        leaderGroups[leader].totalVolume += theme.total_volume || 0;
+        leaderGroups[groupKey].themes.push(theme);
+        leaderGroups[groupKey].totalVolume += theme.total_volume || 0;
     });
 
     // Convert to array and sort
@@ -725,19 +799,18 @@ function renderDashboard() {
         
         let isFirstGroup = true;
         
-        // 1. Render Multi Groups (핫 테마군)
-        multiGroups.forEach(group => {
-            const groupHeader = document.createElement('div');
-            groupHeader.style.cssText = `grid-column: 1 / -1; font-size: 0.95rem; font-weight: 700; color: var(--accent-blue); padding: 0.5rem 0 0.4rem 0; margin-top: ${isFirstGroup ? '0.25rem' : '1.5rem'}; display: flex; align-items: center; gap: 0.5rem; letter-spacing: -0.02em;`;
-            
-            const badgeHtml = `<span style="background: var(--accent-blue-glow); color: var(--accent-blue); padding: 0.1rem 0.4rem; border-radius: 12px; font-size: 0.75rem; font-weight: 800; margin-left: 0.25rem;">🔥 핫 테마군</span>`;
-                
-            groupHeader.innerHTML = `👑 대장주: <span style="color: var(--text-primary); font-size: 1.05rem;">${group.leader}</span> <span style="font-size: 0.8rem; font-weight: 500; color: var(--text-muted); margin-left: 0.5rem;">- 연관 테마 ${group.themes.length}개</span> ${badgeHtml}`;
-            container.appendChild(groupHeader);
+        // 1. Render Multi Groups (핫 테마군 - 병합된 단일 카드)
+        if (multiGroups.length > 0) {
+            const multiHeader = document.createElement('div');
+            multiHeader.style.cssText = `grid-column: 1 / -1; font-size: 0.95rem; font-weight: 700; color: var(--accent-blue); padding: 0.5rem 0 0.4rem 0; margin-top: ${isFirstGroup ? '0.25rem' : '1.5rem'}; border-bottom: 2px solid rgba(29, 78, 216, 0.3); display: flex; align-items: center; gap: 0.5rem; letter-spacing: -0.02em;`;
+            multiHeader.innerHTML = `🔥 복합 주도 테마군 (대장주 묶음) <span style="font-size: 0.8rem; font-weight: 500; color: var(--text-muted); margin-left: 0.5rem;">- ${multiGroups.length}개 묶음</span>`;
+            container.appendChild(multiHeader);
             isFirstGroup = false;
 
-            group.themes.forEach(appendThemeCard);
-        });
+            multiGroups.forEach(group => {
+                appendThemeGroupCard(group, true);
+            });
+        }
 
         // 2. Render Single Groups (개별 테마)
         if (singleGroups.length > 0) {
@@ -747,7 +820,7 @@ function renderDashboard() {
             container.appendChild(singleHeader);
             
             singleGroups.forEach(group => {
-                group.themes.forEach(appendThemeCard);
+                appendThemeGroupCard(group, false);
             });
         }
     }
@@ -766,6 +839,11 @@ function renderDashboard() {
     } else {
         const cbSection = document.getElementById('closing-bet-section');
         if (cbSection) cbSection.style.display = 'none';
+    }
+    
+    // Also re-render the sidebar ranking in case themesData (for strong-theme filter) just loaded
+    if (typeof renderTossSidebarRanking === 'function') {
+        renderTossSidebarRanking();
     }
 }
 
@@ -1026,6 +1104,7 @@ async function fetchTossRanking() {
         if (result.status === 'success') {
             tossData = result.data || [];
             renderTossRankingList();
+            renderTossSidebarRanking();
         }
     } catch (error) {
         console.error("Toss 랭킹 데이터 로드 중 에러 발생:", error);
@@ -1140,6 +1219,106 @@ function renderTossRankingList() {
     });
     updateTickerPreview();
 }
+let currentTossSidebarFilter = 'strong-theme';
+
+window.switchTossSidebarTab = function(filter) {
+    currentTossSidebarFilter = filter;
+    
+    const btnTheme = document.getElementById('btn-toss-sidebar-theme');
+    const btnVolRate = document.getElementById('btn-toss-sidebar-volrate');
+    if (!btnTheme || !btnVolRate) return;
+    
+    if (filter === 'strong-theme') {
+        btnTheme.style.background = 'white';
+        btnTheme.style.borderColor = 'var(--border-color)';
+        btnTheme.style.color = 'var(--text-primary)';
+        btnTheme.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)';
+        
+        btnVolRate.style.background = 'transparent';
+        btnVolRate.style.borderColor = 'transparent';
+        btnVolRate.style.color = 'var(--text-muted)';
+        btnVolRate.style.boxShadow = 'none';
+    } else {
+        btnVolRate.style.background = 'white';
+        btnVolRate.style.borderColor = 'var(--border-color)';
+        btnVolRate.style.color = 'var(--text-primary)';
+        btnVolRate.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)';
+        
+        btnTheme.style.background = 'transparent';
+        btnTheme.style.borderColor = 'transparent';
+        btnTheme.style.color = 'var(--text-muted)';
+        btnTheme.style.boxShadow = 'none';
+    }
+    
+    renderTossSidebarRanking();
+};
+
+window.renderTossSidebarRanking = function() {
+    const container = document.getElementById('toss-sidebar-list');
+    if (!container) return;
+    
+    if (!Array.isArray(tossData) || tossData.length === 0) {
+        container.innerHTML = `<div style="text-align:center; padding: 2rem 0; color: var(--text-muted); font-size: 0.8rem;">데이터 대기 중...</div>`;
+        return;
+    }
+    
+    let filtered = tossData;
+    if (currentTossSidebarFilter === 'strong-theme') {
+        // Get top 5 themes by total_volume from themesData
+        const topThemeNames = themesData.slice(0, 5).map(t => t.theme_name);
+        filtered = tossData.filter(stock => 
+            Array.isArray(stock.themes) && stock.themes.some(name => topThemeNames.includes(name))
+        );
+        filtered.sort((a, b) => parseFloat(b.rate) - parseFloat(a.rate));
+    } else if (currentTossSidebarFilter === 'high-vol-rate') {
+        let sorted = [...tossData].sort((a, b) => parseFloat(b.rate) - parseFloat(a.rate));
+        filtered = sorted.filter(stock => parseFloat(stock.rate) >= 3.0);
+        if (filtered.length < 5) filtered = sorted.slice(0, 15);
+    }
+    
+    if (filtered.length === 0) {
+        container.innerHTML = `<div style="text-align:center; padding: 2rem 0; color: var(--text-muted); font-size: 0.8rem;">조건에 맞는 랭킹 종목이 없습니다.</div>`;
+        return;
+    }
+    
+    let html = '<div style="display: flex; flex-direction: column; gap: 0.6rem;">';
+    filtered.slice(0, 20).forEach((stock, index) => {
+        const rank = index + 1;
+        const rankColor = rank === 1 ? '#eab308' : rank === 2 ? '#94a3b8' : rank === 3 ? '#b45309' : 'var(--text-muted)';
+        const rankBorder = rank <= 3 ? `border: 1px solid ${rankColor}30;` : 'border: 1px solid transparent;';
+        
+        const rateVal = parseFloat(stock.rate);
+        const rateColor = rateVal > 0 ? 'var(--accent-red)' : rateVal < 0 ? 'var(--accent-blue)' : 'var(--text-muted)';
+        const rateSign = rateVal > 0 ? '+' : '';
+        
+        const priceStr = stock.price_str || (stock.price ? stock.price.toLocaleString() : '-');
+        const volStr = stock.volume_str || '-';
+        const themesStr = Array.isArray(stock.themes) && stock.themes.length > 0 ? stock.themes.join(', ') : '';
+
+        html += `
+            <div class="toss-sidebar-item" onclick="window.open('${stock.toss_url || ''}', '_blank')"
+                style="display: flex; align-items: center; padding: 0.8rem 1rem; background: #ffffff; border-radius: 8px; cursor: pointer; transition: all 0.2s; ${rankBorder} box-shadow: 0 1px 3px rgba(0,0,0,0.02);"
+                onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.05)';"
+                onmouseout="this.style.transform='none'; this.style.boxShadow='0 1px 3px rgba(0,0,0,0.02)';">
+                <div style="width: 28px; font-size: 0.95rem; font-weight: 800; color: ${rankColor}; text-align: center; margin-right: 0.6rem;">${rank}</div>
+                <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.25rem;">
+                    <div style="font-size: 0.95rem; font-weight: 700; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${stock.name}">${stock.name}</div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${stock.market_cap_str ? '시총 ' + stock.market_cap_str + (themesStr ? ' | ' : '') : ''}${themesStr}">
+                        ${stock.market_cap_str ? `<span style="color: #64748b; font-weight: 600; border-right: 1px solid #cbd5e1; padding-right: 0.3rem; margin-right: 0.3rem;">시총 ${stock.market_cap_str}</span>` : ''}
+                        <span>${themesStr}</span>
+                    </div>
+                </div>
+                <div style="text-align: right; padding-left: 0.5rem;">
+                    <div style="font-size: 0.85rem; font-weight: 700; color: ${rateColor};">${rateSign}${rateVal.toFixed(2)}%</div>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 600; margin-top: 0.2rem;">${volStr}</div>
+                </div>
+            </div>
+        `;
+    });
+    html += '</div>';
+    
+    container.innerHTML = html;
+};
 
 
 
@@ -2453,33 +2632,40 @@ function renderHeatmap() {
     // 1. Get processed themes
     let processedThemes = getProcessedThemes();
     
-    // 2. Identify 'Hot Theme Group' (themes that share the same leader stock)
+    // 2. Identify 'Hot Theme Group'
     const leaderGroups = {};
     processedThemes.forEach(theme => {
         const leader = theme.leader_stock;
-        if (!leader) return;
-        if (!leaderGroups[leader]) leaderGroups[leader] = { themes: [] };
-        leaderGroups[leader].themes.push(theme);
+        const groupKey = leader ? leader : theme.theme_name;
+        if (!leaderGroups[groupKey]) leaderGroups[groupKey] = { themes: [], raw_volume: 0 };
+        leaderGroups[groupKey].themes.push(theme);
+        leaderGroups[groupKey].raw_volume += theme.total_volume || 0;
     });
+
+    // Sort groups by raw_volume descending to give priority to bigger groups when deduplicating stocks
+    const sortedGroups = Object.values(leaderGroups).sort((a, b) => b.raw_volume - a.raw_volume);
     
     let hThemes = [];
-    Object.values(leaderGroups).forEach(group => {
-        if (group.themes.length > 1) {
-            // Merge top_stocks and deduplicate
-            const stockMap = new Map();
-            group.themes.forEach(t => {
-                (t.top_stocks || []).forEach(s => {
-                    if (!stockMap.has(s.stock_code)) {
-                        stockMap.set(s.stock_code, s);
-                    }
-                });
+    const globalStockSet = new Set();
+
+    sortedGroups.forEach(group => {
+        const stockMap = new Map();
+        group.themes.forEach(t => {
+            (t.top_stocks || []).forEach(s => {
+                // Global deduplication to prevent a stock from appearing twice in the heatmap
+                if (!globalStockSet.has(s.stock_code)) {
+                    stockMap.set(s.stock_code, s);
+                    globalStockSet.add(s.stock_code);
+                }
             });
-            const mergedStocks = Array.from(stockMap.values());
-            
-            // Sum volumes of the unique merged top stocks to avoid double-counting
+        });
+        const mergedStocks = Array.from(stockMap.values());
+        
+        if (mergedStocks.length > 0) {
+            // Sum volumes of the unique merged top stocks
             const mergedVol = mergedStocks.reduce((sum, s) => sum + (s.volume || 0), 0);
             const avgRate = mergedStocks.length > 0 ? mergedStocks.reduce((sum, s) => sum + (s.rate || 0), 0) / mergedStocks.length : 0;
-            const combinedThemeName = group.themes.map(t => t.theme_name).join(' / ');
+            const combinedThemeName = group.themes.length > 1 ? `👑 ${group.themes[0].leader_stock} 주도 그룹` : group.themes[0].theme_name;
 
             hThemes.push({
                 theme_name: combinedThemeName,
@@ -2602,11 +2788,14 @@ function renderHeatmap() {
                     
                     
                     if (sb.w > 40 && sb.h > 30) {
-                        const fontSizeTitle = Math.max(0.6, Math.min(1.2, sb.w / 70));
-                        const fontSizeRate = Math.max(0.55, Math.min(0.9, sb.w / 90));
+                        let nameLen = sNode.data.stock_name.length;
+                        let optimalRem = sb.w / (nameLen * 12);
+                        const fontSizeTitle = Math.max(0.45, Math.min(1.1, optimalRem * 1.5)); // Multiply by 1.5 because we allow 2-line wrapping
+                        const fontSizeRate = Math.max(0.5, Math.min(0.9, sb.w / 80));
+                        
                         stockBlock.innerHTML = `
-                            <div style="font-size: ${fontSizeTitle}rem; font-weight: 800; color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 95%; line-height: 1.2;">${sNode.data.stock_name}</div>
-                            <div style="font-size: ${fontSizeRate}rem; font-weight: 700; color: rgba(255,255,255,0.9); text-shadow: 0 1px 2px rgba(0,0,0,0.6); margin-top: 2px;">${sNode.data.rate > 0 ? '+'+sNode.data.rate : sNode.data.rate}%</div>
+                            <div style="font-size: ${fontSizeTitle}rem; font-weight: 800; color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.6); text-align: center; word-break: keep-all; overflow: hidden; max-width: 95%; line-height: 1.15; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">${sNode.data.stock_name}</div>
+                            <div style="font-size: ${fontSizeRate}rem; font-weight: 700; color: rgba(255,255,255,0.9); text-shadow: 0 1px 2px rgba(0,0,0,0.6); margin-top: 3px;">${sNode.data.rate > 0 ? '+'+sNode.data.rate : sNode.data.rate}%</div>
                         `;
                     }
                     themeBlock.appendChild(stockBlock);
@@ -2751,6 +2940,43 @@ window.addEventListener('resize', () => {
         const canvas = document.getElementById('heatmap-canvas');
         if (canvas && canvas.clientWidth > 0) {
             renderHeatmap();
+        }
+    }
+});
+
+window.toggleClosingBetPin = function() {
+    const section = document.getElementById('closing-bet-section');
+    const btn = document.getElementById('closing-bet-pin-btn');
+    if (!section || !btn) return;
+
+    const isPinned = section.classList.toggle('pinned');
+    if (isPinned) {
+        btn.style.filter = 'grayscale(0%)';
+        btn.style.opacity = '1';
+        localStorage.setItem('investra_closing_bet_pinned', 'true');
+    } else {
+        btn.style.filter = 'grayscale(100%)';
+        btn.style.opacity = '0.5';
+        localStorage.setItem('investra_closing_bet_pinned', 'false');
+    }
+};
+
+// Initialize pin state on load
+document.addEventListener('DOMContentLoaded', () => {
+    const savedPin = localStorage.getItem('investra_closing_bet_pinned');
+    const section = document.getElementById('closing-bet-section');
+    const btn = document.getElementById('closing-bet-pin-btn');
+    
+    if (section && btn) {
+        if (savedPin === 'false') {
+            section.classList.remove('pinned');
+            btn.style.filter = 'grayscale(100%)';
+            btn.style.opacity = '0.5';
+        } else {
+            // Default is pinned (true)
+            section.classList.add('pinned');
+            btn.style.filter = 'grayscale(0%)';
+            btn.style.opacity = '1';
         }
     }
 });

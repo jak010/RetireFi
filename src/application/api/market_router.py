@@ -2,6 +2,7 @@ from fastapi.routing import APIRouter
 
 from src.application.libs.market.naver_theme_service import NaverThemeService
 from src.application.libs.market.news_summarizer_service import NewsSummaryService
+from src.application.libs.market.market_cap_service import market_cap_service
 
 naver_theme_service = NaverThemeService()
 
@@ -174,6 +175,7 @@ class MarketController:
                     "rate_str": f"{rate:+.2f}%",
                     "volume": amount,
                     "volume_str": amount_str,
+                    "market_cap_str": "",
                     "toss_url": f"https://www.tossinvest.com/stocks/A{symbol}/order"
                 })
             return {
@@ -193,6 +195,9 @@ class MarketController:
             except Exception as e:
                 import logging
                 logging.getLogger("uvicorn").error(f"Failed to resolve missing stock names: {e}")
+
+        # Fetch market caps
+        market_caps = market_cap_service.fetch_market_caps_sync([r.symbol for r in rankings])
 
         # Build list of enriched stocks
         data = []
@@ -226,6 +231,7 @@ class MarketController:
                 "rate_str": f"{rate:+.2f}%",
                 "volume": amount,
                 "volume_str": amount_str,
+                "market_cap_str": market_caps.get(symbol, ""),
                 "toss_url": f"https://www.tossinvest.com/stocks/A{symbol}/order"
             })
             
