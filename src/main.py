@@ -90,7 +90,6 @@ class Application:
                 print("[INFO] Background cache warming finished!")
 
             threading.Thread(target=warm_cache, daemon=True).start()
-            asyncio.create_task(self.schedule_theme_leaders_summary_loop())
             asyncio.create_task(self.schedule_theme_leaders_pullback_loop())
 
     async def schedule_theme_leaders_pullback_loop(self):
@@ -112,34 +111,7 @@ class Application:
             # 3분(180초) 주기로 실시간 낙폭 진입 감지
             await asyncio.sleep(180.0)
 
-    async def schedule_theme_leaders_summary_loop(self):
-        from src.application.api.market_router import naver_theme_service
 
-        while True:
-            # 즉시 발송하지 않고, 먼저 다음 정시(XX:00 혹은 XX:30)까지 대기 시간을 계산하여 대기합니다.
-            now = datetime.now()
-            minutes_to_add = 30 - (now.minute % 30)
-            next_run = (
-                now + timedelta(minutes=minutes_to_add)
-            ).replace(
-                second=0,
-                microsecond=0
-            )
-            sleep_seconds = (next_run - now).total_seconds()
-            if sleep_seconds <= 0:
-                sleep_seconds = 1800.0
-
-            print(f"[INFO] Next 30-minute theme summary scheduled at {next_run} (sleeping for {sleep_seconds:.1f} seconds)")
-            await asyncio.sleep(max(1.0, sleep_seconds))
-
-            try:
-                loop = asyncio.get_event_loop()
-                await loop.run_in_executor(
-                    None,
-                    naver_theme_service.send_theme_leaders_summary_to_slack
-                )
-            except Exception as e:
-                print(f"[BACKGROUND THEME LEADER SUMMARY ERROR] {e}")
 
     async def schedule_news_summary_loop(self):
 

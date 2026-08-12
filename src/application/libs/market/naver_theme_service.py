@@ -1421,57 +1421,7 @@ class NaverThemeService:
         return {"status": "error", "message": "4개월 통계 데이터를 가져올 수 없거나 지원하지 않는 종목코드입니다."}
 
 
-    def send_theme_leaders_summary_to_slack(self):
-        """30분 단위 주기적 호출: 각 테마의 대장주 및 1등주 목록을 요약하여 Slack 채널에 파일(스니펫) 형태로 업로드합니다."""
-        from datetime import datetime
-        import tempfile
-        import os
-        # KST 08:00~20:00 시간대에만 슬랙 발송
-        if not self._is_kst_alert_window():
-            logger.info("[SLACK SUMMARY] KST 08~20시 시간대가 아니어서 브리핑 슬랙 발송을 건너뜁니다.")
-            return
-        logger.info("[SLACK SUMMARY] 30분 단위 테마별 대장주 및 1등주 요약 알림 준비 시작 (파일 업로드 방식)...")
 
-        # 1. 텍스트 파일로 저장할 내용 생성
-        briefing_text = self.generate_briefing_text()
-        
-        if not self.slack:
-            logger.info(f"[SLACK SUMMARY - Slack 미연동 상태, 콘솔 출력]\n{briefing_text}")
-            return
-
-        # 2. 임시 파일 생성
-        temp_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "temp")
-        os.makedirs(temp_dir, exist_ok=True)
-        
-        now = datetime.now()
-        file_name = f"theme_briefing_{now.strftime('%Y%m%d_%H%M%S')}.txt"
-        file_path = os.path.join(temp_dir, file_name)
-        
-        try:
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.write(briefing_text)
-                
-            # 3. 슬랙 파일 업로드 전송
-            # sned_message_with_file 내부적으로 files_upload_v2를 사용하여 슬랙 채널에 업로드하며, 
-            # 슬랙 UI 상에서 접었다 펼쳐볼 수 있는 스니펫 형태와 다운로드 기능을 동시에 지원하게 됩니다.
-            title = f"📊 실시간 테마 & 대장주 고점 대비 낙폭 브리핑 ({now.strftime('%Y-%m-%d %H:%M')})"
-            comment = f"실시간 거래대금 상위 TOP 15 테마군 및 대장주/1등주 고점 대비 낙폭 브리핑 파일입니다. (정각/30분 발송)"
-            
-            self.slack.sned_message_with_file(
-                title=title,
-                comment=comment,
-                file_path=file_path,
-                channel=SlackClient.FINANCE_CHNNAEL
-            )
-            logger.info("[SLACK SUMMARY] 테마별 대장주 및 1등주 요약 파일 슬랙 전송 완료!")
-        except Exception as e:
-            logger.error(f"[SLACK SUMMARY ERROR] 슬랙 파일 전송 실패: {e}")
-        finally:
-            if os.path.exists(file_path):
-                try:
-                    os.remove(file_path)
-                except Exception as ex:
-                    logger.warning(f"임시 파일 삭제 실패: {ex}")
 
     def generate_briefing_text(self) -> str:
         """실시간 테마별 대장주 & 1등주 당일 고점 대비 낙폭 현황 (거래대금 TOP 15) 브리핑 텍스트를 생성합니다."""

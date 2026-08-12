@@ -51,15 +51,6 @@ class MarketController:
             "summary": "뉴스 요약 서비스가 수동 비활성화되었습니다."
         }
 
-    @staticmethod
-    @market_entrypoint.get(path="/cron/theme-leaders-summary",
-                           summary="[CRON] : 테마별 대장주 및 1등주 요약 슬랙 전송")
-    def run_theme_leaders_summary():
-        naver_theme_service.send_theme_leaders_summary_to_slack()
-        return {
-            "status": "success",
-            "message": "테마별 대장주 및 1등주 요약 슬랙 전송 요청 완료"
-        }
 
     @staticmethod
     @market_entrypoint.get(path="/pullback-alert-settings",
