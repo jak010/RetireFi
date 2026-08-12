@@ -2961,6 +2961,20 @@ window.toggleClosingBetPin = function() {
     }
 };
 
+window.toggleClosingBetCollapse = function() {
+    const container = document.getElementById('closing-bet-cards-container');
+    const btn = document.getElementById('closing-bet-collapse-btn');
+    if (!container || !btn) return;
+    
+    if (container.style.display === 'none') {
+        container.style.display = 'flex';
+        btn.textContent = '🔽';
+    } else {
+        container.style.display = 'none';
+        btn.textContent = '🔼';
+    }
+};
+
 // Initialize pin state on load
 document.addEventListener('DOMContentLoaded', () => {
     const savedPin = localStorage.getItem('investra_closing_bet_pinned');
