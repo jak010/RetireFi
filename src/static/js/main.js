@@ -451,6 +451,19 @@ function downloadBriefing() {
 // Render Main Themes Grid Cards (Top 9 by default or filtered results)
 function renderDashboard() {
     const container = document.getElementById('dashboard-grid-container');
+    if (!container) return;
+
+    // Save scroll states to prevent jumping on refresh
+    const mainScrollY = window.scrollY || document.documentElement.scrollTop;
+    const cardScrolls = {};
+    document.querySelectorAll('.theme-card-body').forEach(body => {
+        const card = body.closest('.theme-card');
+        if (card) {
+            const cardId = card.getAttribute('data-theme-name');
+            if (cardId) cardScrolls[cardId] = body.scrollTop;
+        }
+    });
+
     const searchBox = document.getElementById('search-box');
     const searchVal = searchBox.value.trim().toLowerCase();
     const rateFilter = document.getElementById('filter-rate').value;
@@ -642,9 +655,10 @@ function renderDashboard() {
                                     <span class="stock-name" style="cursor: pointer;" onclick="showStockNetworkMap('${stock.stock_name}', '${stock.stock_code}')" onmouseenter="handleStockHover(event, '${stock.stock_code}', '${stock.stock_name}')" onmouseleave="handleStockLeave()">${stock.stock_name}</span>
                                     <a href="https://www.tossinvest.com/stocks/A${stock.stock_code}/order" target="_blank" class="stock-code">${stock.stock_code}</a>
                                 </div>
-                                <div style="font-size: 0.7rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.25rem; margin-top: 0.15rem;">
+                                <div style="font-size: 0.7rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.25rem; margin-top: 0.2rem;">
                                     <span style="color: var(--text-muted);">대금:</span>
                                     <span style="font-weight: 500;">${stock.volume_str || '-'}</span>
+                                    <button onclick="openNewsModal('${stock.stock_code}', '${stock.stock_name}')" style="margin-left: auto; padding: 0.15rem 0.4rem; background: #fff7ed; color: #ea580c; border: 1px solid #fdba74; border-radius: 4px; font-size: 0.6rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 0.15rem; transition: all 0.2s ease; box-shadow: 0 1px 2px rgba(234, 88, 12, 0.05);" onmouseover="this.style.background='#ffedd5'; this.style.borderColor='#fb923c';" onmouseout="this.style.background='#fff7ed'; this.style.borderColor='#fdba74';" title="네이버 증권 뉴스 및 공시 보기"><span style="font-size: 0.65rem;">📰</span> 뉴스</button>
                                 </div>
                             </div>
                             <div class="stock-price-block">
@@ -845,6 +859,20 @@ function renderDashboard() {
     if (typeof renderTossSidebarRanking === 'function') {
         renderTossSidebarRanking();
     }
+
+    // Restore scroll states
+    requestAnimationFrame(() => {
+        window.scrollTo(0, mainScrollY);
+        document.querySelectorAll('.theme-card-body').forEach(body => {
+            const card = body.closest('.theme-card');
+            if (card) {
+                const cardId = card.getAttribute('data-theme-name');
+                if (cardId && cardScrolls[cardId] !== undefined) {
+                    body.scrollTop = cardScrolls[cardId];
+                }
+            }
+        });
+    });
 }
 
 // Toggle highlighting feature
@@ -1652,8 +1680,9 @@ function renderConsolidatedStocks() {
             </td>
             <td style="padding: 0.6rem 0.5rem; text-align: center;">
                 <div style="display: flex; gap: 0.4rem; justify-content: center; align-items: center;">
-                    <button onclick="showStockNetworkMap('${stock.name}', '${stock.code}')" style="padding: 0.25rem 0.5rem; background: var(--accent-blue-glow); color: var(--accent-blue); border: 1px solid var(--accent-blue); border-radius: 4px; font-size: 0.65rem; font-weight: 600; cursor: pointer;" title="실시간 주가 차트 보기">차트</button>
-                    <a href="https://www.tossinvest.com/stocks/A${stock.code}/order" target="_blank" style="padding: 0.25rem 0.5rem; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; border-radius: 4px; font-size: 0.65rem; font-weight: 600; text-decoration: none; display: inline-block;" title="토스증권에서 주문">토스</a>
+                    <button onclick="showStockNetworkMap('${stock.name}', '${stock.code}')" style="padding: 0.25rem 0.5rem; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; border-radius: 4px; font-size: 0.65rem; font-weight: 600; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='#dbeafe'; this.style.borderColor='#93c5fd';" onmouseout="this.style.background='#eff6ff'; this.style.borderColor='#bfdbfe';" title="실시간 주가 차트 보기">차트</button>
+                    <a href="https://www.tossinvest.com/stocks/A${stock.code}/order" target="_blank" style="padding: 0.25rem 0.5rem; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; border-radius: 4px; font-size: 0.65rem; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; transition: all 0.2s ease;" onmouseover="this.style.background='#bae6fd'; this.style.color='#0369a1';" onmouseout="this.style.background='#e0f2fe'; this.style.color='#0369a1';" title="토스증권에서 주문">토스</a>
+                    <button onclick="openNewsModal('${stock.code}', '${stock.name}')" style="padding: 0.25rem 0.5rem; background: #fff7ed; color: #ea580c; border: 1px solid #fdba74; border-radius: 4px; font-size: 0.65rem; font-weight: 700; cursor: pointer; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 0.2rem;" onmouseover="this.style.background='#ffedd5'; this.style.borderColor='#fb923c';" onmouseout="this.style.background='#fff7ed'; this.style.borderColor='#fdba74';" title="네이버 증권 뉴스 및 공시 보기"><span style="font-size: 0.7rem;">📰</span> 뉴스</button>
                 </div>
             </td>
         `;
@@ -1850,7 +1879,11 @@ function buildSangttaRowHtml(stock, isExited = false) {
             </div>
         </td>
         <td style="padding: 0.75rem 0.5rem; text-align: center;">
-            <a href="${stock.toss_url}" target="_blank" style="padding: 0.35rem 0.65rem; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; border-radius: 6px; font-size: 0.72rem; font-weight: 700; text-decoration: none; display: inline-block; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.05);" title="토스증권에서 주문">🚀 토스 주문</a>
+            <div style="display: flex; gap: 0.4rem; justify-content: center; align-items: center;">
+                <button onclick="showStockNetworkMap('${stock.name}', '${stock.code}')" style="padding: 0.35rem 0.65rem; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='#dbeafe'; this.style.borderColor='#93c5fd';" onmouseout="this.style.background='#eff6ff'; this.style.borderColor='#bfdbfe';" title="실시간 주가 차트 보기">차트</button>
+                <a href="${stock.toss_url}" target="_blank" style="padding: 0.35rem 0.65rem; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; border-radius: 6px; font-size: 0.72rem; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; transition: all 0.2s ease; box-shadow: 0 1px 2px rgba(0,0,0,0.05);" onmouseover="this.style.background='#bae6fd'; this.style.color='#0369a1';" onmouseout="this.style.background='#e0f2fe'; this.style.color='#0369a1';" title="토스증권에서 주문">🚀 토스 주문</a>
+                <button onclick="openNewsModal('${stock.code}', '${stock.name}')" style="padding: 0.35rem 0.65rem; background: #fff7ed; color: #ea580c; border: 1px solid #fdba74; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 0.2rem; box-shadow: 0 1px 2px rgba(234, 88, 12, 0.05);" onmouseover="this.style.background='#ffedd5'; this.style.borderColor='#fb923c';" onmouseout="this.style.background='#fff7ed'; this.style.borderColor='#fdba74';" title="네이버 증권 뉴스 및 공시 보기"><span style="font-size: 0.75rem;">📰</span> 뉴스</button>
+            </div>
         </td>
     `;
 }
@@ -2994,3 +3027,92 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 });
+
+// ==========================================
+// News and Disclosures Modal Logic
+// ==========================================
+
+window.openNewsModal = async function(code, name) {
+    const overlay = document.getElementById('news-modal-overlay');
+    const titleSpan = document.querySelector('#news-modal-title .stock-name');
+    const newsContainer = document.getElementById('news-list-container');
+    const noticeContainer = document.getElementById('notice-list-container');
+
+    if (!overlay) return;
+
+    // Set title
+    titleSpan.textContent = name;
+    
+    // Show loading state
+    newsContainer.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 2rem 0;">데이터를 불러오는 중...</div>';
+    noticeContainer.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 2rem 0;">데이터를 불러오는 중...</div>';
+
+    // Display modal
+    overlay.style.display = 'flex';
+    // Trigger reflow
+    void overlay.offsetWidth;
+    overlay.style.opacity = '1';
+    overlay.querySelector('.modal-content').style.transform = 'scale(1)';
+
+    try {
+        const response = await fetch(`/api/v1/market/stocks/${code}/news`);
+        const result = await response.json();
+        
+        if (result.status === 'success' && result.data) {
+            renderNewsList(newsContainer, result.data.news, '뉴스가 없습니다.');
+            renderNewsList(noticeContainer, result.data.disclosures, '공시가 없습니다.');
+        } else {
+            throw new Error('Invalid response');
+        }
+    } catch (e) {
+        console.error('Failed to fetch news:', e);
+        const errorMsg = '<div style="text-align: center; color: var(--accent-red); padding: 2rem 0;">데이터를 불러오는데 실패했습니다.</div>';
+        newsContainer.innerHTML = errorMsg;
+        noticeContainer.innerHTML = errorMsg;
+    }
+};
+
+window.closeNewsModal = function() {
+    const overlay = document.getElementById('news-modal-overlay');
+    if (!overlay) return;
+    
+    overlay.style.opacity = '0';
+    overlay.querySelector('.modal-content').style.transform = 'scale(0.95)';
+    
+    setTimeout(() => {
+        overlay.style.display = 'none';
+    }, 300);
+};
+
+// Close modal when clicking outside
+document.addEventListener('DOMContentLoaded', () => {
+    const overlay = document.getElementById('news-modal-overlay');
+    if (overlay) {
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                closeNewsModal();
+            }
+        });
+    }
+});
+
+function renderNewsList(container, items, emptyMessage) {
+    if (!items || items.length === 0) {
+        container.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 2rem 0; font-size: 0.9rem;">${emptyMessage}</div>`;
+        return;
+    }
+
+    const html = items.map(item => `
+        <a href="${item.link}" target="_blank" style="display: block; padding: 0.75rem; background: rgba(0,0,0,0.015); border: 1px solid var(--border-color); border-radius: 8px; text-decoration: none; transition: var(--transition-fast);" onmouseover="this.style.background='var(--bg-card)'; this.style.boxShadow='var(--shadow-sm)'; this.style.borderColor='var(--accent-blue)';" onmouseout="this.style.background='rgba(0,0,0,0.015)'; this.style.boxShadow='none'; this.style.borderColor='var(--border-color)';">
+            <div style="font-size: 0.9rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.4rem; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis;">
+                ${item.title}
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: var(--text-muted);">
+                <span style="background: rgba(0,0,0,0.04); padding: 0.1rem 0.4rem; border-radius: 4px;">${item.publisher}</span>
+                <span>${item.date}</span>
+            </div>
+        </a>
+    `).join('');
+    
+    container.innerHTML = html;
+}

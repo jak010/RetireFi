@@ -3,8 +3,10 @@ from fastapi.routing import APIRouter
 from src.application.libs.market.naver_theme_service import NaverThemeService
 from src.application.libs.market.news_summarizer_service import NewsSummaryService
 from src.application.libs.market.market_cap_service import market_cap_service
+from src.application.libs.market.news_service import NewsService
 
 naver_theme_service = NaverThemeService()
+news_service = NewsService()
 
 market_entrypoint = APIRouter(tags=["MARKET"], prefix="/api/v1/market")
 
@@ -41,6 +43,20 @@ class MarketController:
         return {
             "status": "success",
             "data": naver_theme_service.get_theme_stocks_detail(theme_name)
+        }
+
+    @staticmethod
+    @market_entrypoint.get(path="/stocks/{code}/news",
+                           summary="[MARKET] : 종목코드 기반 네이버 증권 최근 뉴스 및 공시 목록 조회")
+    async def get_stock_news(code: str):
+        news_list = await news_service.get_news(code)
+        notice_list = await news_service.get_disclosures(code)
+        return {
+            "status": "success",
+            "data": {
+                "news": news_list,
+                "disclosures": notice_list
+            }
         }
 
     @staticmethod
@@ -364,7 +380,7 @@ class MarketController:
 
     @staticmethod
     @market_entrypoint.get(path="/stocks/{stock_code}/stats-4m",
-                           summary="[MARKET] : 특정 종목의 최근 4개월 수급 구간(머리/어깨/무릎) 가격대 조회 (야후 파이낸스)")
+                           summary="[MARKET] : 특정 종목의 최근 3.5개월(3개월+2주) 수급 구간(머리/어깨/무릎) 가격대 조회 (야후 파이낸스)")
     def get_stock_4month_stats(stock_code: str):
         return naver_theme_service.fetch_stock_4month_stats(stock_code)
 

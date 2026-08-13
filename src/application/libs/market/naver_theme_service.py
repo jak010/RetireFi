@@ -1353,14 +1353,19 @@ class NaverThemeService:
         return {"status": "error", "message": "차트 데이터를 가져올 수 없거나 지원하지 않는 종목코드입니다."}
 
     def fetch_stock_4month_stats(self, stock_code: str) -> Dict[str, Any]:
-        """특정 종목의 최근 4개월 일봉 데이터를 야후 파이낸스로 조회하여 수급 구간(머리/어깨/무릎) 가격대 및 이평 정보를 반환합니다."""
+        """특정 종목의 최근 3개월+2주 일봉 데이터를 야후 파이낸스로 조회하여 수급 구간(머리/어깨/무릎) 가격대 및 이평 정보를 반환합니다."""
+        import time
         code = stock_code.strip()
         if len(code) != 6 or not code.isdigit():
             return {"status": "error", "message": "잘못된 종목코드입니다."}
 
+        # 3개월 + 2주 = 대략 104일
+        period2 = int(time.time())
+        period1 = period2 - (104 * 24 * 3600)
+
         for suffix in [".KS", ".KQ"]:
             symbol = f"{code}{suffix}"
-            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=4mo"
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&period1={period1}&period2={period2}"
             try:
                 r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=4.0)
                 if r.status_code != 200:
