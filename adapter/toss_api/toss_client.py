@@ -7,7 +7,7 @@ import requests
 from pydantic import BaseModel
 from src.config.setup import settings
 
-from adapter.toss_api.dto.asset import PortfolioResult, PortfolioSummaryDto
+from adapter.toss_api.dto.asset import PortfolioResult, PortfolioSummaryDto, PriceResultDto
 from adapter.toss_api.dto.ranking import StockRankingResponseDTO
 
 logger = logging.getLogger("uvicorn")

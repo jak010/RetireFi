@@ -78,3 +78,9 @@ class PortfolioSummaryDto(BaseModel):
     symbol: str
     market_country: str
     profit_loss_rate: Decimal
+
+class PriceResultDto(BaseModel):
+    symbol: str
+    timestamp: str
+    lastPrice: Decimal
+    currency: str

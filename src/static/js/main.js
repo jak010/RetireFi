@@ -1467,9 +1467,36 @@ function updateConsolidatedSortIcons() {
     });
 }
 
-function renderTechPanel(stockList) {
+async function renderTechPanel(stockList) {
     const techPanel = document.getElementById('tech-panel-content');
     if (!techPanel) return;
+    
+    if (stockList.length > 0) {
+        const symbols = stockList.map(s => s.code).join(',');
+        try {
+            const res = await fetch(`/api/v1/market/prices?symbols=${symbols}`);
+            const json = await res.json();
+            if (json.status === 'success' && json.data) {
+                const priceMap = {};
+                json.data.forEach(p => {
+                    priceMap[p.symbol] = parseInt(p.lastPrice, 10);
+                });
+                stockList.forEach(s => {
+                    if (priceMap[s.code]) {
+                        s.price = priceMap[s.code];
+                        s.price_str = s.price.toLocaleString() + '원';
+                        
+                        const rowPriceEl = document.querySelector(`#consolidated-row-${s.code} td:nth-child(2) span`);
+                        if (rowPriceEl) {
+                            rowPriceEl.innerText = s.price_str;
+                        }
+                    }
+                });
+            }
+        } catch (e) {
+            console.error("Toss 현재가 조회 실패:", e);
+        }
+    }
     
     const currentCardIds = Array.from(techPanel.children).map(c => c.id).filter(id => id.startsWith('tech-card-'));
     const newCardIds = stockList.map(s => `tech-card-${s.code}`);
@@ -1613,58 +1640,46 @@ function renderTechPanel(stockList) {
                     </div>
                 </div>
                 
-                <div style="background: rgba(0,0,0,0.02); border-radius: 8px; padding: 0.6rem; display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.3rem;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.7rem; border-bottom: 1px dashed rgba(0,0,0,0.05); padding-bottom: 0.4rem;">
-                        <span style="color: var(--text-muted); font-weight: 600;">26주 최고가</span>
-                        <span style="font-weight: 800; color: var(--text-primary); font-family: var(--font-outfit);">${high26w}</span>
-                    </div>
-                    
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem;">
-                        <div style="display: flex; flex-direction: column; background: rgba(239, 68, 68, 0.05); padding: 0.4rem 0.5rem; border-radius: 6px; border-left: 3px solid #ef4444;">
-                            <span style="font-size: 0.6rem; color: #ef4444; font-weight: 700; margin-bottom: 0.1rem;">저항 (목표가)</span>
-                            <span style="font-size: 0.8rem; font-weight: 800; color: #b91c1c; font-family: var(--font-outfit);">${rPrice}</span>
-                        </div>
-                        <div style="display: flex; flex-direction: column; background: rgba(16, 185, 129, 0.05); padding: 0.4rem 0.5rem; border-radius: 6px; border-left: 3px solid #10b981;">
-                            <span style="font-size: 0.6rem; color: #10b981; font-weight: 700; margin-bottom: 0.1rem;">지지 (매수가)</span>
-                            <span style="font-size: 0.8rem; font-weight: 800; color: #047857; font-family: var(--font-outfit);">${sPrice}</span>
-                        </div>
-                    </div>
-                </div>
                 
                 <div style="margin-top: 3.5rem; padding: 0 0.5rem; margin-bottom: 2rem;">
-                    <div class="gauge-track" style="position: relative; height: 10px; background: #e2e8f0; border-radius: 5px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);">
-                        <!-- Low (발바닥) at bottom -->
+                    <div class="gauge-track" style="position: relative; height: 12px; background: #e2e8f0; border-radius: 6px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);">
+                        <!-- Price Zones (가격구간) -->
+                        <div style="position: absolute; left: 0%; width: ${supportRatio}%; height: 100%; background: rgba(16, 185, 129, 0.35); border-radius: 6px 0 0 6px;" title="매수 가능 구간 (발바닥~무릎)"></div>
+                        <div style="position: absolute; left: ${supportRatio}%; width: ${resistanceRatio - supportRatio}%; height: 100%; background: rgba(245, 158, 11, 0.35);" title="보유/관망 구간 (무릎~어깨)"></div>
+                        <div style="position: absolute; left: ${resistanceRatio}%; width: ${100 - resistanceRatio}%; height: 100%; background: rgba(239, 68, 68, 0.35); border-radius: 0 6px 6px 0;" title="매도 고려 구간 (어깨~머리)"></div>
+                        <!-- Low (최저가) at bottom -->
                         <div style="position: absolute; top: -5px; left: 0%; width: 4px; height: 20px; background: #cbd5e1; transform: translateX(-50%); border-radius: 2px;">
-                            <div style="position: absolute; top: 24px; left: 0; transform: translateX(0); font-size: 0.7rem; color: var(--text-muted); white-space: nowrap; text-align: left; line-height: 1.2;">
-                                발바닥<br><span style="font-weight:600;">${stats.four_month_low ? stats.four_month_low.toLocaleString() : '-'}</span>
+                            <div style="position: absolute; top: 24px; left: 0; transform: translateX(0); font-size: 0.65rem; color: var(--text-muted); white-space: nowrap; text-align: left; line-height: 1.2;">
+                                최저 (발바닥)<br><span style="font-weight:600;">${stats.four_month_low ? stats.four_month_low.toLocaleString() : '-'}</span>
                             </div>
                         </div>
 
-                        <!-- Support (무릎) at top -->
+                        <!-- Support (지지선) at top -->
                         <div style="position: absolute; top: -9px; left: ${supportRatio}%; width: 6px; height: 28px; background: #10b981; display: ${supportVisible}; z-index: 1; transform: translateX(-50%); border-radius: 3px;">
-                            <div style="position: absolute; top: -36px; ${getLabelStyle(supportRatio)} font-size: 0.7rem; color: #10b981; white-space: nowrap; font-weight: 800; line-height: 1.2;">
-                                무릎<br>${sPrice}
+                            <div style="position: absolute; top: -36px; ${getLabelStyle(supportRatio)} font-size: 0.65rem; color: #10b981; white-space: nowrap; font-weight: 800; line-height: 1.2;">
+                                지지가 (무릎)<br>${sPrice}
                             </div>
                         </div>
 
-                        <!-- Resistance (어깨) at bottom -->
+                        <!-- Resistance (저항선) at bottom -->
                         <div style="position: absolute; top: -9px; left: ${resistanceRatio}%; width: 6px; height: 28px; background: #ef4444; display: ${resistanceVisible}; z-index: 1; transform: translateX(-50%); border-radius: 3px;">
-                            <div style="position: absolute; top: 24px; ${getLabelStyle(resistanceRatio)} font-size: 0.7rem; color: #ef4444; white-space: nowrap; font-weight: 800; line-height: 1.2;">
-                                어깨<br>${rPrice}
+                            <div style="position: absolute; top: 24px; ${getLabelStyle(resistanceRatio)} font-size: 0.65rem; color: #ef4444; white-space: nowrap; font-weight: 800; line-height: 1.2;">
+                                저항가 (어깨)<br>${rPrice}
                             </div>
                         </div>
 
-                        <!-- High (머리) at top -->
+                        <!-- High (최고가) at top -->
                         <div style="position: absolute; top: -5px; left: 100%; width: 4px; height: 20px; background: #cbd5e1; transform: translateX(-50%); border-radius: 2px;">
-                            <div style="position: absolute; top: -36px; right: 0; left: auto; transform: translateX(0); font-size: 0.7rem; color: var(--text-muted); white-space: nowrap; text-align: right; line-height: 1.2;">
-                                머리<br><span style="font-weight:600;">${high26w}</span>
+                            <div style="position: absolute; top: -36px; right: 0; left: auto; transform: translateX(0); font-size: 0.65rem; color: var(--text-muted); white-space: nowrap; text-align: right; line-height: 1.2;">
+                                26주 최고가 (머리)<br><span style="font-weight:600;">${high26w}</span>
+                                ${(stats.twenty_six_week_high && stock.price >= stats.twenty_six_week_high) ? `<br><span style="font-size: 0.55rem; background: #fee2e2; color: #ef4444; border: 1px solid #fca5a5; padding: 0.05rem 0.25rem; border-radius: 4px; display: inline-block; margin-top: 0.15rem; font-weight: 800;">🔥 신고가 돌파</span>` : ''}
                             </div>
                         </div>
 
                         <!-- Current (현재가) at very top -->
                         <div style="position: absolute; top: -13px; left: ${gaugeRatio}%; width: 6px; height: 36px; background: #0f172a; border-radius: 3px; z-index: 3; box-shadow: 0 0 5px rgba(0,0,0,0.4); transform: translateX(-50%);">
                             <div style="position: absolute; top: -62px; ${getLabelStyle(gaugeRatio)} font-size: 0.8rem; color: #ffffff; background: #0f172a; padding: 4px 8px; border-radius: 6px; white-space: nowrap; text-align: center; font-weight: 800; line-height: 1.2; box-shadow: 0 3px 6px rgba(0,0,0,0.3);">
-                                현재 ${stock.price_str}
+                                현재가 ${stock.price_str}
                             </div>
                         </div>
                     </div>

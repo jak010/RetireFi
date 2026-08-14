@@ -156,6 +156,27 @@ class MarketController:
         }
 
     @staticmethod
+    @market_entrypoint.get(path="/prices",
+                           summary="[MARKET] : 토스증권 실시간 현재가 조회")
+    def get_realtime_prices(symbols: str):
+        from adapter.toss_api.toss_client import TossInvestmentAPI
+        try:
+            toss_api = TossInvestmentAPI()
+            symbol_list = [s.strip() for s in symbols.split(',') if s.strip()]
+            if not symbol_list:
+                return {"status": "success", "data": []}
+                
+            prices = toss_api.get_current_price(symbol_list)
+            return {
+                "status": "success",
+                "data": [p.model_dump() for p in prices]
+            }
+        except Exception as e:
+            import logging
+            logging.getLogger("uvicorn").error(f"Failed to fetch prices: {e}")
+            return {"status": "error", "message": str(e), "data": []}
+
+    @staticmethod
     @market_entrypoint.get(path="/themes/download-briefing",
                            summary="[MARKET] : 실시간 테마 & 대장주 30분 브리핑 다운로드 (텍스트 파일)")
     def download_theme_briefing():
