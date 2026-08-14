@@ -693,7 +693,7 @@ function renderDashboard() {
                             <div class="stock-price-block">
                                 <div class="stock-price" style="display: flex; align-items: center; justify-content: flex-end; gap: 0.25rem;">
                                     ${changeIndicatorHtml}
-                                    <span>${stock.price_str}</span>
+                                    <span id="matrix-price-${stock.stock_code}">${stock.price_str}</span>
                                 </div>
                                 <div class="stock-rate ${stockRateClass}">${stockRateSign}${stock.rate_str}</div>
                             </div>
@@ -983,7 +983,8 @@ window.onload = () => {
     updateClock();
     setInterval(updateClock, 1000);
     loadAlertSettings();
-};
+
+} // End of renderDashboard;
 
 // Switch between Ticker Tabs (Breaking News vs Toss)
 let currentTickerTab = 'toss';
@@ -1467,6 +1468,193 @@ function updateConsolidatedSortIcons() {
     });
 }
 
+async function toggleMatrixTech(code) {
+    const container = document.getElementById(`matrix-tech-${code}`);
+    if (!container) return;
+    
+    if (container.style.display === 'none') {
+        container.style.display = 'grid'; // because it spans grid column
+        const contentDiv = document.getElementById(`matrix-tech-${code}-content`);
+        const loadingDiv = document.getElementById(`matrix-tech-${code}-loading`);
+        
+        // If already loaded, just return
+        if (contentDiv.innerHTML.trim() !== '') return;
+        
+        loadingDiv.style.display = 'block';
+        contentDiv.style.display = 'none';
+        
+        try {
+            // Fetch live price
+            let currentPrice = null;
+            let currentPriceStr = '-';
+            try {
+                const res = await fetch(`/api/v1/market/prices?symbols=${code}`);
+                const json = await res.json();
+                if (json.status === 'success' && json.data && json.data.length > 0) {
+                    currentPrice = parseInt(json.data[0].lastPrice, 10);
+                    currentPriceStr = currentPrice.toLocaleString() + '원';
+                    
+                    const priceEl = document.getElementById(`matrix-price-${code}`);
+                    if (priceEl) priceEl.innerText = currentPriceStr;
+                }
+            } catch(e) {
+                console.error("Toss 현재가 조회 실패:", e);
+            }
+            
+            // Fetch stats
+            const stats = await loadStock4mStats(code);
+            loadingDiv.style.display = 'none';
+            
+            const stockObj = {
+                code: code,
+                price: currentPrice,
+                price_str: currentPriceStr,
+                drop: 0, // We can get drop from the DOM if we really need to, but generateGaugeHtml doesn't strictly need accurate drop if stats is there
+                drop_str: ''
+            };
+            
+            contentDiv.innerHTML = generateGaugeHtml(stockObj, stats);
+            contentDiv.style.display = 'flex';
+        } catch (e) {
+            loadingDiv.innerText = '데이터 로딩 실패';
+        }
+    } else {
+        container.style.display = 'none';
+    }
+}
+
+function generateGaugeHtml(stock, stats) {
+    if (!stats) {
+        return `<div style="font-size: 0.7rem; color: var(--text-muted); text-align: center;">데이터 없음</div>`;
+    }
+    
+    const align = stats.ma_alignment || '-';
+    const goodAlign = align.includes('정배열');
+    const badAlign = align.includes('역배열');
+    const maStyle = goodAlign ? 'background: rgba(16, 185, 129, 0.08); color: #10b981; border: 1px solid #10b981;' : (badAlign ? 'background: rgba(239, 68, 68, 0.08); color: #ef4444; border: 1px solid #ef4444;' : 'background: rgba(100, 116, 139, 0.08); color: var(--text-muted); border: 1px solid var(--text-muted);');
+    
+    const level = stats.price_level || '-';
+    let levelStyle = '';
+    if (level === '머리') { levelStyle = 'color: #ef4444; background: rgba(239, 68, 68, 0.08); border: 1px solid #ef4444;'; }
+    else if (level === '어깨') { levelStyle = 'color: #d97706; background: rgba(245, 158, 11, 0.08); border: 1px solid #d97706;'; }
+    else if (level === '무릎') { levelStyle = 'color: #10b981; background: rgba(16, 185, 129, 0.08); border: 1px solid #10b981;'; }
+    else { levelStyle = 'color: var(--text-muted); background: rgba(100, 116, 139, 0.08); border: 1px solid var(--text-muted);'; }
+    
+    const pos = stats.price_position_ratio !== undefined ? `${stats.price_position_ratio}%` : '';
+    let high26w = stats.twenty_six_week_high ? stats.twenty_six_week_high.toLocaleString() : '-';
+    let sPrice = stats.support_price ? stats.support_price.toLocaleString() : '-';
+    let rPrice = stats.resistance_price ? stats.resistance_price.toLocaleString() : '-';
+    
+    let supportVisible = 'none', resistanceVisible = 'none';
+    
+    let pLow = stats.four_month_low;
+    let pSupp = stats.support_price;
+    let pRes = stats.resistance_price;
+    let pHigh = stats.twenty_six_week_high;
+    let pCurr = stock.price;
+    
+    let nodes = [];
+    nodes.push({ val: pLow || 0, type: 'low', pos: 0 });
+    if (pSupp) nodes.push({ val: pSupp, type: 'supp', pos: 0 });
+    if (pRes) nodes.push({ val: pRes, type: 'res', pos: 0 });
+    nodes.push({ val: pHigh || (pLow > 0 ? pLow + 1 : 100), type: 'high', pos: 0 });
+    
+    nodes.sort((a, b) => a.val - b.val);
+    
+    for (let i = 0; i < nodes.length; i++) {
+        nodes[i].pos = (i / (nodes.length - 1)) * 100;
+    }
+    
+    let trackLow = 0, trackSupp = 33.3, trackRes = 66.6, trackHigh = 100, trackCurr = 50;
+    
+    for (let node of nodes) {
+        if (node.type === 'low') trackLow = node.pos;
+        if (node.type === 'supp') { trackSupp = node.pos; supportVisible = 'block'; }
+        if (node.type === 'res') { trackRes = node.pos; resistanceVisible = 'block'; }
+        if (node.type === 'high') trackHigh = node.pos;
+    }
+    
+    if (pCurr <= nodes[0].val) {
+        trackCurr = 0;
+    } else if (pCurr >= nodes[nodes.length - 1].val) {
+        trackCurr = 100;
+    } else {
+        for (let i = 0; i < nodes.length - 1; i++) {
+            let n1 = nodes[i];
+            let n2 = nodes[i+1];
+            if (pCurr >= n1.val && pCurr <= n2.val) {
+                let range = n2.val - n1.val;
+                if (range === 0) {
+                    trackCurr = n1.pos;
+                } else {
+                    let ratio = (pCurr - n1.val) / range;
+                    trackCurr = n1.pos + ratio * (n2.pos - n1.pos);
+                }
+                break;
+            }
+        }
+    }
+    
+    let supportRatio = trackSupp;
+    let resistanceRatio = trackRes;
+    let gaugeRatio = trackCurr;
+    
+    let dropVal = stock.drop || (stats.four_month_high && stock.price ? ((stock.price - stats.four_month_high) / stats.four_month_high) * 100 : 0);
+    let dropStr = stock.drop_str || (dropVal !== 0 ? dropVal.toFixed(2) + '%' : '-');
+    
+    const getLabelStyle = (ratio) => {
+        if (ratio < 15) return 'left: 0; transform: translateX(-10%); text-align: left;';
+        if (ratio > 85) return 'right: 0; left: auto; transform: translateX(10%); text-align: right;';
+        return 'left: 50%; transform: translateX(-50%); text-align: center;';
+    };
+
+    return `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.2rem;">
+            <div style="display: flex; gap: 0.3rem;">
+                <span style="font-size: 0.65rem; font-weight: 700; padding: 0.15rem 0.4rem; border-radius: 4px; ${levelStyle}">${level} ${pos}</span>
+                <span style="font-size: 0.65rem; font-weight: 700; padding: 0.15rem 0.4rem; border-radius: 4px; ${maStyle}">${align}</span>
+            </div>
+            <div style="font-size: 0.7rem; font-weight: 700; color: ${dropVal < -8.0 ? 'var(--accent-orange)' : (dropVal < -4.4 ? 'var(--accent-green)' : 'var(--text-muted)')}; background: ${dropVal < -8.0 ? 'rgba(249, 115, 22, 0.05)' : (dropVal < -4.4 ? 'rgba(16, 185, 129, 0.05)' : 'transparent')}; padding: 0.15rem 0.4rem; border-radius: 4px;">
+                당일 낙폭: ${dropStr}
+            </div>
+        </div>
+        
+        <div style="margin-top: 3.5rem; padding: 0 0.5rem; margin-bottom: 2rem;">
+            <div class="gauge-track" style="position: relative; height: 12px; background: #e2e8f0; border-radius: 6px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);">
+                <div style="position: absolute; left: 0%; width: ${supportRatio}%; height: 100%; background: rgba(16, 185, 129, 0.35); border-radius: 6px 0 0 6px;" title="매수 가능 구간 (발바닥~무릎)"></div>
+                <div style="position: absolute; left: ${supportRatio}%; width: ${resistanceRatio - supportRatio}%; height: 100%; background: rgba(245, 158, 11, 0.35);" title="보유/관망 구간 (무릎~어깨)"></div>
+                <div style="position: absolute; left: ${resistanceRatio}%; width: ${100 - resistanceRatio}%; height: 100%; background: rgba(239, 68, 68, 0.35); border-radius: 0 6px 6px 0;" title="매도 고려 구간 (어깨~머리)"></div>
+                <div style="position: absolute; top: -5px; left: 0%; width: 4px; height: 20px; background: #cbd5e1; transform: translateX(-50%); border-radius: 2px;">
+                    <div style="position: absolute; top: 24px; left: 0; transform: translateX(0); font-size: 0.65rem; color: var(--text-muted); white-space: nowrap; text-align: left; line-height: 1.2;">
+                        최저 (발바닥)<br><span style="font-weight:600;">${stats.four_month_low ? stats.four_month_low.toLocaleString() : '-'}</span>
+                    </div>
+                </div>
+                <div style="position: absolute; top: -9px; left: ${supportRatio}%; width: 6px; height: 28px; background: #10b981; display: ${supportVisible}; z-index: 1; transform: translateX(-50%); border-radius: 3px;">
+                    <div style="position: absolute; top: -36px; ${getLabelStyle(supportRatio)} font-size: 0.65rem; color: #10b981; white-space: nowrap; font-weight: 800; line-height: 1.2;">
+                        지지가 (무릎)<br>${sPrice}
+                    </div>
+                </div>
+                <div style="position: absolute; top: -9px; left: ${resistanceRatio}%; width: 6px; height: 28px; background: #ef4444; display: ${resistanceVisible}; z-index: 1; transform: translateX(-50%); border-radius: 3px;">
+                    <div style="position: absolute; top: 24px; ${getLabelStyle(resistanceRatio)} font-size: 0.65rem; color: #ef4444; white-space: nowrap; font-weight: 800; line-height: 1.2;">
+                        저항가 (어깨)<br>${rPrice}
+                    </div>
+                </div>
+                <div style="position: absolute; top: -5px; left: 100%; width: 4px; height: 20px; background: #cbd5e1; transform: translateX(-50%); border-radius: 2px;">
+                    <div style="position: absolute; top: -36px; right: 0; left: auto; transform: translateX(0); font-size: 0.65rem; color: var(--text-muted); white-space: nowrap; text-align: right; line-height: 1.2;">
+                        26주 최고가 (머리)<br><span style="font-weight:600;">${high26w}</span>
+                        ${(stats.twenty_six_week_high && stock.price >= stats.twenty_six_week_high) ? `<br><span style="font-size: 0.55rem; background: #fee2e2; color: #ef4444; border: 1px solid #fca5a5; padding: 0.05rem 0.25rem; border-radius: 4px; display: inline-block; margin-top: 0.15rem; font-weight: 800;">🔥 신고가 돌파</span>` : ''}
+                    </div>
+                </div>
+                <div style="position: absolute; top: -13px; left: ${gaugeRatio}%; width: 6px; height: 36px; background: #0f172a; border-radius: 3px; z-index: 3; box-shadow: 0 0 5px rgba(0,0,0,0.4); transform: translateX(-50%);">
+                    <div style="position: absolute; top: -62px; ${getLabelStyle(gaugeRatio)} font-size: 0.8rem; color: #ffffff; background: #0f172a; padding: 4px 8px; border-radius: 6px; white-space: nowrap; text-align: center; font-weight: 800; line-height: 1.2; box-shadow: 0 3px 6px rgba(0,0,0,0.3);">
+                        현재가 ${stock.price_str}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
 async function renderTechPanel(stockList) {
     const techPanel = document.getElementById('tech-panel-content');
     if (!techPanel) return;
@@ -1540,154 +1728,13 @@ async function renderTechPanel(stockList) {
             if (!cardLoading || !cardContent) return;
             
             cardLoading.style.display = 'none';
-            if (!stats) {
-                cardContent.innerHTML = `<div style="font-size: 0.7rem; color: var(--text-muted); text-align: center;">데이터 없음</div>`;
-                cardContent.style.display = 'flex';
-                return;
-            }
-            
-            const align = stats.ma_alignment || '-';
-            const goodAlign = align.includes('정배열');
-            const badAlign = align.includes('역배열');
-            const maStyle = goodAlign ? 'background: rgba(16, 185, 129, 0.08); color: #10b981; border: 1px solid #10b981;' : (badAlign ? 'background: rgba(239, 68, 68, 0.08); color: #ef4444; border: 1px solid #ef4444;' : 'background: rgba(100, 116, 139, 0.08); color: var(--text-muted); border: 1px solid var(--text-muted);');
-            
-            const level = stats.price_level || '-';
-            let levelStyle = '';
-            if (level === '머리') { levelStyle = 'color: #ef4444; background: rgba(239, 68, 68, 0.08); border: 1px solid #ef4444;'; }
-            else if (level === '어깨') { levelStyle = 'color: #d97706; background: rgba(245, 158, 11, 0.08); border: 1px solid #d97706;'; }
-            else if (level === '무릎') { levelStyle = 'color: #10b981; background: rgba(16, 185, 129, 0.08); border: 1px solid #10b981;'; }
-            else { levelStyle = 'color: var(--text-muted); background: rgba(100, 116, 139, 0.08); border: 1px solid var(--text-muted);'; }
-            
-            const pos = stats.price_position_ratio !== undefined ? `${stats.price_position_ratio}%` : '';
-            let high26w = stats.twenty_six_week_high ? stats.twenty_six_week_high.toLocaleString() : '-';
-            let sPrice = stats.support_price ? stats.support_price.toLocaleString() : '-';
-            let rPrice = stats.resistance_price ? stats.resistance_price.toLocaleString() : '-';
-            
-            let supportVisible = 'none', resistanceVisible = 'none';
-            
-            let pLow = stats.four_month_low;
-            let pSupp = stats.support_price;
-            let pRes = stats.resistance_price;
-            let pHigh = stats.twenty_six_week_high;
-            let pCurr = stock.price;
-            
-            // 모든 기준선을 균등하게 배치하여 UI 쏠림 완전 방지 (Dynamic Piecewise Mapping)
-            let nodes = [];
-            nodes.push({ val: pLow || 0, type: 'low', pos: 0 });
-            if (pSupp) nodes.push({ val: pSupp, type: 'supp', pos: 0 });
-            if (pRes) nodes.push({ val: pRes, type: 'res', pos: 0 });
-            nodes.push({ val: pHigh || (pLow > 0 ? pLow + 1 : 100), type: 'high', pos: 0 });
-            
-            // 값을 기준으로 오름차순 정렬하여 순서 꼬임 및 동일 값(0 나누기) 방지
-            nodes.sort((a, b) => a.val - b.val);
-            
-            // 정렬된 순서대로 0% ~ 100% 사이에 균등한 간격(UI 위치) 부여
-            for (let i = 0; i < nodes.length; i++) {
-                nodes[i].pos = (i / (nodes.length - 1)) * 100;
-            }
-            
-            let trackLow = 0, trackSupp = 33.3, trackRes = 66.6, trackHigh = 100, trackCurr = 50;
-            
-            for (let node of nodes) {
-                if (node.type === 'low') trackLow = node.pos;
-                if (node.type === 'supp') { trackSupp = node.pos; supportVisible = 'block'; }
-                if (node.type === 'res') { trackRes = node.pos; resistanceVisible = 'block'; }
-                if (node.type === 'high') trackHigh = node.pos;
-            }
-            
-            // 현재가를 부여된 구간들 사이에서 동적 비율로 계산
-            if (pCurr <= nodes[0].val) {
-                trackCurr = 0;
-            } else if (pCurr >= nodes[nodes.length - 1].val) {
-                trackCurr = 100;
-            } else {
-                for (let i = 0; i < nodes.length - 1; i++) {
-                    let n1 = nodes[i];
-                    let n2 = nodes[i+1];
-                    if (pCurr >= n1.val && pCurr <= n2.val) {
-                        let range = n2.val - n1.val;
-                        if (range === 0) {
-                            trackCurr = n1.pos;
-                        } else {
-                            let ratio = (pCurr - n1.val) / range;
-                            trackCurr = n1.pos + ratio * (n2.pos - n1.pos);
-                        }
-                        break;
-                    }
-                }
-            }
-            
-            let supportRatio = trackSupp;
-            let resistanceRatio = trackRes;
-            let gaugeRatio = trackCurr;
-            
-            let dropVal = stock.drop || (stats.four_month_high && stock.price ? ((stock.price - stats.four_month_high) / stats.four_month_high) * 100 : 0);
-
-            const getLabelStyle = (ratio) => {
-                if (ratio < 15) return 'left: 0; transform: translateX(-10%); text-align: left;';
-                if (ratio > 85) return 'right: 0; left: auto; transform: translateX(10%); text-align: right;';
-                return 'left: 50%; transform: translateX(-50%); text-align: center;';
-            };
-
-            let cardHtml = `
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.2rem;">
-                    <div style="display: flex; gap: 0.3rem;">
-                        <span style="font-size: 0.65rem; font-weight: 700; padding: 0.15rem 0.4rem; border-radius: 4px; ${levelStyle}">${level} ${pos}</span>
-                        <span style="font-size: 0.65rem; font-weight: 700; padding: 0.15rem 0.4rem; border-radius: 4px; ${maStyle}">${align}</span>
-                    </div>
-                    <div style="font-size: 0.7rem; font-weight: 700; color: ${stock.drop < -8.0 ? 'var(--accent-orange)' : (stock.drop < -4.4 ? 'var(--accent-green)' : 'var(--text-muted)')}; background: ${stock.drop < -8.0 ? 'rgba(249, 115, 22, 0.05)' : (stock.drop < -4.4 ? 'rgba(16, 185, 129, 0.05)' : 'transparent')}; padding: 0.15rem 0.4rem; border-radius: 4px;">
-                        당일 낙폭: ${stock.drop_str}
-                    </div>
-                </div>
-                
-                
-                <div style="margin-top: 3.5rem; padding: 0 0.5rem; margin-bottom: 2rem;">
-                    <div class="gauge-track" style="position: relative; height: 12px; background: #e2e8f0; border-radius: 6px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);">
-                        <!-- Price Zones (가격구간) -->
-                        <div style="position: absolute; left: 0%; width: ${supportRatio}%; height: 100%; background: rgba(16, 185, 129, 0.35); border-radius: 6px 0 0 6px;" title="매수 가능 구간 (발바닥~무릎)"></div>
-                        <div style="position: absolute; left: ${supportRatio}%; width: ${resistanceRatio - supportRatio}%; height: 100%; background: rgba(245, 158, 11, 0.35);" title="보유/관망 구간 (무릎~어깨)"></div>
-                        <div style="position: absolute; left: ${resistanceRatio}%; width: ${100 - resistanceRatio}%; height: 100%; background: rgba(239, 68, 68, 0.35); border-radius: 0 6px 6px 0;" title="매도 고려 구간 (어깨~머리)"></div>
-                        <!-- Low (최저가) at bottom -->
-                        <div style="position: absolute; top: -5px; left: 0%; width: 4px; height: 20px; background: #cbd5e1; transform: translateX(-50%); border-radius: 2px;">
-                            <div style="position: absolute; top: 24px; left: 0; transform: translateX(0); font-size: 0.65rem; color: var(--text-muted); white-space: nowrap; text-align: left; line-height: 1.2;">
-                                최저 (발바닥)<br><span style="font-weight:600;">${stats.four_month_low ? stats.four_month_low.toLocaleString() : '-'}</span>
-                            </div>
-                        </div>
-
-                        <!-- Support (지지선) at top -->
-                        <div style="position: absolute; top: -9px; left: ${supportRatio}%; width: 6px; height: 28px; background: #10b981; display: ${supportVisible}; z-index: 1; transform: translateX(-50%); border-radius: 3px;">
-                            <div style="position: absolute; top: -36px; ${getLabelStyle(supportRatio)} font-size: 0.65rem; color: #10b981; white-space: nowrap; font-weight: 800; line-height: 1.2;">
-                                지지가 (무릎)<br>${sPrice}
-                            </div>
-                        </div>
-
-                        <!-- Resistance (저항선) at bottom -->
-                        <div style="position: absolute; top: -9px; left: ${resistanceRatio}%; width: 6px; height: 28px; background: #ef4444; display: ${resistanceVisible}; z-index: 1; transform: translateX(-50%); border-radius: 3px;">
-                            <div style="position: absolute; top: 24px; ${getLabelStyle(resistanceRatio)} font-size: 0.65rem; color: #ef4444; white-space: nowrap; font-weight: 800; line-height: 1.2;">
-                                저항가 (어깨)<br>${rPrice}
-                            </div>
-                        </div>
-
-                        <!-- High (최고가) at top -->
-                        <div style="position: absolute; top: -5px; left: 100%; width: 4px; height: 20px; background: #cbd5e1; transform: translateX(-50%); border-radius: 2px;">
-                            <div style="position: absolute; top: -36px; right: 0; left: auto; transform: translateX(0); font-size: 0.65rem; color: var(--text-muted); white-space: nowrap; text-align: right; line-height: 1.2;">
-                                26주 최고가 (머리)<br><span style="font-weight:600;">${high26w}</span>
-                                ${(stats.twenty_six_week_high && stock.price >= stats.twenty_six_week_high) ? `<br><span style="font-size: 0.55rem; background: #fee2e2; color: #ef4444; border: 1px solid #fca5a5; padding: 0.05rem 0.25rem; border-radius: 4px; display: inline-block; margin-top: 0.15rem; font-weight: 800;">🔥 신고가 돌파</span>` : ''}
-                            </div>
-                        </div>
-
-                        <!-- Current (현재가) at very top -->
-                        <div style="position: absolute; top: -13px; left: ${gaugeRatio}%; width: 6px; height: 36px; background: #0f172a; border-radius: 3px; z-index: 3; box-shadow: 0 0 5px rgba(0,0,0,0.4); transform: translateX(-50%);">
-                            <div style="position: absolute; top: -62px; ${getLabelStyle(gaugeRatio)} font-size: 0.8rem; color: #ffffff; background: #0f172a; padding: 4px 8px; border-radius: 6px; white-space: nowrap; text-align: center; font-weight: 800; line-height: 1.2; box-shadow: 0 3px 6px rgba(0,0,0,0.3);">
-                                현재가 ${stock.price_str}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            cardContent.innerHTML = cardHtml;
+            cardContent.innerHTML = generateGaugeHtml(stock, stats);
             cardContent.style.display = 'flex';
+        }).catch(err => {
+            const cardLoading = document.getElementById(`tech-card-${stock.code}-loading`);
+            if (cardLoading) {
+                cardLoading.innerText = '데이터 로딩 실패';
+            }
         });
         };
         

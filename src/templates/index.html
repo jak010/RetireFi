@@ -13,7 +13,7 @@
         rel="stylesheet">
 
     <!-- External Premium Light Mode Stylesheet -->
-    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/style.css?v=1.1">
     <!-- Chart.js for High-Fidelity Intraday Charts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -264,7 +264,7 @@
                 <!-- 1-A: Dashboard Detail Grid & Sidebar Wrapper -->
                 <div style="display: flex; flex: 1; position: relative;">
                     <!-- Left Side: Main Dashboard Grid -->
-                    <div class="dashboard-grid" id="dashboard-grid-container" style="flex: 1;">
+                    <div class="dashboard-grid" id="dashboard-grid-container" style="flex: 7; min-width: 0;">
                         <div class="no-data-msg">
                             <div class="no-data-icon">⏳</div>
                             <h3>실시간 시장 데이터를 로딩하고 있습니다...</h3>
@@ -273,6 +273,19 @@
                                 <div class="loading-progress-bar" id="loading-progress-bar"></div>
                             </div>
                             <div class="loading-progress-text" id="loading-progress-text">준비 중... (0%)</div>
+                        </div>
+                    </div>
+
+                    <!-- Right Side: Leader Stock Tech Panel -->
+                    <div id="stock-tech-panel"
+                        style="display: flex; flex-direction: column; flex: 3; min-width: 0; background: #ffffff; border-radius: 12px; border: 1px solid var(--border-color); position: relative; overflow-y: auto; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); padding: 1.25rem; margin: 1.5rem 1.5rem 2rem 0;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1rem; user-select: none; position: sticky; top: 0; background: #ffffff; z-index: 10;">
+                            <div style="font-family: var(--font-outfit); font-size: 0.85rem; font-weight: 700; color: var(--accent-orange); text-transform: uppercase; letter-spacing: 0.05em;">
+                                대장주 기술적 분석</div>
+                            <div style="font-size: 0.7rem; color: var(--text-muted); font-weight: 600;">실시간 동기화</div>
+                        </div>
+                        <div id="tech-panel-content" style="display: flex; flex-direction: column; gap: 1rem;">
+                            <div style="text-align: center; color: var(--text-muted); font-size: 0.75rem; margin-top: 2rem;">데이터를 불러오는 중입니다...</div>
                         </div>
                     </div>
                 </div>
@@ -316,7 +329,7 @@
                 style="display: none; flex-direction: row; flex: 1; min-height: 0; gap: 1rem; margin: 0.5rem 1.5rem 1.5rem 1.5rem;">
                 
                 <div id="stock-view-container"
-                    style="display: flex; flex-direction: column; flex: 7; min-height: 0; background: #ffffff; border-radius: 12px; border: 1px solid var(--border-color); position: relative; overflow-y: auto; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); padding: 1.25rem;">
+                    style="display: flex; flex-direction: column; flex: 1; min-height: 0; background: #ffffff; border-radius: 12px; border: 1px solid var(--border-color); position: relative; overflow-y: auto; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); padding: 1.25rem;">
                     <div
                         style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1rem; user-select: none;">
                         <div
@@ -387,18 +400,6 @@
                     <div id="stock-view-empty-msg"
                         style="display: none; text-align: center; padding: 3rem; color: var(--text-muted); font-weight: 600; user-select: none;">
                         조건에 맞는 종목이 없습니다.
-                    </div>
-                </div>
-                
-                <div id="stock-tech-panel"
-                    style="display: flex; flex-direction: column; flex: 4; min-height: 0; background: #ffffff; border-radius: 12px; border: 1px solid var(--border-color); position: relative; overflow-y: auto; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); padding: 1.25rem;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 1rem; user-select: none; position: sticky; top: 0; background: #ffffff; z-index: 10;">
-                        <div style="font-family: var(--font-outfit); font-size: 0.85rem; font-weight: 700; color: var(--accent-orange); text-transform: uppercase; letter-spacing: 0.05em;">
-                            대장주 기술적 분석</div>
-                        <div style="font-size: 0.7rem; color: var(--text-muted); font-weight: 600;">실시간 동기화</div>
-                    </div>
-                    <div id="tech-panel-content" style="display: flex; flex-direction: column; gap: 1rem;">
-                        <div style="text-align: center; color: var(--text-muted); font-size: 0.75rem; margin-top: 2rem;">데이터를 불러오는 중입니다...</div>
                     </div>
                 </div>
             </div>
