@@ -23,7 +23,7 @@ def load_realtime_theme_data() -> List[ThemeResponseDTO]:
             themes = theme_list_adapter.validate_json(json.dumps(res.json()))
             return themes
     except Exception as e:
-        logging.error(f"테마 데이터 수집 실패: {e}");
+        logging.error(f"[로얄로더 실시간 테마 조회] 실패 - URL: {API_THEME_URL}, 사유: {type(e).__name__}({e})")
     return None
 
 
@@ -39,5 +39,5 @@ def load_realtime_indicies() -> Optional[List[Dict[str, Any]]]:
         res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=5)
         return res.json() if res.status_code == 200 else None
     except Exception as e:
-        logging.error(f"테마 데이터 수집 실패: {e}");
+        logging.error(f"[로얄로더 시장 지수 조회] 실패 - URL: {url}, 사유: {type(e).__name__}({e})")
         return None

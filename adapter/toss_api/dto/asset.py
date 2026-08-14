@@ -74,6 +74,7 @@ class PortfolioResult(BaseModel):
 class PortfolioSummaryDto(BaseModel):
     total_purchase_amount: Decimal
     market_value: Decimal
-    name:str
+    name: str
     symbol: str
+    market_country: str
     profit_loss_rate: Decimal

@@ -59,7 +59,7 @@ class NaverThemeService:
 
         self.rr_cache = None
         self.rr_cache_time = 0.0
-        self.rr_cache_ttl = 7.0 # 로얄로더 시세 TTL: 7초
+        self.rr_cache_ttl = 30.0 # 로얄로더 시세 TTL: 30초
 
         self.indices_cache = None
         self.indices_cache_time = 0.0
@@ -459,8 +459,8 @@ class NaverThemeService:
                     s["drop"] = round(intraday_drop, 2)
                     s["drop_str"] = f"{intraday_drop:.2f}%"
 
-                    # 1차 낙폭(-4.4~-8%), 2차 낙폭(-8~-12%) 매수 밴드 산출
-                    high_minus_4pct = int(day_high * 0.956)
+                    # 1차 낙폭(-4.0~-8%), 2차 낙폭(-8~-12%) 매수 밴드 산출
+                    high_minus_4pct = int(day_high * 0.96)
                     high_minus_8pct = int(day_high * 0.92)
                     high_minus_12pct = int(day_high * 0.88)
 
@@ -468,7 +468,7 @@ class NaverThemeService:
                     s["buy_zone_2"] = f"{high_minus_12pct:,} ~ {high_minus_8pct:,}원"
 
                     # 실시간 매수타점 Slack 알림 발송 체크
-                    self.trigger_slack_alerts_if_needed(s, theme_name)
+                    self.trigger_slack_alerts_if_needed(s, theme_name, avg_rate)
 
                 up_count = sum(1 for s in theme_stocks if s["rate"] > 0)
                 down_count = sum(1 for s in theme_stocks if s["rate"] < 0)
@@ -558,7 +558,7 @@ class NaverThemeService:
                 intraday_drop = ((safe_price - day_high) / day_high) * 100
                 drop = round(intraday_drop, 2)
                 
-                high_minus_4pct = int(day_high * 0.956)
+                high_minus_4pct = int(day_high * 0.96)
                 high_minus_8pct = int(day_high * 0.92)
                 high_minus_12pct = int(day_high * 0.88)
 
@@ -618,7 +618,7 @@ class NaverThemeService:
                         s["role"] = "🥈 2등주"
                     else:
                         s["role"] = "후발주"
-                    self.trigger_slack_alerts_if_needed(s, rt.name)
+                    self.trigger_slack_alerts_if_needed(s, rt.name, avg_rate)
                 
                 up_count = sum(1 for s in theme_stocks if s["rate"] > 0)
                 down_count = sum(1 for s in theme_stocks if s["rate"] < 0)
@@ -1046,8 +1046,8 @@ class NaverThemeService:
 
             intraday_drop = ((safe_price - day_high) / day_high) * 100
 
-            # 매수 밴드 산출 (1차 낙폭 -4.4~-8%, 2차 낙폭 -8~-12%)
-            high_minus_4pct = int(day_high * 0.956)
+            # 매수 밴드 산출 (1차 낙폭 -4.0~-8%, 2차 낙폭 -8~-12%)
+            high_minus_4pct = int(day_high * 0.96)
             high_minus_8pct = int(day_high * 0.92)
             high_minus_12pct = int(day_high * 0.88)
 
@@ -1087,6 +1087,9 @@ class NaverThemeService:
         # 테마 내 거래대금 및 등락률 복합 상위 정렬
         stock_details = sort_stocks_composite(stock_details)
 
+        # 테마 평균 등락률 산출
+        theme_avg_rate = sum(s.get("rate", 0) for s in stock_details) / len(stock_details) if stock_details else 0.0
+
         # 역할 동적 부여 (등락률 1위: 대장주, 2위: 1등주, 3위: 2등주, 그 외 후발주)
         # 단, 로얄로더 글로벌 대장주인 경우 우선 배정
         for idx, s in enumerate(stock_details):
@@ -1102,7 +1105,7 @@ class NaverThemeService:
                 s["role"] = "후발주"
 
             # 매수 가능 구간 판정 및 Slack 알림 연동
-            self.trigger_slack_alerts_if_needed(s, theme_name)
+            self.trigger_slack_alerts_if_needed(s, theme_name, theme_avg_rate)
 
         self.flush_pending_alerts()
         return stock_details
@@ -1114,28 +1117,34 @@ class NaverThemeService:
         now_kst = datetime.now(timezone(timedelta(hours=9)))
         return 8 <= now_kst.hour < 20
 
-    def trigger_slack_alerts_if_needed(self, stock_item: Dict[str, Any], theme_name: str):
+    def trigger_slack_alerts_if_needed(self, stock_item: Dict[str, Any], theme_name: str, theme_avg_rate: float = 0.0):
         """특정 종목(대장주/1등주)의 매수 타점 진입 시 Slack 알림 대기열에 추가 (쿨다운 1시간 적용, KST 08~20시만)"""
         if not self.slack or stock_item["role"] not in ["👑 대장주", "👑 대장주 (로얄)", "🥇 1등주"]:
             return
         if not self._is_kst_alert_window():
             return
 
+        # 1. 종목 거래대금 1500억 이상 조건
+        if stock_item.get("volume", 0) < 150_000_000_000:
+            return
+
+        # 2. 속한 테마(섹터)의 상승세 조건
+        if theme_avg_rate <= 0:
+            return
+
         drop = stock_item["drop"]
         code = stock_item["stock_code"]
         name = stock_item["stock_name"]
 
-        # 종목별 라디오버튼 설정으로 수신 종목에 없는 경우 알림을 보내지 않음 (기본 안받기)
-        if code not in self.pullback_alert_enabled_codes:
-            return
+        # 알림 수신 종목 제한 없이 모든 대장주/1등주에 대해 낙폭 알림 발송
         price_str = stock_item.get("price_str", "-")
         rate_str = stock_item.get("rate_str", "-")
         role = stock_item.get("role", "")
         buy_zone_1 = stock_item.get("buy_zone_1", "-")
         buy_zone_2 = stock_item.get("buy_zone_2", "-")
 
-        # 1차 낙폭 (-4% ~ -8%) 매수 구간
-        is_1st_drop_zone = -8.0 <= drop <= -4.4
+        # 1차 낙폭 (-4.0% ~ -8%) 매수 구간
+        is_1st_drop_zone = -8.0 <= drop <= -4.0
         # 2차 낙폭 (-8% ~ -12%) 매수 구간
         is_2nd_drop_zone = -12.0 <= drop < -8.0
 
@@ -1143,7 +1152,7 @@ class NaverThemeService:
         cooldown_seconds = 3600
 
         if is_1st_drop_zone or is_2nd_drop_zone:
-            zone_name = "1차 낙폭(-4.4~-8%)" if is_1st_drop_zone else "2차 낙폭(-8~-12%)"
+            zone_name = "1차 낙폭(-4.0~-8%)" if is_1st_drop_zone else "2차 낙폭(-8~-12%)"
             emoji = "⚡" if is_1st_drop_zone else "🟠"
             cooldown_key = f"{code}_1st_drop_zone" if is_1st_drop_zone else f"{code}_2nd_drop_zone"
             last_sent = self.slack_alert_history.get(cooldown_key, 0)
@@ -1221,7 +1230,7 @@ class NaverThemeService:
                 f"{emoji} *[{alert['zone_name']}] {name} ({code})* | {role}\n"
                 f"• *소속 테마:* {theme_name}\n"
                 f"• *현재가:* {price_str} ({rate_str}) | *고점 대비 낙폭:* `{drop:.2f}%`\n"
-                f"• *1차 매수구간 (-4.4~-8%):* `{buy_zone_1}`" + (" 🟢 진입" if is_1st else "") + "\n"
+                f"• *1차 매수구간 (-4.0~-8%):* `{buy_zone_1}`" + (" 🟢 진입" if is_1st else "") + "\n"
                 f"• *2차 매수구간 (-8~-12%):* `{buy_zone_2}`" + (" 🟠 진입" if not is_1st else "")
             )
             
@@ -1270,9 +1279,9 @@ class NaverThemeService:
         return self.get_pullback_alert_settings()
 
     def check_and_alert_theme_leaders_pullback(self):
-        """백그라운드 실시간 모니터링: 테마별 대장주가 1차 낙폭(-4.4~-8%) 구간에 진입했는지 주기적으로 점검하고 알림 발송"""
+        """백그라운드 실시간 모니터링: 테마별 대장주가 1차 낙폭(-4.0~-8%) 구간에 진입했는지 주기적으로 점검하고 알림 발송"""
         try:
-            logger.info("[PULLBACK MONITOR] 테마 대장주 1차 낙폭(-4.4~-8%) 진입 감지 스케줄러 실행 중...")
+            logger.info("[PULLBACK MONITOR] 테마 대장주 1차 낙폭(-4.0~-8%) 진입 감지 스케줄러 실행 중...")
             # 캐싱 TTL이나 갱신 주기에 따라 시세 데이터를 수집하며 각 종목의 낙폭 알림(trigger_slack_alerts_if_needed) 자동 가동
             self._calculate_themes_summary()
             logger.info("[PULLBACK MONITOR] 테마 대장주 실시간 낙폭 감지 완료.")
@@ -1352,6 +1361,89 @@ class NaverThemeService:
                     
         return {"status": "error", "message": "차트 데이터를 가져올 수 없거나 지원하지 않는 종목코드입니다."}
 
+    @staticmethod
+    def _calculate_pitchfork_sr(highs: List[float], lows: List[float], closes: List[float]) -> Tuple[Optional[float], Optional[float]]:
+        if len(closes) < 30:
+            return None, None
+            
+        n = len(closes)
+        window = 5
+        
+        # Find local peaks (highs) and troughs (lows)
+        pivots = []
+        for i in range(window, n - window):
+            # Peak condition
+            if max(highs[i-window:i+window+1]) == highs[i]:
+                if not pivots or pivots[-1][0] != i:
+                    pivots.append((i, highs[i], 'peak'))
+            # Trough condition
+            if min(lows[i-window:i+window+1]) == lows[i]:
+                if not pivots or pivots[-1][0] != i:
+                    pivots.append((i, lows[i], 'trough'))
+                    
+        # Filter to make them alternating
+        filtered_pivots = []
+        for p in pivots:
+            if not filtered_pivots:
+                filtered_pivots.append(p)
+            else:
+                last_p = filtered_pivots[-1]
+                if last_p[2] == p[2]:
+                    # Same type, keep the more extreme one
+                    if p[2] == 'peak' and p[1] > last_p[1]:
+                        filtered_pivots[-1] = p
+                    elif p[2] == 'trough' and p[1] < last_p[1]:
+                        filtered_pivots[-1] = p
+                else:
+                    filtered_pivots.append(p)
+                    
+        if len(filtered_pivots) < 3:
+            return None, None
+            
+        # Take the last 3 pivots
+        A, B, C = filtered_pivots[-3], filtered_pivots[-2], filtered_pivots[-1]
+        t_A, p_A = A[0], A[1]
+        t_B, p_B = B[0], B[1]
+        t_C, p_C = C[0], C[1]
+        
+        if t_A == t_B or t_B == t_C or t_A == t_C:
+            return None, None
+            
+        t_M = (t_B + t_C) / 2.0
+        p_M = (p_B + p_C) / 2.0
+        
+        if t_M == t_A:
+            return None, None
+            
+        m = (p_M - p_A) / (t_M - t_A)
+        
+        def L(t):
+            return p_A + m * (t - t_A)
+            
+        D = abs(p_B - L(t_B))
+        
+        # Calculate levels at current time t_cur = n - 1
+        t_cur = n - 1
+        base_L = L(t_cur)
+        
+        ratios = [0.0, 0.236, 0.382, 0.5, 0.618, 0.786, 1.0, 1.618, 2.618]
+        levels = []
+        for r in ratios:
+            levels.append(base_L + D * r)
+            if r != 0:
+                levels.append(base_L - D * r)
+                
+        levels = sorted(list(set(levels)))
+        p_cur = closes[-1]
+        
+        supports = [lvl for lvl in levels if lvl < p_cur]
+        resistances = [lvl for lvl in levels if lvl > p_cur]
+        
+        support = max(supports) if supports else None
+        resistance = min(resistances) if resistances else None
+        
+        return support, resistance
+
     def fetch_stock_4month_stats(self, stock_code: str) -> Dict[str, Any]:
         """특정 종목의 최근 3개월+2주 일봉 데이터를 야후 파이낸스로 조회하여 수급 구간(머리/어깨/무릎) 가격대 및 이평 정보를 반환합니다."""
         import time
@@ -1359,9 +1451,9 @@ class NaverThemeService:
         if len(code) != 6 or not code.isdigit():
             return {"status": "error", "message": "잘못된 종목코드입니다."}
 
-        # 3개월 + 2주 = 대략 104일
+        # 26주 = 182일
         period2 = int(time.time())
-        period1 = period2 - (104 * 24 * 3600)
+        period1 = period2 - (182 * 24 * 3600)
 
         for suffix in [".KS", ".KQ"]:
             symbol = f"{code}{suffix}"
@@ -1399,26 +1491,42 @@ class NaverThemeService:
                 else:
                     price_level, price_level_desc = "무릎", "저점 부근 (매수 관심)"
 
-                ma10_above_ma20 = False
-                if len(closes) >= 20:
-                    ma10 = sum(closes[-10:]) / 10
+                ma_alignment = "-"
+                if len(closes) >= 120:
                     ma20 = sum(closes[-20:]) / 20
-                    ma10_above_ma20 = ma10 >= ma20
-                elif len(closes) >= 10:
-                    ma10 = sum(closes[-10:]) / 10
-                    ma_all = sum(closes) / len(closes)
-                    ma10_above_ma20 = ma10 >= ma_all
+                    ma60 = sum(closes[-60:]) / 60
+                    ma120 = sum(closes[-120:]) / 120
+                    if ma20 > ma60 > ma120:
+                        ma_alignment = "정배열"
+                    elif ma20 < ma60 < ma120:
+                        ma_alignment = "역배열"
+                    else:
+                        ma_alignment = "혼조세"
+                elif len(closes) >= 60:
+                    ma20 = sum(closes[-20:]) / 20
+                    ma60 = sum(closes[-60:]) / 60
+                    if ma20 > ma60:
+                        ma_alignment = "단기 정배열"
+                    elif ma20 < ma60:
+                        ma_alignment = "단기 역배열"
+                    else:
+                        ma_alignment = "혼조세"
+
+                support_price, resistance_price = self._calculate_pitchfork_sr(highs, lows, closes)
 
                 return {
                     "status": "success",
                     "symbol": symbol,
-                    "four_month_high": round(four_month_high, 2),
+                    "four_month_high": round(four_month_high, 2), # legacy name
+                    "twenty_six_week_high": round(four_month_high, 2),
                     "four_month_low": round(four_month_low, 2),
                     "last_close": round(last_close, 2),
                     "price_level": price_level,
                     "price_level_desc": price_level_desc,
                     "price_position_ratio": round(pos_ratio, 1),
-                    "ma10_above_ma20": ma10_above_ma20,
+                    "ma_alignment": ma_alignment,
+                    "support_price": round(support_price, 2) if support_price else None,
+                    "resistance_price": round(resistance_price, 2) if resistance_price else None,
                 }
             except Exception as e:
                 logger.warning(f"야후 파이낸스 4개월 통계 조회 에러 ({symbol}): {e}")
@@ -1510,14 +1618,14 @@ class NaverThemeService:
                 # 1차/2차 매수 구간 및 진입 여부 안내
                 buy_zone_1 = s.get("buy_zone_1", "-")
                 buy_zone_2 = s.get("buy_zone_2", "-")
-                if -8.0 <= drop_val <= -4.4:
-                    zone_desc = f"⚡ [1차 낙폭 매수구간 진입!] 1차 매수 밴드(-4.4~-8%): {buy_zone_1}"
+                if -8.0 <= drop_val <= -4.0:
+                    zone_desc = f"⚡ [1차 낙폭 매수구간 진입!] 1차 매수 밴드(-4.0~-8%): {buy_zone_1}"
                 elif -12.0 <= drop_val < -8.0:
                     zone_desc = f"🟠 [2차 낙폭 매수구간 진입!] 2차 매수 밴드(-8~-12%): {buy_zone_2}"
                 elif drop_val < -12.0:
                     zone_desc = f"🛑 [2차 매수구간 하향 이탈] 2차 매수 밴드(-8~-12%): {buy_zone_2}"
                 else:
-                    zone_desc = f"🎯 [1차 낙폭 대기 중] 1차 매수 밴드(-4.4~-8%): {buy_zone_1}"
+                    zone_desc = f"🎯 [1차 낙폭 대기 중] 1차 매수 밴드(-4.0~-8%): {buy_zone_1}"
 
                 leaders_info.append(f"  • {role}: {s_name} (거래대금: {s_vol} | 당일 등락률: {s_rate})")
                 leaders_info.append(f"    └ {drop_desc}")

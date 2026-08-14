@@ -47,6 +47,7 @@ class NewsService:
             return []
 
         news_list = []
+        seen_titles = set()
         for row in table.select("tr"):
             title_td = row.select_one("td.title")
             if not title_td:
@@ -57,6 +58,10 @@ class NewsService:
                 continue
 
             title = a_tag.text.strip()
+            if title in seen_titles:
+                continue
+            seen_titles.add(title)
+
             link = "https://finance.naver.com" + a_tag.get('href')
 
             info_tds = row.select("td.info")
@@ -95,6 +100,7 @@ class NewsService:
             return []
 
         notice_list = []
+        seen_titles = set()
         for row in table.select("tr"):
             title_td = row.select_one("td.title")
             if not title_td:
@@ -105,6 +111,10 @@ class NewsService:
                 continue
 
             title = a_tag.text.strip()
+            if title in seen_titles:
+                continue
+            seen_titles.add(title)
+
             link = "https://finance.naver.com" + a_tag.get('href')
 
             info_tds = row.select("td.info")

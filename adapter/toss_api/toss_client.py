@@ -190,6 +190,7 @@ class TossInvestmentAPI:
                         market_value=portfolio.marketValue.amount.krw,
                         name=item.name,
                         symbol=item.symbol,
+                        market_country=item.marketCountry,
                         profit_loss_rate=item.profitLoss.rate,
                     )
                 )

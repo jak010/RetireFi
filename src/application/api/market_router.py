@@ -46,6 +46,20 @@ class MarketController:
         }
 
     @staticmethod
+    @market_entrypoint.get(path="/holdings/symbols",
+                           summary="[MARKET] : 보유 주식 종목코드 목록 조회")
+    async def get_holdings_symbols():
+        from adapter.toss_api.toss_client import TossInvestmentAPI
+        import logging
+        try:
+            toss_api = TossInvestmentAPI()
+            holdings = toss_api.get_my_asset()
+            symbols = [h.symbol for h in holdings]
+            return {"status": "success", "data": symbols}
+        except Exception as e:
+            logging.getLogger("uvicorn").error(f"Failed to fetch holding symbols: {e}")
+            return {"status": "error", "data": []}
+
     @market_entrypoint.get(path="/stocks/{code}/news",
                            summary="[MARKET] : 종목코드 기반 네이버 증권 최근 뉴스 및 공시 목록 조회")
     async def get_stock_news(code: str):
@@ -57,6 +71,48 @@ class MarketController:
                 "news": news_list,
                 "disclosures": notice_list
             }
+        }
+
+    @staticmethod
+    @market_entrypoint.get(path="/holdings/news",
+                           summary="[MARKET] : 보유 주식 실시간 뉴스 조회")
+    async def get_holdings_news():
+        from adapter.toss_api.toss_client import TossInvestmentAPI
+        import asyncio
+        import logging
+        try:
+            toss_api = TossInvestmentAPI()
+            holdings = toss_api.get_my_asset()
+        except Exception as e:
+            logging.getLogger("uvicorn").error(f"Failed to fetch holdings for news: {e}")
+            holdings = []
+        
+        async def fetch_for_symbol(sym, name):
+            n_list = await news_service.get_news(sym)
+            for n in n_list:
+                n["stock_name"] = name
+                n["stock_code"] = sym
+            return n_list
+            
+        # 수익률이 -7% 이하인 종목은 제외 (h.profit_loss_rate > -0.07)
+        tasks = [
+            fetch_for_symbol(h.symbol, h.name) 
+            for h in holdings 
+            if h.market_country == "KR" and float(h.profit_loss_rate) > -0.07
+        ]
+        results = await asyncio.gather(*tasks)
+        
+        all_news = []
+        for r in results:
+            all_news.extend(r)
+            
+        # Sort by date descending (assuming date string is sortable or we just return it)
+        # Naver date format is usually "YYYY.MM.DD HH:MM" or similar
+        all_news.sort(key=lambda x: x.get("date", ""), reverse=True)
+        
+        return {
+            "status": "success",
+            "data": all_news[:50]  # Limit to top 50 recent news
         }
 
     @staticmethod
@@ -91,12 +147,12 @@ class MarketController:
 
     @staticmethod
     @market_entrypoint.get(path="/cron/theme-leaders-pullback-check",
-                           summary="[CRON] : 테마별 대장주 1차 낙폭(-4.4~-8%) 구간 진입 체크 및 슬랙 알림")
+                           summary="[CRON] : 테마별 대장주 1차 낙폭(-4.0~-8%) 구간 진입 체크 및 슬랙 알림")
     def run_theme_leaders_pullback_check():
         naver_theme_service.check_and_alert_theme_leaders_pullback()
         return {
             "status": "success",
-            "message": "테마별 대장주 1차 낙폭 구간(-4.4~-8%) 진입 체크 완료"
+            "message": "테마별 대장주 1차 낙폭 구간(-4.0~-8%) 진입 체크 완료"
         }
 
     @staticmethod

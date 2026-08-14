@@ -1929,3 +1929,21 @@ header {
     width: 80%;
     opacity: 1;
 }
+
+/* Volume Leader (주도주) Highlight */
+.stock-row-item.volume-leader {
+    border: 1.5px solid var(--accent-orange, #ea580c) !important;
+    background-color: rgba(234, 88, 12, 0.03);
+    border-radius: 6px;
+}
+
+.volume-leader-badge {
+    font-size: 0.55rem;
+    background-color: #ea580c;
+    color: white;
+    padding: 0.1rem 0.25rem;
+    border-radius: 3px;
+    margin-left: 0.25rem;
+    font-weight: 700;
+    vertical-align: middle;
+}
