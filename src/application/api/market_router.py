@@ -4,9 +4,11 @@ from src.application.libs.market.naver_theme_service import NaverThemeService
 from src.application.libs.market.news_summarizer_service import NewsSummaryService
 from src.application.libs.market.market_cap_service import market_cap_service
 from src.application.libs.market.news_service import NewsService
+from src.application.libs.market.closing_bet_material_service import ClosingBetMaterialService
 
 naver_theme_service = NaverThemeService()
 news_service = NewsService()
+closing_bet_service = ClosingBetMaterialService()
 
 market_entrypoint = APIRouter(tags=["MARKET"], prefix="/api/v1/market")
 
@@ -469,4 +471,44 @@ class MarketController:
             "status": "success",
             "data": naver_theme_service.load_status
         }
+
+    @staticmethod
+    @market_entrypoint.post(path="/closing-bet/evaluate",
+                            summary="[MARKET] : 종가베팅 재료 탐색 및 유효성 검증")
+    async def evaluate_closing_bet_material(payload: dict):
+        try:
+            stock_code = payload.get("stock_code")
+            user_news = payload.get("user_news_summary", "")
+
+            # If user didn't provide news and we have a stock code, auto fetch
+            if stock_code and user_news in ("없음", "", None, "파악안됨"):
+                try:
+                    news_list = await news_service.get_news(stock_code)
+                    notice_list = await news_service.get_disclosures(stock_code)
+                    
+                    news_titles = [n.get("title", "") for n in news_list[:5]]
+                    notice_titles = [n.get("title", "") for n in notice_list[:3]]
+                    
+                    auto_news = []
+                    if notice_titles:
+                        auto_news.append(f"최근 공시: {', '.join(notice_titles)}")
+                    if news_titles:
+                        auto_news.append(f"최근 뉴스: {', '.join(news_titles)}")
+                        
+                    if auto_news:
+                        payload["user_news_summary"] = " | ".join(auto_news)
+                except Exception as e:
+                    import logging
+                    logging.getLogger("uvicorn").warning(f"Failed to auto fetch news for {stock_code}: {e}")
+
+            result = await closing_bet_service.evaluate_material(payload)
+            return {
+                "status": "success",
+                "data": result
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": str(e)
+            }
 

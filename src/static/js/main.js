@@ -1940,6 +1940,7 @@ function renderConsolidatedStocks() {
                     <button onclick="showStockNetworkMap('${stock.name}', '${stock.code}')" style="display: inline-flex; align-items: center; justify-content: center; min-width: 54px; box-sizing: border-box; padding: 0.25rem 0.5rem; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; border-radius: 4px; font-size: 0.65rem; font-weight: 600; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='#dbeafe'; this.style.borderColor='#93c5fd';" onmouseout="this.style.background='#eff6ff'; this.style.borderColor='#bfdbfe';" title="실시간 주가 차트 보기">차트</button>
                     <a href="https://www.tossinvest.com/stocks/A${stock.code}/order" target="_blank" style="display: inline-flex; align-items: center; justify-content: center; min-width: 54px; box-sizing: border-box; padding: 0.25rem 0.5rem; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; border-radius: 4px; font-size: 0.65rem; font-weight: 600; text-decoration: none; transition: all 0.2s ease;" onmouseover="this.style.background='#bae6fd'; this.style.color='#0369a1';" onmouseout="this.style.background='#e0f2fe'; this.style.color='#0369a1';" title="토스증권에서 주문">토스</a>
                     <button onclick="openNewsModal('${stock.code}', '${stock.name}')" style="display: inline-flex; align-items: center; justify-content: center; min-width: 54px; box-sizing: border-box; gap: 0.2rem; padding: 0.25rem 0.5rem; background: #fff7ed; color: #ea580c; border: 1px solid #fdba74; border-radius: 4px; font-size: 0.65rem; font-weight: 700; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='#ffedd5'; this.style.borderColor='#fb923c';" onmouseout="this.style.background='#fff7ed'; this.style.borderColor='#fdba74';" title="네이버 증권 뉴스 및 공시 보기"><span style="font-size: 0.7rem;">📰</span> 뉴스</button>
+                    <button onclick="openStockDashboard('${stock.code}', '${stock.name}', '${stock.rate}', '${stock.volume_str}', '${(stock.themes || []).join(', ')}', '${stock.price_str}')" style="display: inline-flex; align-items: center; justify-content: center; min-width: 54px; box-sizing: border-box; gap: 0.2rem; padding: 0.25rem 0.5rem; background: #f3f4f6; color: #4b5563; border: 1px solid #d1d5db; border-radius: 4px; font-size: 0.65rem; font-weight: 700; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='#e5e7eb'; this.style.color='#1f2937';" onmouseout="this.style.background='#f3f4f6'; this.style.color='#4b5563';" title="종목 상세 대시보드"><span style="font-size: 0.7rem;">📊</span> 상세</button>
                 </div>
             </td>
         `;
@@ -1960,7 +1961,7 @@ function renderConsolidatedStocks() {
 
 // ==========================================
 // ==========================================
-let activeMainView = 'grid'; // 'grid', 'stock', 'sangtta'
+let activeMainView = 'grid'; // 'grid', 'stock', 'sangtta', 'material'
 let chartInstances = {}; // To store Chart.js instances
 
 function switchMainView(viewType) {
@@ -1968,18 +1969,20 @@ function switchMainView(viewType) {
     const tabGrid = document.getElementById('tab-grid-view');
     const tabStock = document.getElementById('tab-stock-view');
     const tabSangtta = document.getElementById('tab-sangtta-view');
+    const tabMaterial = document.getElementById('tab-material-view');
     const gridContainer = document.getElementById('grid-view-container');
     const stockContainer = document.getElementById('stock-view-wrapper');
     const sangttaContainer = document.getElementById('sangtta-view-container');
+    const materialContainer = document.getElementById('material-view-container');
 
     // Reset styles
-    [tabGrid, tabStock, tabSangtta].forEach(tab => {
+    [tabGrid, tabStock, tabSangtta, tabMaterial].forEach(tab => {
         if (tab) {
             tab.classList.remove('active');
             tab.style.color = 'var(--text-muted)';
         }
     });
-    [gridContainer, stockContainer, sangttaContainer].forEach(c => {
+    [gridContainer, stockContainer, sangttaContainer, materialContainer].forEach(c => {
         if (c) c.style.display = 'none';
     });
 
@@ -2008,6 +2011,12 @@ function switchMainView(viewType) {
         if (sangttaContainer) sangttaContainer.style.display = 'flex';
         updateSangttaSortIcons();
         fetchAndRenderSangttaStocks();
+    } else if (viewType === 'material') {
+        if (tabMaterial) {
+            tabMaterial.classList.add('active');
+            tabMaterial.style.color = 'var(--accent-blue)';
+        }
+        if (materialContainer) materialContainer.style.display = 'flex';
     }
 }
 
@@ -2142,6 +2151,7 @@ function buildSangttaRowHtml(stock, isExited = false) {
                 <button onclick="showStockNetworkMap('${stock.name}', '${stock.code}')" style="display: inline-flex; align-items: center; justify-content: center; min-width: 80px; box-sizing: border-box; padding: 0.35rem 0.65rem; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='#dbeafe'; this.style.borderColor='#93c5fd';" onmouseout="this.style.background='#eff6ff'; this.style.borderColor='#bfdbfe';" title="실시간 주가 차트 보기">차트</button>
                 <a href="${stock.toss_url}" target="_blank" style="display: inline-flex; align-items: center; justify-content: center; min-width: 80px; box-sizing: border-box; padding: 0.35rem 0.65rem; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; border-radius: 6px; font-size: 0.72rem; font-weight: 700; text-decoration: none; transition: all 0.2s ease; box-shadow: 0 1px 2px rgba(0,0,0,0.05);" onmouseover="this.style.background='#bae6fd'; this.style.color='#0369a1';" onmouseout="this.style.background='#e0f2fe'; this.style.color='#0369a1';" title="토스증권에서 주문">🚀 토스 주문</a>
                 <button onclick="openNewsModal('${stock.code}', '${stock.name}')" style="display: inline-flex; align-items: center; justify-content: center; min-width: 80px; box-sizing: border-box; gap: 0.2rem; padding: 0.35rem 0.65rem; background: #fff7ed; color: #ea580c; border: 1px solid #fdba74; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 1px 2px rgba(234, 88, 12, 0.05);" onmouseover="this.style.background='#ffedd5'; this.style.borderColor='#fb923c';" onmouseout="this.style.background='#fff7ed'; this.style.borderColor='#fdba74';" title="네이버 증권 뉴스 및 공시 보기"><span style="font-size: 0.75rem;">📰</span> 뉴스</button>
+                <button onclick="openStockDashboard('${stock.symbol}', '${stock.name}', '${stock.rate}', '${stock.volume_str}', '${(stock.themes || []).join(', ')}', '${stock.price_str}')" style="display: inline-flex; align-items: center; justify-content: center; min-width: 80px; box-sizing: border-box; gap: 0.2rem; padding: 0.35rem 0.65rem; background: #f3f4f6; color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='#e5e7eb'; this.style.color='#1f2937';" onmouseout="this.style.background='#f3f4f6'; this.style.color='#4b5563';" title="종목 상세 대시보드"><span style="font-size: 0.75rem;">📊</span> 상세</button>
             </div>
         </td>
     `;
@@ -3521,3 +3531,136 @@ function renderHoldingsNewsList(newsList) {
     wrapper.innerHTML = html;
 }
 
+// ==========================================
+// Stock Dashboard Functions
+// ==========================================
+
+let dashChartInstance = null;
+
+async function openStockDashboard(stockCode, stockName, rate, volumeStr, themesStr, priceStr) {
+    // Switch to material tab
+    switchMainView('material');
+
+    // 1. Update Header
+    document.getElementById('dash-stock-name').innerText = stockName;
+    document.getElementById('dash-stock-code').innerText = stockCode;
+    
+    // Rate coloring
+    const rateElem = document.getElementById('dash-stock-rate');
+    const rateNum = parseFloat(rate);
+    let rColor = 'var(--text-secondary)';
+    if(rateNum > 0) rColor = '#dc2626';
+    else if(rateNum < 0) rColor = '#2563eb';
+    rateElem.innerText = (rateNum > 0 ? '+' : '') + rate + '%';
+    rateElem.style.color = rColor;
+    
+    document.getElementById('dash-stock-price').innerText = priceStr || '-';
+    document.getElementById('dash-stock-volume').innerText = '거래대금 ' + volumeStr;
+
+    // Render themes
+    const themesContainer = document.getElementById('dash-stock-themes');
+    themesContainer.innerHTML = '';
+    if (themesStr) {
+        const themes = themesStr.split(',').map(s => s.trim()).filter(s => s);
+        themes.forEach(t => {
+            const span = document.createElement('span');
+            span.style.cssText = 'background: #eff6ff; color: #1d4ed8; padding: 0.2rem 0.6rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 700; border: 1px solid #bfdbfe;';
+            span.innerText = t;
+            themesContainer.appendChild(span);
+        });
+    }
+
+    // Reset UI states before loading
+    document.getElementById('dash-stat-high').innerText = '로딩 중...';
+    document.getElementById('dash-stat-shoulder').innerText = '로딩 중...';
+    document.getElementById('dash-stat-knee').innerText = '로딩 중...';
+    
+    const newsContainer = document.getElementById('dash-news-container');
+    const noticeContainer = document.getElementById('dash-notice-container');
+    
+    newsContainer.innerHTML = '<div style="text-align: center; color: var(--text-muted); font-size: 0.85rem; margin-top: 2rem;">데이터를 불러오는 중입니다...</div>';
+    noticeContainer.innerHTML = '<div style="text-align: center; color: var(--text-muted); font-size: 0.85rem; margin-top: 2rem;">데이터를 불러오는 중입니다...</div>';
+    
+    if (dashChartInstance) {
+        dashChartInstance.destroy();
+        dashChartInstance = null;
+    }
+
+    // 2. Fetch Data in Parallel (Chart fetch removed)
+    try {
+        const [statsRes, newsRes] = await Promise.all([
+            fetch(`/api/v1/market/stocks/${stockCode}/stats-4m`),
+            fetch(`/api/v1/market/stocks/${stockCode}/news`)
+        ]);
+
+        const statsData = await statsRes.json();
+        const newsData = await newsRes.json();
+
+        // 3. Render 4M Stats
+        if (statsData.status === 'success' && statsData.data) {
+            document.getElementById('dash-stat-high').innerText = statsData.data.four_month_high_str || '-';
+            document.getElementById('dash-stat-shoulder').innerText = statsData.data.buy_zone_1 || '-';
+            document.getElementById('dash-stat-knee').innerText = statsData.data.buy_zone_2 || '-';
+        } else {
+            document.getElementById('dash-stat-high').innerText = '데이터 없음';
+            document.getElementById('dash-stat-shoulder').innerText = '데이터 없음';
+            document.getElementById('dash-stat-knee').innerText = '데이터 없음';
+        }
+
+        // 4. Render News & Disclosures separately
+        newsContainer.innerHTML = '';
+        noticeContainer.innerHTML = '';
+        
+        if (newsData.status === 'success' && newsData.data) {
+            const disclosures = newsData.data.disclosures || [];
+            const newsList = newsData.data.news || [];
+            
+            // Render disclosures
+            if (disclosures.length === 0) {
+                noticeContainer.innerHTML = '<div style="text-align: center; color: var(--text-muted); font-size: 0.85rem; margin-top: 2rem;">최근 공시가 없습니다.</div>';
+            } else {
+                disclosures.forEach(d => {
+                    const el = document.createElement('a');
+                    el.href = d.link;
+                    el.target = '_blank';
+                    el.style.cssText = 'display: block; padding: 0.8rem; background: #fffbeb; border: 1px solid #fef3c7; border-radius: 8px; margin-bottom: 0.5rem; text-decoration: none; transition: background 0.2s;';
+                    el.innerHTML = `
+                        <div style="font-weight: 700; color: #b45309; font-size: 0.8rem; margin-bottom: 0.3rem;">[공시] ${d.title}</div>
+                        <div style="font-size: 0.65rem; color: #d97706; display: flex; justify-content: space-between;">
+                            <span>${d.publisher || 'DART'}</span>
+                            <span>${d.date}</span>
+                        </div>
+                    `;
+                    noticeContainer.appendChild(el);
+                });
+            }
+
+            // Render news
+            if (newsList.length === 0) {
+                newsContainer.innerHTML = '<div style="text-align: center; color: var(--text-muted); font-size: 0.85rem; margin-top: 2rem;">최근 뉴스가 없습니다.</div>';
+            } else {
+                newsList.forEach(n => {
+                    const el = document.createElement('a');
+                    el.href = n.link;
+                    el.target = '_blank';
+                    el.style.cssText = 'display: block; padding: 0.8rem; border-bottom: 1px solid var(--border-color); text-decoration: none; transition: background 0.2s;';
+                    el.onmouseover = () => el.style.background = '#f8fafc';
+                    el.onmouseout = () => el.style.background = 'transparent';
+                    el.innerHTML = `
+                        <div style="font-weight: 700; color: var(--text-primary); font-size: 0.85rem; margin-bottom: 0.3rem; line-height: 1.4;">${n.title}</div>
+                        <div style="font-size: 0.65rem; color: var(--text-muted); display: flex; justify-content: space-between;">
+                            <span>${n.publisher || '네이버금융'}</span>
+                            <span>${n.date}</span>
+                        </div>
+                    `;
+                    newsContainer.appendChild(el);
+                });
+            }
+        } else {
+            newsContainer.innerHTML = '<div style="text-align: center; color: #ef4444; font-size: 0.85rem; margin-top: 2rem;">뉴스 정보를 불러오지 못했습니다.</div>';
+            noticeContainer.innerHTML = '<div style="text-align: center; color: #ef4444; font-size: 0.85rem; margin-top: 2rem;">공시 정보를 불러오지 못했습니다.</div>';
+        }
+    } catch (e) {
+        console.error("Dashboard Fetch Error:", e);
+    }
+}

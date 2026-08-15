@@ -7,6 +7,7 @@ API_THEME_URL = "https://theme.royalroader.co.kr/api/themes/ranking"
 
 
 def load_realtime_theme_data() -> Optional[List[Dict[str, Any]]]:
+    return None # 임시 비활성화
     try:
         res = requests.get(API_THEME_URL, headers={'User-Agent': 'Mozilla/5.0'}, timeout=5)
         return res.json() if res.status_code == 200 else None
@@ -22,6 +23,7 @@ def load_realtime_indicies() -> Optional[List[Dict[str, Any]]]:
     :return:
     """
     url = "https://theme.royalroader.co.kr/api/market/indices"
+    return None # 임시 비활성화
 
     try:
         res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=5)
