@@ -1519,6 +1519,7 @@ class NaverThemeService:
                     "symbol": symbol,
                     "four_month_high": round(four_month_high, 2), # legacy name
                     "twenty_six_week_high": round(four_month_high, 2),
+                    "twenty_day_high": round(max(highs[-20:]), 2) if len(highs) >= 20 else round(max(highs), 2),
                     "four_month_low": round(four_month_low, 2),
                     "last_close": round(last_close, 2),
                     "price_level": price_level,

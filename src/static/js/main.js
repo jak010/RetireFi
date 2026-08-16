@@ -284,7 +284,7 @@ function getProcessedThemes() {
         // Target filter
         if (targetFilter === 'has-target') {
             const hasBuyingTarget = theme.top_stocks && theme.top_stocks.some(stock => {
-                const isLeaderOr1st = stock.role.includes("대장주") || stock.role === "🥇 1등주";
+                const isLeaderOr1st = stock.role && (stock.role.includes("대장주") || stock.role === "🥇 1등주");
                 const drop = parseFloat(stock.drop);
                 return isLeaderOr1st && drop >= -8.0 && drop <= -3.0;
             });
@@ -581,7 +581,7 @@ function renderDashboard() {
             if (theme.top_stocks) {
                 theme.top_stocks.forEach(stock => {
                     const drop = parseFloat(stock.drop);
-                    if (stock.role.includes("대장주") || stock.role === "🥇 1등주") {
+                    if (stock.role && (stock.role.includes("대장주") || stock.role === "🥇 1등주")) {
                         if (drop >= -8.0 && drop <= -4.4) hasAlert1 = true;
                         else if (drop >= -12.0 && drop < -8.0) hasAlert2 = true;
                     }
@@ -1642,7 +1642,7 @@ function generateGaugeHtml(stock, stats) {
                 <div style="position: absolute; top: -5px; left: 100%; width: 4px; height: 20px; background: #cbd5e1; transform: translateX(-50%); border-radius: 2px;">
                     <div style="position: absolute; top: -36px; right: 0; left: auto; transform: translateX(0); font-size: 0.65rem; color: var(--text-muted); white-space: nowrap; text-align: right; line-height: 1.2;">
                         26주 최고가 (머리)<br><span style="font-weight:600;">${high26w}</span>
-                        ${(stats.twenty_six_week_high && stock.price >= stats.twenty_six_week_high) ? `<br><span style="font-size: 0.55rem; background: #fee2e2; color: #ef4444; border: 1px solid #fca5a5; padding: 0.05rem 0.25rem; border-radius: 4px; display: inline-block; margin-top: 0.15rem; font-weight: 800;">🔥 신고가 돌파</span>` : ''}
+                        ${(stats.twenty_day_high && stock.price >= stats.twenty_day_high) ? `<br><span style="font-size: 0.55rem; background: #fee2e2; color: #ef4444; border: 1px solid #fca5a5; padding: 0.05rem 0.25rem; border-radius: 4px; display: inline-block; margin-top: 0.15rem; font-weight: 800;">🔥 20일 신고가 돌파</span>` : ''}
                     </div>
                 </div>
                 <div style="position: absolute; top: -13px; left: ${gaugeRatio}%; width: 6px; height: 36px; background: #0f172a; border-radius: 3px; z-index: 3; box-shadow: 0 0 5px rgba(0,0,0,0.4); transform: translateX(-50%);">
@@ -1763,7 +1763,7 @@ function renderConsolidatedStocks() {
         if (theme.top_stocks) {
             theme.top_stocks.forEach(stock => {
                 const code = stock.stock_code;
-                const isLeader = stock.role.includes("대장주") || stock.role.includes("1등주");
+                const isLeader = stock.role && (stock.role.includes("대장주") || stock.role.includes("1등주"));
 
                 // 압축 관찰판에는 대장주만 표기합니다.
                 if (!isLeader) return;
