@@ -223,7 +223,6 @@
                 <button class="main-tab active" id="tab-grid-view" onclick="switchMainView('grid')">전광판 매트릭스</button>
                 <button class="main-tab" id="tab-stock-view" onclick="switchMainView('stock')">종목 압축 관찰판</button>
                 <button class="main-tab" id="tab-sangtta-view" onclick="switchMainView('sangtta')">🔥 종가베팅 & 상따</button>
-                <button class="main-tab" id="tab-material-view" onclick="switchMainView('material')">📊 종목 대시보드</button>
             </div>
 
             <!-- Tab Content 1: Grid View -->
@@ -537,7 +536,11 @@
                             <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.85rem;">
                                 <tbody>
                                     <tr style="border-bottom: 1px solid var(--border-color);">
-                                        <th style="padding: 0.6rem; color: var(--text-secondary); width: 120px;">3M 최고가</th>
+                                        <th style="padding: 0.6rem; color: var(--text-secondary); width: 120px;">시가총액</th>
+                                        <td id="dash-stat-mcap" style="padding: 0.6rem; font-weight: 700; font-family: var(--font-outfit); color: #4338ca;">-</td>
+                                    </tr>
+                                    <tr style="border-bottom: 1px solid var(--border-color);">
+                                        <th style="padding: 0.6rem; color: var(--text-secondary);">3M 최고가</th>
                                         <td id="dash-stat-high" style="padding: 0.6rem; font-weight: 700; font-family: var(--font-outfit);">-</td>
                                     </tr>
                                     <tr style="border-bottom: 1px solid var(--border-color);">
@@ -563,6 +566,25 @@
                                     <tr>
                                         <th style="padding: 0.6rem; color: var(--text-secondary);">이평선 배열</th>
                                         <td id="dash-stat-ma" style="padding: 0.6rem; font-weight: 700; color: var(--text-primary); font-family: var(--font-outfit);">-</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <!-- Investor Trend Container -->
+                        <div style="background: #ffffff; border-radius: 12px; border: 1px solid var(--border-color); padding: 1rem; display: flex; flex-direction: column;">
+                            <div style="font-weight: 800; font-size: 0.95rem; color: var(--text-primary); margin-bottom: 0.8rem;">
+                                👥 최근 수급 동향 (단기/중장기)
+                            </div>
+                            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.85rem;">
+                                <tbody>
+                                    <tr style="border-bottom: 1px solid var(--border-color);">
+                                        <th style="padding: 0.6rem; color: var(--text-secondary); width: 120px;">기관 투자자</th>
+                                        <td id="dash-investor-inst" style="padding: 0.6rem; font-weight: 700; font-family: var(--font-outfit);">-</td>
+                                    </tr>
+                                    <tr>
+                                        <th style="padding: 0.6rem; color: var(--text-secondary);">외국인 투자자</th>
+                                        <td id="dash-investor-fore" style="padding: 0.6rem; font-weight: 700; font-family: var(--font-outfit);">-</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -742,7 +764,7 @@
     </div>
 
     <!-- External App Business Logic Script -->
-    <script src="/static/js/main.js?v=1.8"></script>
+    <script src="/static/js/main.js?v=2.3"></script>
 </body>
 
 </html>

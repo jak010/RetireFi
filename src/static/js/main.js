@@ -3602,9 +3602,24 @@ async function openStockDashboard(stockCode, stockName, rate, volumeStr, themesS
     }
 
     // Reset UI states before loading
-    document.getElementById('dash-stat-high').innerText = '로딩 중...';
-    document.getElementById('dash-stat-shoulder').innerText = '로딩 중...';
-    document.getElementById('dash-stat-knee').innerText = '로딩 중...';
+    document.getElementById('dash-stat-mcap').innerText = '로딩중...';
+    document.getElementById('dash-stat-high').innerText = '로딩중...';
+    document.getElementById('dash-stat-20d-high').innerText = '로딩중...';
+    document.getElementById('dash-stat-head').innerText = '로딩중...';
+    document.getElementById('dash-stat-shoulder').innerText = '로딩중...';
+    document.getElementById('dash-stat-knee').innerText = '로딩중...';
+    document.getElementById('dash-stat-current-loc').innerText = '로딩중...';
+    
+    const maElemLoading = document.getElementById('dash-stat-ma');
+    if (maElemLoading) {
+        maElemLoading.innerText = '로딩중...';
+        maElemLoading.style.color = 'var(--text-primary)';
+    }
+    
+    const instElemLoading = document.getElementById('dash-investor-inst');
+    const foreElemLoading = document.getElementById('dash-investor-fore');
+    if (instElemLoading) instElemLoading.innerText = '로딩중...';
+    if (foreElemLoading) foreElemLoading.innerText = '로딩중...';
     
     const newsContainer = document.getElementById('dash-news-container');
     const noticeContainer = document.getElementById('dash-notice-container');
@@ -3617,19 +3632,22 @@ async function openStockDashboard(stockCode, stockName, rate, volumeStr, themesS
         dashChartInstance = null;
     }
 
-    // 2. Fetch Data in Parallel (Chart fetch removed)
+    // 2. Fetch Data in Parallel
     try {
-        const [statsRes, newsRes] = await Promise.all([
+        const [statsRes, newsRes, invRes] = await Promise.all([
             fetch(`/api/v1/market/stocks/${stockCode}/stats-4m`),
-            fetch(`/api/v1/market/stocks/${stockCode}/news`)
+            fetch(`/api/v1/market/stocks/${stockCode}/news`),
+            fetch(`/api/v1/market/stocks/${stockCode}/investors`)
         ]);
-
+        
         const statsData = await statsRes.json();
         const newsData = await newsRes.json();
+        const invData = await invRes.json();
 
-        // 3. Render 3M Stats
+        // 3. Render Stats
         if (statsData.status === 'success') {
             const stats = statsData;
+            document.getElementById('dash-stat-mcap').innerText = stats.market_cap || '-';
             document.getElementById('dash-stat-high').innerText = stats.three_month_high ? stats.three_month_high.toLocaleString() + '원' : '-';
             if (stats.three_month_high && stats.three_month_low) {
                 const gap = stats.three_month_high - stats.three_month_low;
@@ -3666,6 +3684,7 @@ async function openStockDashboard(stockCode, stockName, rate, volumeStr, themesS
             else if (maAlign.includes('역배열')) maElem.style.color = '#2563eb';
             else maElem.style.color = 'var(--text-primary)';
         } else {
+            document.getElementById('dash-stat-mcap').innerText = '데이터 없음';
             document.getElementById('dash-stat-high').innerText = '데이터 없음';
             document.getElementById('dash-stat-20d-high').innerText = '데이터 없음';
             document.getElementById('dash-stat-head').innerText = '데이터 없음';
@@ -3731,6 +3750,49 @@ async function openStockDashboard(stockCode, stockName, rate, volumeStr, themesS
         } else {
             newsContainer.innerHTML = '<div style="text-align: center; color: #ef4444; font-size: 0.85rem; margin-top: 2rem;">뉴스 정보를 불러오지 못했습니다.</div>';
             noticeContainer.innerHTML = '<div style="text-align: center; color: #ef4444; font-size: 0.85rem; margin-top: 2rem;">공시 정보를 불러오지 못했습니다.</div>';
+        }
+
+        // 5. Render Investor Trend
+        const instElem = document.getElementById('dash-investor-inst');
+        const foreElem = document.getElementById('dash-investor-fore');
+        if (invData.status === 'success') {
+            const inst = invData.institution;
+            const fore = invData.foreigner;
+            
+            const setTrend = (elem, data) => {
+                if (!elem) return;
+                
+                let color = 'var(--text-primary)';
+                if (data.trend.includes('강한 매수')) color = '#ef4444';
+                else if (data.trend.includes('최근 매수')) color = '#ea580c';
+                else if (data.trend.includes('최근 매도')) color = '#3b82f6';
+                else if (data.trend.includes('강한 매도')) color = '#1d4ed8';
+                
+                const formatNum = (num) => {
+                    if (num > 0) return `<span style="color: #ef4444;">+${num.toLocaleString()}</span>`;
+                    if (num < 0) return `<span style="color: #3b82f6;">${num.toLocaleString()}</span>`;
+                    return `0`;
+                };
+                
+                elem.innerHTML = `
+                    <div style="color: ${color}; margin-bottom: 0.2rem;">${data.trend}</div>
+                    <div style="font-size: 0.7rem; color: var(--text-muted); font-weight: 500; font-family: var(--font-outfit);">
+                        단기(5일): ${formatNum(data.short_term_sum)} / 중장기(60일): ${formatNum(data.long_term_sum)}
+                    </div>
+                `;
+            };
+            
+            setTrend(instElem, inst);
+            setTrend(foreElem, fore);
+        } else {
+            if (instElem) {
+                instElem.innerText = '데이터 없음';
+                instElem.style.color = 'var(--text-primary)';
+            }
+            if (foreElem) {
+                foreElem.innerText = '데이터 없음';
+                foreElem.style.color = 'var(--text-primary)';
+            }
         }
     } catch (e) {
         console.error("Dashboard Fetch Error:", e);

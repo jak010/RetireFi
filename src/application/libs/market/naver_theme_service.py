@@ -1518,6 +1518,21 @@ class NaverThemeService:
 
                 support_price, resistance_price = self._calculate_pitchfork_sr(highs, lows, closes)
 
+                market_cap_str = None
+                try:
+                    from bs4 import BeautifulSoup
+                    url_naver = f"https://finance.naver.com/item/main.naver?code={code}"
+                    r_naver = requests.get(url_naver, headers={'User-Agent': 'Mozilla/5.0'}, timeout=3.0)
+                    if r_naver.status_code == 200:
+                        soup = BeautifulSoup(r_naver.text, 'html.parser')
+                        em = soup.find('em', id='_market_sum')
+                        if em:
+                            market_cap_str = em.text.strip().replace('\t', '').replace('\n', '').replace(' ', '')
+                            if not market_cap_str.endswith('억원'):
+                                market_cap_str += '억원'
+                except Exception:
+                    pass
+
                 return {
                     "status": "success",
                     "symbol": symbol,
@@ -1532,6 +1547,7 @@ class NaverThemeService:
                     "ma_alignment": ma_alignment,
                     "support_price": round(support_price, 2) if support_price else None,
                     "resistance_price": round(resistance_price, 2) if resistance_price else None,
+                    "market_cap": market_cap_str,
                 }
             except Exception as e:
                 logger.warning(f"야후 파이낸스 4개월 통계 조회 에러 ({symbol}): {e}")
@@ -1552,6 +1568,89 @@ class NaverThemeService:
         themes = summary_res.get("themes", []) if isinstance(summary_res, dict) else []
         if not themes:
             return "조회된 테마 데이터가 없습니다."
+
+    def fetch_investor_trend(self, stock_code: str) -> Dict[str, Any]:
+        """최근 수급 동향 (단기 5일, 중장기 60일) 평가"""
+        code = stock_code.strip()
+        if len(code) != 6 or not code.isdigit():
+            return {"status": "error", "message": "잘못된 종목코드입니다."}
+            
+        import requests
+        from bs4 import BeautifulSoup
+        
+        inst_net_buys = []
+        fore_net_buys = []
+        
+        try:
+            # 60 days means we need 3 pages (20 days per page). We fetch 4 just to be safe.
+            for page in range(1, 5):
+                url = f"https://finance.naver.com/item/frgn.naver?code={code}&page={page}"
+                r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=3.0)
+                if r.status_code != 200:
+                    break
+                soup = BeautifulSoup(r.text, 'html.parser')
+                tables = soup.find_all('table', {'class': 'type2'})
+                if len(tables) < 2:
+                    break
+                
+                rows = tables[1].find_all('tr')
+                for row in rows:
+                    cols = row.find_all('td')
+                    if len(cols) == 9:
+                        try:
+                            # 기관 (Index 5)
+                            inst_str = cols[5].text.replace(',', '').replace('+', '').strip()
+                            # 외국인 (Index 6)
+                            fore_str = cols[6].text.replace(',', '').replace('+', '').strip()
+                            
+                            if inst_str and fore_str and inst_str != "" and fore_str != "":
+                                inst_val = int(inst_str)
+                                fore_val = int(fore_str)
+                                inst_net_buys.append(inst_val)
+                                fore_net_buys.append(fore_val)
+                        except ValueError:
+                            continue
+                            
+            if not inst_net_buys:
+                return {"status": "error", "message": "데이터를 파싱할 수 없습니다."}
+                
+            # 단기 (5일)
+            st_inst = sum(inst_net_buys[:5])
+            st_fore = sum(fore_net_buys[:5])
+            
+            # 중장기 (60일)
+            lt_inst = sum(inst_net_buys[:60])
+            lt_fore = sum(fore_net_buys[:60])
+            
+            def evaluate_trend(st, lt):
+                if st > 0 and lt > 0:
+                    return "강한 매수 우위"
+                elif st > 0 and lt <= 0:
+                    return "최근 매수 전환"
+                elif st <= 0 and lt > 0:
+                    return "최근 매도 전환"
+                else:
+                    return "강한 매도 우위"
+                    
+            inst_trend = evaluate_trend(st_inst, lt_inst)
+            fore_trend = evaluate_trend(st_fore, lt_fore)
+            
+            return {
+                "status": "success",
+                "institution": {
+                    "short_term_sum": st_inst,
+                    "long_term_sum": lt_inst,
+                    "trend": inst_trend
+                },
+                "foreigner": {
+                    "short_term_sum": st_fore,
+                    "long_term_sum": lt_fore,
+                    "trend": fore_trend
+                }
+            }
+        except Exception as e:
+            logger.error(f"수급 동향 조회 중 오류: {e}")
+            return {"status": "error", "message": "조회 실패"}
 
         # 상위 15개 테마 대상 (거래대금 기준 내림차순 정렬)
         sorted_themes = sorted(themes, key=lambda x: x.get("total_volume", 0), reverse=True)[:15]

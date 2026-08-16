@@ -459,9 +459,15 @@ class MarketController:
 
     @staticmethod
     @market_entrypoint.get(path="/stocks/{stock_code}/stats-4m",
-                           summary="[MARKET] : 특정 종목의 최근 3.5개월(3개월+2주) 수급 구간(머리/어깨/무릎) 가격대 조회 (야후 파이낸스)")
+                           summary="[MARKET] : 특정 종목의 최근 3개월 수급 구간(머리/어깨/무릎) 가격대 조회 (야후 파이낸스)")
     def get_stock_4month_stats(stock_code: str):
         return naver_theme_service.fetch_stock_4month_stats(stock_code)
+
+    @staticmethod
+    @market_entrypoint.get(path="/stocks/{stock_code}/investors",
+                           summary="[MARKET] : 특정 종목의 최근 수급 동향(기관/외국인) 평가 조회")
+    def get_stock_investor_trend(stock_code: str):
+        return naver_theme_service.fetch_investor_trend(stock_code)
 
     @staticmethod
     @market_entrypoint.get(path="/loading-progress",
