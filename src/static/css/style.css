@@ -584,16 +584,14 @@ header {
 
 /* Right Side: Dashboard Grid (Top 9) */
 .dashboard-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-    gap: 1.25rem;
-    align-items: start; /* Prevents cards from stretching to row height */
+    column-width: 360px;
+    column-gap: 1.25rem;
     padding: 1.5rem;
     padding-bottom: 2rem;
 }
 
 .grid-header-title {
-    grid-column: 1 / -1;
+    column-span: all;
     font-family: var(--font-outfit);
     font-size: 0.85rem;
     font-weight: 700;
@@ -605,20 +603,25 @@ header {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    margin-bottom: 1.25rem;
 }
 
 /* Theme Card (Accordion Foldable) */
 .theme-card {
+    break-inside: avoid;
+    page-break-inside: avoid; /* Safari fallback */
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: 12px;
-    padding: 1rem 1.25rem;
+    padding: 1.25rem 1.5rem;
     display: flex;
     flex-direction: column;
-    gap: 0.85rem;
+    gap: 1rem;
     transition: var(--transition-smooth);
     position: relative;
     box-shadow: var(--shadow-sm);
+    margin-bottom: 1.25rem;
+    transform: translateZ(0); /* Fix for webkit rendering glitches with masonry */
 }
 
 .theme-card:hover {
@@ -629,7 +632,7 @@ header {
 }
 
 .theme-card.expanded {
-    padding-bottom: 1.25rem;
+    padding-bottom: 1.5rem;
 }
 
 @keyframes alert-pulse-green {
@@ -770,7 +773,7 @@ header {
     background: rgba(0, 0, 0, 0.015);
     border: 1px solid rgba(0, 0, 0, 0.04);
     border-radius: 8px;
-    padding: 0.5rem 0.75rem;
+    padding: 0.65rem 0.85rem;
     display: grid;
     grid-template-columns: 24px 1fr 80px 50px;
     align-items: center;

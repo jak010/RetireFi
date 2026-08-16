@@ -826,7 +826,7 @@ function renderDashboard() {
 
     if (sortedGroups.length === 0) {
         const emptyMsg = document.createElement('div');
-        emptyMsg.style.cssText = "grid-column: 1 / -1; text-align: center; padding: 1.5rem; color: var(--text-muted); font-size: 0.85rem; background: var(--bg-card); border-radius: 8px; border: 1px dashed var(--border-color);";
+        emptyMsg.style.cssText = "column-span: all; text-align: center; padding: 1.5rem; color: var(--text-muted); font-size: 0.85rem; background: var(--bg-card); border-radius: 8px; border: 1px dashed var(--border-color);";
         emptyMsg.innerHTML = "수집된 테마 데이터가 없습니다.";
         container.appendChild(emptyMsg);
     } else {
@@ -845,7 +845,7 @@ function renderDashboard() {
         // 1. Render Multi Groups (핫 테마군 - 병합된 단일 카드)
         if (multiGroups.length > 0) {
             const multiHeader = document.createElement('div');
-            multiHeader.style.cssText = `grid-column: 1 / -1; font-size: 0.95rem; font-weight: 700; color: var(--accent-blue); padding: 0.5rem 0 0.4rem 0; margin-top: ${isFirstGroup ? '0.25rem' : '1.5rem'}; border-bottom: 2px solid rgba(29, 78, 216, 0.3); display: flex; align-items: center; gap: 0.5rem; letter-spacing: -0.02em;`;
+            multiHeader.style.cssText = `column-span: all; font-size: 0.95rem; font-weight: 700; color: var(--accent-blue); padding: 0.5rem 0 0.4rem 0; margin-top: ${isFirstGroup ? '0.25rem' : '1.5rem'}; border-bottom: 2px solid rgba(29, 78, 216, 0.3); display: flex; align-items: center; gap: 0.5rem; letter-spacing: -0.02em;`;
             multiHeader.innerHTML = `🔥 복합 주도 테마군 (대장주 묶음) <span style="font-size: 0.8rem; font-weight: 500; color: var(--text-muted); margin-left: 0.5rem;">- ${multiGroups.length}개 묶음</span>`;
             container.appendChild(multiHeader);
             isFirstGroup = false;
@@ -858,7 +858,7 @@ function renderDashboard() {
         // 2. Render Single Groups (개별 테마)
         if (singleGroups.length > 0) {
             const singleHeader = document.createElement('div');
-            singleHeader.style.cssText = `grid-column: 1 / -1; font-size: 0.95rem; font-weight: 700; color: var(--accent-green); padding: 0.5rem 0 0.4rem 0; border-bottom: 2px solid rgba(16, 185, 129, 0.3); margin-top: ${isFirstGroup ? '0.25rem' : '1.5rem'}; display: flex; align-items: center; gap: 0.5rem; letter-spacing: -0.02em;`;
+            singleHeader.style.cssText = `column-span: all; font-size: 0.95rem; font-weight: 700; color: var(--accent-green); padding: 0.5rem 0 0.4rem 0; border-bottom: 2px solid rgba(16, 185, 129, 0.3); margin-top: ${isFirstGroup ? '0.25rem' : '1.5rem'}; display: flex; align-items: center; gap: 0.5rem; letter-spacing: -0.02em;`;
             singleHeader.innerHTML = `💎 개별 주도 테마 <span style="font-size: 0.8rem; font-weight: 500; color: var(--text-muted); margin-left: 0.5rem;">- 단일 섹터 ${singleGroups.length}개</span>`;
             container.appendChild(singleHeader);
             
@@ -1659,7 +1659,22 @@ async function renderTechPanel(stockList) {
     const techPanel = document.getElementById('tech-panel-content');
     if (!techPanel) return;
     
-    if (stockList.length > 0) {
+    // 대장주 기술적 분석 UI를 복합 주도 테마군(다수 테마의 대장주) 위주로 정렬
+    const sortedTechList = [...stockList].sort((a, b) => {
+        const aLeaders = (a.leaderOfThemes || []).length;
+        const bLeaders = (b.leaderOfThemes || []).length;
+        if (bLeaders !== aLeaders) {
+            return bLeaders - aLeaders;
+        }
+        const aThemes = (a.themes || []).length;
+        const bThemes = (b.themes || []).length;
+        if (bThemes !== aThemes) {
+            return bThemes - aThemes;
+        }
+        return (a.drop || 0) - (b.drop || 0);
+    });
+
+    if (sortedTechList.length > 0) {
         const symbols = stockList.map(s => s.code).join(',');
         try {
             const res = await fetch(`/api/v1/market/prices?symbols=${symbols}`);
@@ -1687,12 +1702,12 @@ async function renderTechPanel(stockList) {
     }
     
     const currentCardIds = Array.from(techPanel.children).map(c => c.id).filter(id => id.startsWith('tech-card-'));
-    const newCardIds = stockList.map(s => `tech-card-${s.code}`);
+    const newCardIds = sortedTechList.map(s => `tech-card-${s.code}`);
     const isSameList = currentCardIds.length === newCardIds.length && currentCardIds.every((id, i) => id === newCardIds[i]);
     
     if (!isSameList) {
         let html = '';
-        stockList.forEach(stock => {
+        sortedTechList.forEach(stock => {
             const id = `tech-card-${stock.code}`;
             const isHolding = myHoldingSymbols.has(stock.code);
             const cardBorder = isHolding ? '2px solid #eab308' : '1px solid var(--border-color)';
@@ -1700,7 +1715,7 @@ async function renderTechPanel(stockList) {
             const holdingBadge = isHolding ? `<span style="font-size: 0.6rem; background: #eab308; color: white; padding: 0.15rem 0.3rem; border-radius: 4px; margin-left: 0.3rem; font-weight: 700; vertical-align: middle;">내 주식</span>` : '';
             
             html += `
-                <div id="${id}" style="border: ${cardBorder}; border-radius: 8px; padding: 0.8rem; background: ${cardBg}; display: flex; flex-direction: column; gap: 0.5rem; transition: all 0.2s; ${isHolding ? 'box-shadow: 0 4px 6px rgba(234, 179, 8, 0.1);' : ''}">
+                <div id="${id}" style="border: ${cardBorder}; border-radius: 8px; padding: 1rem; background: ${cardBg}; display: flex; flex-direction: column; gap: 0.75rem; transition: all 0.2s; ${isHolding ? 'box-shadow: 0 4px 6px rgba(234, 179, 8, 0.1);' : ''}">
                     <div style="display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid rgba(0,0,0,0.05); padding-bottom: 0.3rem;">
                         <div style="font-weight: 800; font-size: 0.95rem; color: var(--text-primary); cursor: pointer;" onclick="document.getElementById('consolidated-row-${stock.code}')?.scrollIntoView({behavior: 'smooth'})" title="표에서 해당 종목으로 이동">${stock.name}${holdingBadge} <span style="font-size: 0.7rem; color: var(--text-muted);">${stock.code}</span></div>
                         <div id="${id}-price" style="font-weight: 800; font-size: 0.95rem; font-family: var(--font-outfit);">${stock.price_str}</div>
@@ -1712,7 +1727,7 @@ async function renderTechPanel(stockList) {
         });
         techPanel.innerHTML = html || '<div style="text-align: center; color: var(--text-muted); font-size: 0.75rem; margin-top: 2rem;">조건에 맞는 종목이 없습니다.</div>';
     } else {
-        stockList.forEach(stock => {
+        sortedTechList.forEach(stock => {
             const priceEl = document.getElementById(`tech-card-${stock.code}-price`);
             if (priceEl) priceEl.innerText = stock.price_str;
         });
@@ -1720,7 +1735,7 @@ async function renderTechPanel(stockList) {
     
     // Stagger API calls to prevent bombarding the backend and Naver Finance
     let delayCounter = 0;
-    stockList.forEach((stock) => {
+    sortedTechList.forEach((stock) => {
         const fetchAndRender = () => {
             loadStock4mStats(stock.code).then(stats => {
                 const cardLoading = document.getElementById(`tech-card-${stock.code}-loading`);
@@ -1937,9 +1952,9 @@ function renderConsolidatedStocks() {
             </td>
             <td style="padding: 0.6rem 0.5rem; text-align: center;">
                 <div style="display: flex; gap: 0.4rem; justify-content: center; align-items: center;">
-                    <button onclick="showStockNetworkMap('${stock.name}', '${stock.code}')" style="display: inline-flex; align-items: center; justify-content: center; min-width: 54px; box-sizing: border-box; padding: 0.25rem 0.5rem; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; border-radius: 4px; font-size: 0.65rem; font-weight: 600; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='#dbeafe'; this.style.borderColor='#93c5fd';" onmouseout="this.style.background='#eff6ff'; this.style.borderColor='#bfdbfe';" title="실시간 주가 차트 보기">차트</button>
+
                     <a href="https://www.tossinvest.com/stocks/A${stock.code}/order" target="_blank" style="display: inline-flex; align-items: center; justify-content: center; min-width: 54px; box-sizing: border-box; padding: 0.25rem 0.5rem; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; border-radius: 4px; font-size: 0.65rem; font-weight: 600; text-decoration: none; transition: all 0.2s ease;" onmouseover="this.style.background='#bae6fd'; this.style.color='#0369a1';" onmouseout="this.style.background='#e0f2fe'; this.style.color='#0369a1';" title="토스증권에서 주문">토스</a>
-                    <button onclick="openNewsModal('${stock.code}', '${stock.name}')" style="display: inline-flex; align-items: center; justify-content: center; min-width: 54px; box-sizing: border-box; gap: 0.2rem; padding: 0.25rem 0.5rem; background: #fff7ed; color: #ea580c; border: 1px solid #fdba74; border-radius: 4px; font-size: 0.65rem; font-weight: 700; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='#ffedd5'; this.style.borderColor='#fb923c';" onmouseout="this.style.background='#fff7ed'; this.style.borderColor='#fdba74';" title="네이버 증권 뉴스 및 공시 보기"><span style="font-size: 0.7rem;">📰</span> 뉴스</button>
+
                     <button onclick="openStockDashboard('${stock.code}', '${stock.name}', '${stock.rate}', '${stock.volume_str}', '${(stock.themes || []).join(', ')}', '${stock.price_str}')" style="display: inline-flex; align-items: center; justify-content: center; min-width: 54px; box-sizing: border-box; gap: 0.2rem; padding: 0.25rem 0.5rem; background: #f3f4f6; color: #4b5563; border: 1px solid #d1d5db; border-radius: 4px; font-size: 0.65rem; font-weight: 700; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='#e5e7eb'; this.style.color='#1f2937';" onmouseout="this.style.background='#f3f4f6'; this.style.color='#4b5563';" title="종목 상세 대시보드"><span style="font-size: 0.7rem;">📊</span> 상세</button>
                 </div>
             </td>
@@ -2147,9 +2162,9 @@ function buildSangttaRowHtml(stock, isExited = false) {
         </td>
         <td style="padding: 0.75rem 0.5rem; text-align: center;">
             <div style="display: flex; gap: 0.4rem; justify-content: center; align-items: center;">
-                <button onclick="showStockNetworkMap('${stock.name}', '${stock.code}')" style="display: inline-flex; align-items: center; justify-content: center; min-width: 80px; box-sizing: border-box; padding: 0.35rem 0.65rem; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='#dbeafe'; this.style.borderColor='#93c5fd';" onmouseout="this.style.background='#eff6ff'; this.style.borderColor='#bfdbfe';" title="실시간 주가 차트 보기">차트</button>
+
                 <a href="${stock.toss_url}" target="_blank" style="display: inline-flex; align-items: center; justify-content: center; min-width: 80px; box-sizing: border-box; padding: 0.35rem 0.65rem; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; border-radius: 6px; font-size: 0.72rem; font-weight: 700; text-decoration: none; transition: all 0.2s ease; box-shadow: 0 1px 2px rgba(0,0,0,0.05);" onmouseover="this.style.background='#bae6fd'; this.style.color='#0369a1';" onmouseout="this.style.background='#e0f2fe'; this.style.color='#0369a1';" title="토스증권에서 주문">🚀 토스 주문</a>
-                <button onclick="openNewsModal('${stock.code}', '${stock.name}')" style="display: inline-flex; align-items: center; justify-content: center; min-width: 80px; box-sizing: border-box; gap: 0.2rem; padding: 0.35rem 0.65rem; background: #fff7ed; color: #ea580c; border: 1px solid #fdba74; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 1px 2px rgba(234, 88, 12, 0.05);" onmouseover="this.style.background='#ffedd5'; this.style.borderColor='#fb923c';" onmouseout="this.style.background='#fff7ed'; this.style.borderColor='#fdba74';" title="네이버 증권 뉴스 및 공시 보기"><span style="font-size: 0.75rem;">📰</span> 뉴스</button>
+
                 <button onclick="openStockDashboard('${stock.symbol}', '${stock.name}', '${stock.rate}', '${stock.volume_str}', '${(stock.themes || []).join(', ')}', '${stock.price_str}')" style="display: inline-flex; align-items: center; justify-content: center; min-width: 80px; box-sizing: border-box; gap: 0.2rem; padding: 0.35rem 0.65rem; background: #f3f4f6; color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.72rem; font-weight: 700; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='#e5e7eb'; this.style.color='#1f2937';" onmouseout="this.style.background='#f3f4f6'; this.style.color='#4b5563';" title="종목 상세 대시보드"><span style="font-size: 0.75rem;">📊</span> 상세</button>
             </div>
         </td>
@@ -2612,7 +2627,10 @@ async function showHoverChart(clientX, clientY, stockCode, stockName) {
     setTimeout(() => tooltip.classList.add('visible'), 10);
     
     try {
-        const stats = await loadStock4mStats(stockCode);
+        const [stats, invRes] = await Promise.all([
+            loadStock4mStats(stockCode),
+            fetch(`/api/v1/market/stocks/${stockCode}/investors`).catch(e => null)
+        ]);
         
         if (!tooltip.classList.contains('visible') || codeEl.innerText !== stockCode) return;
         
@@ -2638,6 +2656,63 @@ async function showHoverChart(clientX, clientY, stockCode, stockName) {
             if (curPriceEl) {
                 curPriceEl.innerText = targetStock.price_str || '-';
             }
+        }
+
+        const high20dEl = document.getElementById('hover-20d-high');
+        if (high20dEl) {
+            high20dEl.innerText = stats && stats.twenty_day_high ? `${Math.floor(stats.twenty_day_high).toLocaleString()}원` : '-';
+        }
+
+        const headEl = document.getElementById('hover-3m-head');
+        const shoulderEl = document.getElementById('hover-3m-shoulder');
+        const kneeEl = document.getElementById('hover-3m-knee');
+
+        if (stats && stats.three_month_high && stats.three_month_low) {
+            const gap = stats.three_month_high - stats.three_month_low;
+            const res = stats.three_month_high - (gap * 0.382);
+            const supp = stats.three_month_high - (gap * 0.618);
+            if (headEl) headEl.innerText = `${Math.floor(res).toLocaleString()} ~ ${Math.floor(stats.three_month_high).toLocaleString()}원`;
+            if (shoulderEl) shoulderEl.innerText = `${Math.floor(supp).toLocaleString()} ~ ${Math.floor(res).toLocaleString()}원`;
+            if (kneeEl) kneeEl.innerText = `${Math.floor(stats.three_month_low).toLocaleString()} ~ ${Math.floor(supp).toLocaleString()}원`;
+        } else {
+            if (headEl) headEl.innerText = '-';
+            if (shoulderEl) shoulderEl.innerText = '-';
+            if (kneeEl) kneeEl.innerText = '-';
+        }
+
+        const invShortEl = document.getElementById('hover-investor-short');
+        const invLongEl = document.getElementById('hover-investor-long');
+
+        if (invRes && invRes.ok) {
+            const invData = await invRes.json();
+            if (invData.status === 'success') {
+                const inst = invData.institution;
+                const fore = invData.foreigner;
+                
+                const shortSum = (inst.short_term_sum || 0) + (fore.short_term_sum || 0);
+                const longSum = (inst.long_term_sum || 0) + (fore.long_term_sum || 0);
+                
+                const formatNum = (num) => {
+                    if (num > 0) return `+${num.toLocaleString()}`;
+                    if (num < 0) return `${num.toLocaleString()}`;
+                    return `0`;
+                };
+
+                if (invShortEl) {
+                    invShortEl.innerText = formatNum(shortSum);
+                    invShortEl.style.color = shortSum > 0 ? '#ef4444' : (shortSum < 0 ? '#3b82f6' : '#f8fafc');
+                }
+                if (invLongEl) {
+                    invLongEl.innerText = formatNum(longSum);
+                    invLongEl.style.color = longSum > 0 ? '#ef4444' : (longSum < 0 ? '#3b82f6' : '#f8fafc');
+                }
+            } else {
+                if (invShortEl) invShortEl.innerText = '데이터 없음';
+                if (invLongEl) invLongEl.innerText = '데이터 없음';
+            }
+        } else {
+            if (invShortEl) invShortEl.innerText = '로딩 실패';
+            if (invLongEl) invLongEl.innerText = '로딩 실패';
         }
         
         const lvlEl = document.getElementById('hover-stock-level');
