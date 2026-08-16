@@ -1474,12 +1474,16 @@ class NaverThemeService:
                 if not highs or not lows or not closes:
                     continue
 
-                four_month_high = max(highs)
-                four_month_low = min(lows)
+                if len(highs) >= 60:
+                    three_month_high = max(highs[-60:])
+                    three_month_low = min(lows[-60:])
+                else:
+                    three_month_high = max(highs)
+                    three_month_low = min(lows)
                 last_close = closes[-1]
 
-                if four_month_high > four_month_low > 0:
-                    pos_ratio = ((last_close - four_month_low) / (four_month_high - four_month_low)) * 100
+                if three_month_high > three_month_low > 0:
+                    pos_ratio = ((last_close - three_month_low) / (three_month_high - three_month_low)) * 100
                 else:
                     pos_ratio = 50.0
                 pos_ratio = max(0.0, min(100.0, pos_ratio))
@@ -1497,30 +1501,30 @@ class NaverThemeService:
                     ma60 = sum(closes[-60:]) / 60
                     ma120 = sum(closes[-120:]) / 120
                     if ma20 > ma60 > ma120:
-                        ma_alignment = "정배열"
+                        ma_alignment = "정배열 (20/60/120)"
                     elif ma20 < ma60 < ma120:
-                        ma_alignment = "역배열"
+                        ma_alignment = "역배열 (20/60/120)"
                     else:
-                        ma_alignment = "혼조세"
+                        ma_alignment = "혼조세 (20/60/120)"
                 elif len(closes) >= 60:
                     ma20 = sum(closes[-20:]) / 20
                     ma60 = sum(closes[-60:]) / 60
                     if ma20 > ma60:
-                        ma_alignment = "단기 정배열"
+                        ma_alignment = "단기 정배열 (20/60)"
                     elif ma20 < ma60:
-                        ma_alignment = "단기 역배열"
+                        ma_alignment = "단기 역배열 (20/60)"
                     else:
-                        ma_alignment = "혼조세"
+                        ma_alignment = "혼조세 (20/60)"
 
                 support_price, resistance_price = self._calculate_pitchfork_sr(highs, lows, closes)
 
                 return {
                     "status": "success",
                     "symbol": symbol,
-                    "four_month_high": round(four_month_high, 2), # legacy name
-                    "twenty_six_week_high": round(four_month_high, 2),
+                    "three_month_high": round(three_month_high, 2),
+                    "three_month_low": round(three_month_low, 2),
+                    "twenty_six_week_high": round(max(highs), 2),
                     "twenty_day_high": round(max(highs[-20:]), 2) if len(highs) >= 20 else round(max(highs), 2),
-                    "four_month_low": round(four_month_low, 2),
                     "last_close": round(last_close, 2),
                     "price_level": price_level,
                     "price_level_desc": price_level_desc,

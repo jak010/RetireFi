@@ -1973,16 +1973,15 @@ function switchMainView(viewType) {
     const gridContainer = document.getElementById('grid-view-container');
     const stockContainer = document.getElementById('stock-view-wrapper');
     const sangttaContainer = document.getElementById('sangtta-view-container');
-    const materialContainer = document.getElementById('material-view-container');
 
     // Reset styles
-    [tabGrid, tabStock, tabSangtta, tabMaterial].forEach(tab => {
+    [tabGrid, tabStock, tabSangtta].forEach(tab => {
         if (tab) {
             tab.classList.remove('active');
             tab.style.color = 'var(--text-muted)';
         }
     });
-    [gridContainer, stockContainer, sangttaContainer, materialContainer].forEach(c => {
+    [gridContainer, stockContainer, sangttaContainer].forEach(c => {
         if (c) c.style.display = 'none';
     });
 
@@ -3428,6 +3427,15 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    const stockDashboardOverlay = document.getElementById('stock-dashboard-modal');
+    if (stockDashboardOverlay) {
+        stockDashboardOverlay.addEventListener('click', (e) => {
+            if (e.target === stockDashboardOverlay) {
+                closeStockDashboard();
+            }
+        });
+    }
 });
 
 function renderNewsList(container, items, emptyMessage) {
@@ -3535,11 +3543,34 @@ function renderHoldingsNewsList(newsList) {
 // Stock Dashboard Functions
 // ==========================================
 
+function closeStockDashboard() {
+    const modal = document.getElementById('stock-dashboard-modal');
+    if (modal) {
+        modal.style.opacity = '0';
+        const content = modal.querySelector('.modal-content');
+        if (content) content.style.transform = 'scale(0.95)';
+        setTimeout(() => {
+            modal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }, 300);
+    }
+}
+
 let dashChartInstance = null;
 
 async function openStockDashboard(stockCode, stockName, rate, volumeStr, themesStr, priceStr) {
-    // Switch to material tab
-    switchMainView('material');
+    // Show Modal
+    const modal = document.getElementById('stock-dashboard-modal');
+    if (modal) {
+        modal.style.display = 'flex';
+        // Small delay to allow display:flex to apply before changing opacity for transition
+        setTimeout(() => {
+            modal.style.opacity = '1';
+            const content = modal.querySelector('.modal-content');
+            if (content) content.style.transform = 'scale(1)';
+        }, 10);
+        document.body.style.overflow = 'hidden';
+    }
 
     // 1. Update Header
     document.getElementById('dash-stock-name').innerText = stockName;
@@ -3596,15 +3627,56 @@ async function openStockDashboard(stockCode, stockName, rate, volumeStr, themesS
         const statsData = await statsRes.json();
         const newsData = await newsRes.json();
 
-        // 3. Render 4M Stats
-        if (statsData.status === 'success' && statsData.data) {
-            document.getElementById('dash-stat-high').innerText = statsData.data.four_month_high_str || '-';
-            document.getElementById('dash-stat-shoulder').innerText = statsData.data.buy_zone_1 || '-';
-            document.getElementById('dash-stat-knee').innerText = statsData.data.buy_zone_2 || '-';
+        // 3. Render 3M Stats
+        if (statsData.status === 'success') {
+            const stats = statsData;
+            document.getElementById('dash-stat-high').innerText = stats.three_month_high ? stats.three_month_high.toLocaleString() + '원' : '-';
+            if (stats.three_month_high && stats.three_month_low) {
+                const gap = stats.three_month_high - stats.three_month_low;
+                const res = stats.three_month_high - (gap * 0.382);
+                const supp = stats.three_month_high - (gap * 0.618);
+                document.getElementById('dash-stat-head').innerText = `${Math.floor(res).toLocaleString()} ~ ${Math.floor(stats.three_month_high).toLocaleString()}원`;
+                document.getElementById('dash-stat-shoulder').innerText = `${Math.floor(supp).toLocaleString()} ~ ${Math.floor(res).toLocaleString()}원`;
+                document.getElementById('dash-stat-knee').innerText = `${Math.floor(stats.three_month_low).toLocaleString()} ~ ${Math.floor(supp).toLocaleString()}원`;
+                
+                // 20-day high
+                document.getElementById('dash-stat-20d-high').innerText = stats.twenty_day_high ? `${Math.floor(stats.twenty_day_high).toLocaleString()}원` : '-';
+                
+                // Current Location
+                const currentLoc = stats.price_level ? `${stats.price_level} (${stats.price_level_desc})` : '-';
+                const locElem = document.getElementById('dash-stat-current-loc');
+                locElem.innerText = currentLoc;
+                if (stats.price_level === '머리') locElem.style.color = '#ef4444';
+                else if (stats.price_level === '어깨') locElem.style.color = '#ea580c';
+                else if (stats.price_level === '무릎') locElem.style.color = '#16a34a';
+                else locElem.style.color = 'var(--text-primary)';
+            } else {
+                document.getElementById('dash-stat-head').innerText = '-';
+                document.getElementById('dash-stat-shoulder').innerText = '-';
+                document.getElementById('dash-stat-knee').innerText = '-';
+                document.getElementById('dash-stat-20d-high').innerText = '-';
+                document.getElementById('dash-stat-current-loc').innerText = '-';
+            }
+            
+            // MA Alignment
+            const maElem = document.getElementById('dash-stat-ma');
+            const maAlign = stats.ma_alignment || '-';
+            maElem.innerText = maAlign;
+            if (maAlign.includes('정배열')) maElem.style.color = '#ea580c';
+            else if (maAlign.includes('역배열')) maElem.style.color = '#2563eb';
+            else maElem.style.color = 'var(--text-primary)';
         } else {
             document.getElementById('dash-stat-high').innerText = '데이터 없음';
+            document.getElementById('dash-stat-20d-high').innerText = '데이터 없음';
+            document.getElementById('dash-stat-head').innerText = '데이터 없음';
             document.getElementById('dash-stat-shoulder').innerText = '데이터 없음';
             document.getElementById('dash-stat-knee').innerText = '데이터 없음';
+            document.getElementById('dash-stat-current-loc').innerText = '데이터 없음';
+            const maElem = document.getElementById('dash-stat-ma');
+            if (maElem) {
+                maElem.innerText = '데이터 없음';
+                maElem.style.color = 'var(--text-primary)';
+            }
         }
 
         // 4. Render News & Disclosures separately
