@@ -687,7 +687,7 @@ function renderDashboard() {
                                 <div style="font-size: 0.7rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.25rem; margin-top: 0.2rem;">
                                     <span style="color: var(--text-muted);">대금:</span>
                                     <span style="font-weight: 500;">${stock.volume_str || '-'}</span>
-                                    <button onclick="openNewsModal('${stock.stock_code}', '${stock.stock_name}')" style="margin-left: auto; padding: 0.15rem 0.4rem; background: #fff7ed; color: #ea580c; border: 1px solid #fdba74; border-radius: 4px; font-size: 0.6rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 0.15rem; transition: all 0.2s ease; box-shadow: 0 1px 2px rgba(234, 88, 12, 0.05);" onmouseover="this.style.background='#ffedd5'; this.style.borderColor='#fb923c';" onmouseout="this.style.background='#fff7ed'; this.style.borderColor='#fdba74';" title="네이버 증권 뉴스 및 공시 보기"><span style="font-size: 0.65rem;">📰</span> 뉴스</button>
+                                    <button onclick="openNewsModal('${stock.stock_code}', '${stock.stock_name}')" style="margin-left: auto; padding: 0.15rem 0.4rem; background: #fff7ed; color: #ea580c; border: 1px solid #fdba74; border-radius: 4px; font-size: 0.6rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 0.15rem; flex-shrink: 0; transition: all 0.2s ease; box-shadow: 0 1px 2px rgba(234, 88, 12, 0.05);" onmouseover="this.style.background='#ffedd5'; this.style.borderColor='#fb923c';" onmouseout="this.style.background='#fff7ed'; this.style.borderColor='#fdba74';" title="네이버 증권 뉴스 및 공시 보기"><span style="font-size: 0.65rem;">📰</span> 뉴스</button>
                                 </div>
                             </div>
                             <div class="stock-price-block">
@@ -1430,6 +1430,8 @@ function renderLeaderSectorsList() {
 let currentConsolidatedSortField = 'theme_rate'; // 'price', 'rate', 'volume', 'drop', 'theme_rate'
 let currentConsolidatedSortAsc = false;     // 기본 내림차순
 
+
+
 function sortConsolidatedStocks(field) {
     if (currentConsolidatedSortField === field) {
         currentConsolidatedSortAsc = !currentConsolidatedSortAsc;
@@ -1442,7 +1444,7 @@ function sortConsolidatedStocks(field) {
 }
 
 function updateConsolidatedSortIcons() {
-    ['price', 'rate', 'volume', 'drop', 'theme_rate'].forEach(f => {
+    ['price', 'rate', 'volume', 'market_cap', 'drop', 'theme_rate'].forEach(f => {
         const arrowEl = document.getElementById(`sort-arrow-c-${f}`);
         const thEl = arrowEl ? arrowEl.parentElement : null;
         if (!arrowEl) return;
@@ -1795,6 +1797,8 @@ function renderConsolidatedStocks() {
                         rate_str: stock.rate_str,
                         volume_str: stock.volume_str,
                         volume: stock.volume,
+                        market_cap: stock.market_cap || 0,
+                        market_cap_str: stock.market_cap_str || "-",
                         drop: parseFloat(stock.drop),
                         drop_str: stock.drop_str,
                         theme_rate: currentThemeRate,
@@ -1804,6 +1808,8 @@ function renderConsolidatedStocks() {
                         ma10_above_ma20: stock.ma10_above_ma20,
                         description: stock.description,
                         four_month_high_str: stock.four_month_high_str,
+                        market_cap: stock.market_cap || 0,
+                        market_cap_str: stock.market_cap_str || "-",
                         themes: [theme.theme_name],
                         leaderOfThemes: isLeader ? [theme.theme_name] : []
                     });
@@ -1912,37 +1918,40 @@ function renderConsolidatedStocks() {
         const themeRateStr = (themeRateVal > 0 ? '+' : '') + themeRateVal.toFixed(2) + '%';
 
         tr.innerHTML = `
-            <td style="padding: 0.6rem 0.5rem; font-weight: 600; color: var(--text-primary);">
+            <td data-label="종목명" style="padding: 0.6rem 0.5rem; font-weight: 600; color: var(--text-primary);">
                 <div style="display: flex; align-items: center; gap: 0.2rem;">
                     <span style="cursor: pointer; text-decoration: underline; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" onclick="showStockNetworkMap('${stock.name}', '${stock.code}')">${stock.name}</span>
                     ${leaderBadgeHtml}
                 </div>
                 <div style="font-size: 0.65rem; color: var(--text-muted); margin-top: 0.1rem;">${stock.code}</div>
             </td>
-            <td style="padding: 0.6rem 0.5rem; text-align: right; font-weight: 700; font-family: var(--font-outfit); font-size: 0.85rem;">
+            <td data-label="현재가" style="padding: 0.6rem 0.5rem; text-align: right; font-weight: 700; font-family: var(--font-outfit); font-size: 0.85rem;">
                 ${stock.price_str}
             </td>
-            <td class="${rateClass}" style="padding: 0.6rem 0.5rem; text-align: right; font-weight: 800; font-family: var(--font-outfit); font-size: 0.85rem;">
+            <td data-label="당일 등락률" class="${rateClass}" style="padding: 0.6rem 0.5rem; text-align: right; font-weight: 800; font-family: var(--font-outfit); font-size: 0.85rem;">
                 ${cleanRateStr}
             </td>
-            <td style="padding: 0.6rem 0.5rem; text-align: right; font-weight: 700; color: #4338ca; font-family: var(--font-outfit); font-size: 0.82rem;">
+            <td data-label="거래대금" style="padding: 0.6rem 0.5rem; text-align: right; font-weight: 700; color: #4338ca; font-family: var(--font-outfit); font-size: 0.82rem;">
                 ${stock.volume_str || '-'}
             </td>
-            <td style="padding: 0.6rem 0.5rem; text-align: right; font-weight: 700; color: ${dropColor}; font-family: var(--font-outfit); font-size: 0.85rem;">
+            <td data-label="시가총액" style="padding: 0.6rem 0.5rem; text-align: right; font-weight: 700; color: var(--text-secondary); font-family: var(--font-outfit); font-size: 0.82rem;">
+                ${stock.market_cap_str || '-'}
+            </td>
+            <td data-label="고점대비 낙폭" class="hide-on-mobile" style="padding: 0.6rem 0.5rem; text-align: right; font-weight: 700; color: ${dropColor}; font-family: var(--font-outfit); font-size: 0.85rem;">
                 ${stock.drop_str}
             </td>
-            <td class="${themeRateClass}" style="padding: 0.6rem 0.5rem; text-align: right; font-weight: 800; font-family: var(--font-outfit); font-size: 0.85rem;">
+            <td data-label="섹터 등락률" class="hide-on-mobile ${themeRateClass}" style="padding: 0.6rem 0.5rem; text-align: right; font-weight: 800; font-family: var(--font-outfit); font-size: 0.85rem;">
                 ${themeRateStr}
             </td>
-            <td style="padding: 0.6rem 0.5rem 0.6rem 1.5rem; text-align: left;">
+            <td data-label="연계 테마 목록" class="hide-on-mobile" style="padding: 0.6rem 0.5rem 0.6rem 1.5rem; text-align: left;">
                 <div style="display: flex; flex-wrap: wrap; gap: 0.1rem;">
                     ${themeTagsHtml}
                 </div>
             </td>
-            <td style="padding: 0.6rem 0.5rem; text-align: center; vertical-align: middle;">
+            <td data-label="타점 신호" class="hide-on-mobile" style="padding: 0.6rem 0.5rem; text-align: center; vertical-align: middle;">
                 ${alertBadge}
             </td>
-            <td style="padding: 0.6rem 0.5rem; text-align: center; vertical-align: middle; white-space: nowrap;">
+            <td data-label="알림 설정" class="hide-on-mobile" style="padding: 0.6rem 0.5rem; text-align: center; vertical-align: middle; white-space: nowrap;">
                 <label style="font-size: 0.68rem; font-weight: 600; color: var(--accent-green); cursor: pointer; margin-right: 0.45rem;" title="이 종목의 대장주 낙폭 알람을 받습니다">
                     <input type="radio" name="alert-${stock.code}" value="on" ${alertEnabledCodes.has(stock.code) ? 'checked' : ''} onchange="onPullbackAlertChange('${stock.code}', true)" style="cursor: pointer; accent-color: #10b981;"> 받기
                 </label>
@@ -1950,7 +1959,7 @@ function renderConsolidatedStocks() {
                     <input type="radio" name="alert-${stock.code}" value="off" ${alertEnabledCodes.has(stock.code) ? '' : 'checked'} onchange="onPullbackAlertChange('${stock.code}', false)" style="cursor: pointer; accent-color: #ef4444;"> 안받기
                 </label>
             </td>
-            <td style="padding: 0.6rem 0.5rem; text-align: center;">
+            <td data-label="바로가기" style="padding: 0.6rem 0.5rem; text-align: center;">
                 <div style="display: flex; gap: 0.4rem; justify-content: center; align-items: center;">
 
                     <a href="https://www.tossinvest.com/stocks/A${stock.code}/order" target="_blank" style="display: inline-flex; align-items: center; justify-content: center; min-width: 54px; box-sizing: border-box; padding: 0.25rem 0.5rem; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; border-radius: 4px; font-size: 0.65rem; font-weight: 600; text-decoration: none; transition: all 0.2s ease;" onmouseover="this.style.background='#bae6fd'; this.style.color='#0369a1';" onmouseout="this.style.background='#e0f2fe'; this.style.color='#0369a1';" title="토스증권에서 주문">토스</a>
@@ -1984,19 +1993,24 @@ function switchMainView(viewType) {
     const tabGrid = document.getElementById('tab-grid-view');
     const tabStock = document.getElementById('tab-stock-view');
     const tabSangtta = document.getElementById('tab-sangtta-view');
+    const tabScanner = document.getElementById('tab-scanner-view');
     const tabMaterial = document.getElementById('tab-material-view');
     const gridContainer = document.getElementById('grid-view-container');
     const stockContainer = document.getElementById('stock-view-wrapper');
     const sangttaContainer = document.getElementById('sangtta-view-container');
+    const scannerContainer = document.getElementById('content-scanner-view');
 
     // Reset styles
-    [tabGrid, tabStock, tabSangtta].forEach(tab => {
+    [tabGrid, tabStock, tabSangtta, tabScanner].forEach(tab => {
         if (tab) {
             tab.classList.remove('active');
             tab.style.color = 'var(--text-muted)';
+            if (tab.id === 'tab-scanner-view') {
+                tab.style.color = 'var(--accent-blue)';
+            }
         }
     });
-    [gridContainer, stockContainer, sangttaContainer].forEach(c => {
+    [gridContainer, stockContainer, sangttaContainer, scannerContainer].forEach(c => {
         if (c) c.style.display = 'none';
     });
 
@@ -2031,6 +2045,18 @@ function switchMainView(viewType) {
             tabMaterial.style.color = 'var(--accent-blue)';
         }
         if (materialContainer) materialContainer.style.display = 'flex';
+    } else if (viewType === 'scanner') {
+        if (tabScanner) {
+            tabScanner.classList.add('active');
+            tabScanner.style.color = 'var(--accent-blue)';
+        }
+        if (scannerContainer) scannerContainer.style.display = 'block';
+        
+        // Auto-run if first time
+        const scannerContent = document.getElementById('scanner-tab-content');
+        if (scannerContent && scannerContent.innerText.includes('새로 검색하기')) {
+            runScannerTab();
+        }
     }
 }
 
@@ -2138,29 +2164,29 @@ function buildSangttaRowHtml(stock, isExited = false) {
     const nameExtra = isExited ? ` <span style="font-size:0.65rem; color:#ef4444; background:#fef2f2; padding:0.1rem 0.3rem; border-radius:4px; border:1px solid #fecdd3;">24% 미만 이탈</span>` : '';
 
     return `
-        <td class="col-rank" style="padding: 0.75rem 0.5rem; text-align: center; font-weight: 800; color: #dc2626; font-family: var(--font-outfit);">
+        <td data-label="순위" class="col-rank" style="padding: 0.75rem 0.5rem; text-align: center; font-weight: 800; color: #dc2626; font-family: var(--font-outfit);">
             ${rankDisplay}
         </td>
-        <td class="col-name" style="padding: 0.75rem 0.5rem; font-weight: 700; color: var(--text-primary);">
+        <td data-label="종목명" class="col-name" style="padding: 0.75rem 0.5rem; font-weight: 700; color: var(--text-primary);">
             <div style="font-size: 0.85rem; font-weight: 700;">${stock.name}${nameExtra}</div>
             <div style="font-size: 0.65rem; color: var(--text-muted); margin-top: 0.1rem;">${stock.symbol}</div>
         </td>
-        <td class="col-price" style="padding: 0.75rem 0.5rem; text-align: right; font-weight: 700; font-family: var(--font-outfit); font-size: 0.85rem; transition: background-color 0.3s;">
+        <td data-label="현재가" class="col-price" style="padding: 0.75rem 0.5rem; text-align: right; font-weight: 700; font-family: var(--font-outfit); font-size: 0.85rem; transition: background-color 0.3s;">
             ${stock.price_str}
         </td>
-        <td class="col-rate ${rateClass}" style="padding: 0.75rem 0.5rem; text-align: right; font-weight: 800; font-family: var(--font-outfit); font-size: 0.85rem; transition: background-color 0.3s;">
+        <td data-label="당일 등락률" class="col-rate ${rateClass}" style="padding: 0.75rem 0.5rem; text-align: right; font-weight: 800; font-family: var(--font-outfit); font-size: 0.85rem; transition: background-color 0.3s;">
             ${cleanRateStr}
         </td>
-        <td class="col-volume" style="padding: 0.75rem 0.5rem; text-align: right; font-weight: 700; color: #4338ca; font-family: var(--font-outfit); font-size: 0.82rem;">
+        <td data-label="거래대금" class="col-volume" style="padding: 0.75rem 0.5rem; text-align: right; font-weight: 700; color: #4338ca; font-family: var(--font-outfit); font-size: 0.82rem;">
             ${stock.volume_str}
         </td>
-        <td class="col-themes" style="padding: 0.75rem 0.7rem 0.75rem 1.5rem; text-align: left;">
+        <td data-label="연계 테마 속성" class="col-themes" style="padding: 0.75rem 0.7rem 0.75rem 1.5rem; text-align: left;">
             <div style="display: flex; flex-wrap: wrap; gap: 0.2rem; align-items: center;">
                 ${sourcesHtml}
                 ${themeTagsHtml}
             </div>
         </td>
-        <td style="padding: 0.75rem 0.5rem; text-align: center;">
+        <td data-label="토스 주문" style="padding: 0.75rem 0.5rem; text-align: center;">
             <div style="display: flex; gap: 0.4rem; justify-content: center; align-items: center;">
 
                 <a href="${stock.toss_url}" target="_blank" style="display: inline-flex; align-items: center; justify-content: center; min-width: 80px; box-sizing: border-box; padding: 0.35rem 0.65rem; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; border-radius: 6px; font-size: 0.72rem; font-weight: 700; text-decoration: none; transition: all 0.2s ease; box-shadow: 0 1px 2px rgba(0,0,0,0.05);" onmouseover="this.style.background='#bae6fd'; this.style.color='#0369a1';" onmouseout="this.style.background='#e0f2fe'; this.style.color='#0369a1';" title="토스증권에서 주문">🚀 토스 주문</a>
@@ -3871,5 +3897,68 @@ async function openStockDashboard(stockCode, stockName, rate, volumeStr, themesS
         }
     } catch (e) {
         console.error("Dashboard Fetch Error:", e);
+    }
+}
+
+// --- Mid-Long Term Scanner ---
+async function runScannerTab() {
+    const content = document.getElementById('scanner-tab-content');
+    const btn = document.getElementById('btn-run-scanner');
+    
+    // UI Loading state
+    btn.disabled = true;
+    btn.innerHTML = '<span class="pulse-dot" style="display:inline-block; width:8px; height:8px; background:white; margin-right:8px;"></span>검사 중...';
+    btn.style.opacity = '0.7';
+
+    content.innerHTML = `
+        <div style="grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4rem 0; gap: 1rem;">
+            <div class="pulse-dot" style="width: 24px; height: 24px; background: var(--accent-blue);"></div>
+            <div style="font-weight: 800; font-size: 1.1rem; color: var(--text-primary);">전체 대장주를 대상으로 검사 중입니다...</div>
+            <div style="font-size: 0.85rem; color: var(--text-muted);">이 작업은 약 5~10초 정도 소요될 수 있습니다.</div>
+        </div>
+    `;
+
+    try {
+        const res = await fetch('/api/v1/market/scanner/mid-long-term');
+        const data = await res.json();
+
+        if (data.status === 'success' && data.candidates) {
+            if (data.candidates.length === 0) {
+                content.innerHTML = `
+                    <div style="grid-column: 1 / -1; text-align: center; padding: 3rem; background: white; border-radius: 12px; border: 1px solid var(--border-color); color: var(--text-muted);">
+                        조건을 만족하는 종목이 없습니다.
+                    </div>
+                `;
+            } else {
+                let html = '';
+                data.candidates.forEach(c => {
+                    html += `
+                        <div class="stock-row-item leader" style="grid-template-columns: 1fr; gap: 0.5rem; cursor: pointer; transition: all 0.2s; padding: 1.25rem; background: white; border: 1px solid var(--border-color); border-radius: 12px;" onclick="openStockDashboard('${c.code}')">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div style="display: flex; align-items: center; gap: 0.6rem;">
+                                    <span style="font-weight: 800; font-size: 1.15rem; color: var(--text-primary);">${c.name}</span>
+                                    <span style="font-size: 0.75rem; color: var(--text-muted);">${c.code}</span>
+                                    <span style="font-size: 0.7rem; padding: 0.2rem 0.5rem; background: rgba(37, 99, 235, 0.1); color: var(--accent-blue); border-radius: 4px; font-weight: 700;">${c.role}</span>
+                                </div>
+                                <span style="font-weight: 800; font-size: 1.2rem; font-family: var(--font-outfit);">${c.price_str}</span>
+                            </div>
+                            <div style="display: flex; gap: 1rem; font-size: 0.85rem; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed var(--border-color);">
+                                <span style="color: var(--text-secondary);">테마: <span style="font-weight: 700; color: var(--text-primary);">${c.theme}</span></span>
+                                <span style="color: var(--text-secondary);">월봉 10이평: <span style="font-weight: 700; color: var(--text-primary);">${c.ma10_str}</span></span>
+                            </div>
+                        </div>
+                    `;
+                });
+                content.innerHTML = html;
+            }
+        } else {
+            content.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; padding: 3rem; color: var(--accent-red); background: white; border-radius: 12px; border: 1px solid var(--border-color);">검색 중 오류가 발생했습니다.</div>`;
+        }
+    } catch (e) {
+        content.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; padding: 3rem; color: var(--accent-red); background: white; border-radius: 12px; border: 1px solid var(--border-color);">네트워크 오류가 발생했습니다.</div>`;
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '새로 검색하기';
+        btn.style.opacity = '1';
     }
 }

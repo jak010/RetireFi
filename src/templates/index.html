@@ -28,7 +28,7 @@
         </div>
 
         <!-- Core Principle Text (Moved to Header) -->
-        <div style="display: flex; align-items: center; gap: 0.7rem; user-select: none; background: linear-gradient(180deg, #1e293b, #0f172a); border: 1px solid rgba(255, 255, 255, 0.1); padding: 0.45rem 1.25rem; border-radius: 9999px; box-shadow: 0 6px 16px rgba(15, 23, 42, 0.25), inset 0 1px 1px rgba(255,255,255,0.15); margin: 0 1rem; position: relative; overflow: hidden;">
+        <div class="header-core-principle" style="display: flex; align-items: center; gap: 0.7rem; user-select: none; background: linear-gradient(180deg, #1e293b, #0f172a); border: 1px solid rgba(255, 255, 255, 0.1); padding: 0.45rem 1.25rem; border-radius: 9999px; box-shadow: 0 6px 16px rgba(15, 23, 42, 0.25), inset 0 1px 1px rgba(255,255,255,0.15); margin: 0 1rem; position: relative; overflow: hidden;">
             <div style="position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: radial-gradient(circle at 50% -20%, rgba(16, 185, 129, 0.3), transparent 70%); pointer-events: none;"></div>
             <span style="position: relative; font-size: 0.75rem; font-weight: 800; background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 0.2rem 0.65rem; border-radius: 9999px; letter-spacing: 0.05em; box-shadow: 0 0 12px rgba(16,185,129,0.5);">원칙</span>
             <span style="position: relative; font-size: 1.1rem; font-weight: 900; color: #ffffff; font-family: var(--font-outfit); letter-spacing: -0.01em; text-shadow: 0 2px 4px rgba(0,0,0,0.8);">"무릎에서 사서 어깨에서 판다"</span>
@@ -223,6 +223,7 @@
                 <button class="main-tab active" id="tab-grid-view" onclick="switchMainView('grid')">전광판 매트릭스</button>
                 <button class="main-tab" id="tab-stock-view" onclick="switchMainView('stock')">종목 압축 관찰판</button>
                 <button class="main-tab" id="tab-sangtta-view" onclick="switchMainView('sangtta')">🔥 종가베팅 & 상따</button>
+                <button class="main-tab" id="tab-scanner-view" onclick="switchMainView('scanner')" style="color: var(--accent-blue); border-color: var(--accent-blue); font-weight: 700;">🎯 중장기 검색</button>
             </div>
 
             <!-- Tab Content 1: Grid View -->
@@ -264,7 +265,7 @@
                 </div>
 
                 <!-- 1-A: Dashboard Detail Grid & Sidebar Wrapper -->
-                <div style="display: flex; flex: 1; position: relative;">
+                <div class="dashboard-main-wrapper" style="display: flex; flex: 1; position: relative;">
                     <!-- Left Side: Main Dashboard Grid -->
                     <div class="dashboard-grid" id="dashboard-grid-container" style="flex: 7; min-width: 0;">
                         <div class="no-data-msg">
@@ -373,24 +374,31 @@
                                         <span>거래대금</span> <span id="sort-arrow-c-volume"
                                             style="display: inline-block; width: 18px; text-align: center; font-size: 0.65rem; opacity: 0.35; color: var(--text-muted);">▲▼</span>
                                     </th>
-                                    <th style="padding: 0.75rem 0.5rem; width: 105px; text-align: right; cursor: pointer; user-select: none; transition: all 0.2s;"
+                                    <th style="padding: 0.75rem 0.5rem; width: 95px; text-align: right; cursor: pointer; user-select: none; transition: all 0.2s;"
+                                        onclick="sortConsolidatedStocks('market_cap')" title="클릭하여 시가총액 기준으로 오름차순/내림차순 정렬"
+                                        onmouseover="this.style.background='rgba(0,0,0,0.03)';"
+                                        onmouseout="this.style.background='transparent';">
+                                        <span>시가총액</span> <span id="sort-arrow-c-market_cap"
+                                            style="display: inline-block; width: 18px; text-align: center; font-size: 0.65rem; opacity: 0.35; color: var(--text-muted);">▲▼</span>
+                                    </th>
+                                    <th class="hide-on-mobile" style="padding: 0.75rem 0.5rem; width: 105px; text-align: right; cursor: pointer; user-select: none; transition: all 0.2s;"
                                         onclick="sortConsolidatedStocks('drop')" title="클릭하여 고점대비 낙폭 기준으로 오름차순/내림차순 정렬"
                                         onmouseover="this.style.background='rgba(0,0,0,0.03)';"
                                         onmouseout="this.style.background='transparent';">
                                         <span>고점대비 낙폭</span> <span id="sort-arrow-c-drop"
                                             style="display: inline-block; width: 18px; text-align: center; font-size: 0.65rem; opacity: 0.35; color: var(--text-muted);">▲▼</span>
                                     </th>
-                                    <th style="padding: 0.75rem 0.5rem; width: 105px; text-align: right; cursor: pointer; user-select: none; transition: all 0.2s;"
+                                    <th class="hide-on-mobile" style="padding: 0.75rem 0.5rem; width: 105px; text-align: right; cursor: pointer; user-select: none; transition: all 0.2s;"
                                         onclick="sortConsolidatedStocks('theme_rate')" title="클릭하여 소속 섹터 평균 등락률 기준으로 정렬"
                                         onmouseover="this.style.background='rgba(0,0,0,0.03)';"
                                         onmouseout="this.style.background='transparent';">
                                         <span>섹터 등락률</span> <span id="sort-arrow-c-theme_rate"
                                             style="display: inline-block; width: 18px; text-align: center; font-size: 0.65rem; opacity: 0.35; color: var(--text-muted);">▲▼</span>
                                     </th>
-                                    <th style="padding: 0.75rem 0.5rem; text-align: left; padding-left: 1.5rem;">연계 테마 목록
+                                    <th class="hide-on-mobile" style="padding: 0.75rem 0.5rem; text-align: left; padding-left: 1.5rem;">연계 테마 목록
                                     </th>
-                                    <th style="padding: 0.75rem 0.5rem; width: 85px; text-align: center;">타점 신호</th>
-                                    <th style="padding: 0.75rem 0.5rem; width: 105px; text-align: center;">알림 설정</th>
+                                    <th class="hide-on-mobile" style="padding: 0.75rem 0.5rem; width: 85px; text-align: center;">타점 신호</th>
+                                    <th class="hide-on-mobile" style="padding: 0.75rem 0.5rem; width: 105px; text-align: center;">알림 설정</th>
                                     <th style="padding: 0.75rem 0.5rem; width: 90px; text-align: center;">바로가기</th>
                                 </tr>
                             </thead>
@@ -487,10 +495,28 @@
                     현재 네이버/로얄로더/토스 데이터 내 당일 +24% 이상 급등한 종목이 없습니다.
                 </div>
             </div>
+            
+            <!-- Tab Content: Scanner View -->
+            <div id="content-scanner-view" style="display: none; padding: 1.5rem; overflow-y: auto;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h2 style="margin: 0; font-size: 1.5rem; font-weight: 800; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">🎯 중장기 투자 종목 후보 검색기</h2>
+                    <button id="btn-run-scanner" style="padding: 0.5rem 1.5rem; background: var(--accent-blue); color: white; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'" onclick="runScannerTab()">새로 검색하기</button>
+                </div>
+                <div style="padding: 1rem; background: rgba(37,99,235,0.05); border-radius: 8px; border: 1px solid rgba(37,99,235,0.1); font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1.5rem; line-height: 1.6;">
+                    <span style="font-weight: 700; color: var(--accent-blue);">검색 대상:</span> 대장주/1등주 + 코스피 시총 상위 100위<br>
+                    <span style="font-weight: 700; color: var(--accent-blue);">검색 조건:</span> <span style="background: rgba(37,99,235,0.1); padding: 0.1rem 0.3rem; border-radius: 4px;">최근 10개월 이내 1회 이상 발생</span> 전월 종가 10이평 하회 &rarr; 10이평 상향 돌파 장대양봉 (전월 종가 대비 +7% 이상)
+                </div>
+                <div id="scanner-tab-content" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem;">
+                    <div style="grid-column: 1 / -1; text-align: center; padding: 4rem 0; color: var(--text-muted);">
+                        우측 상단의 "새로 검색하기" 버튼을 눌러 조건에 맞는 종목을 스캔하세요.
+                    </div>
+                </div>
+            </div>
+
 
     <!-- Stock Dashboard Modal Overlay -->
     <div id="stock-dashboard-modal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1050; align-items: center; justify-content: center; backdrop-filter: blur(4px); opacity: 0; transition: opacity 0.3s ease;">
-        <div class="modal-content" style="background: #f8fafc; width: 95%; max-width: 1200px; height: 85vh; border-radius: 12px; box-shadow: var(--shadow-lg); display: flex; flex-direction: column; transform: scale(0.95); transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); overflow: hidden;">
+        <div class="modal-content dashboard-modal" style="background: #f8fafc; width: 95%; max-width: 1200px; height: 85vh; border-radius: 12px; box-shadow: var(--shadow-lg); display: flex; flex-direction: column; transform: scale(0.95); transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); overflow: hidden;">
             <!-- Modal Header -->
             <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-color); background: #ffffff; flex-shrink: 0;">
                 <h3 style="margin: 0; font-size: 1.25rem; font-weight: 800; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
@@ -502,10 +528,10 @@
             <div id="material-view-container" style="display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 1rem; padding: 1.5rem; overflow-y: auto;">
                 
                 <!-- Dashboard Header -->
-                <div style="background: #ffffff; border-radius: 12px; border: 1px solid var(--border-color); padding: 1rem 1.5rem; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 4px rgba(0,0,0,0.02); flex-shrink: 0;">
+                <div class="modal-dash-header" style="background: #ffffff; border-radius: 12px; border: 1px solid var(--border-color); padding: 1rem 1.5rem; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 4px rgba(0,0,0,0.02); flex-shrink: 0;">
                     <div style="display: flex; align-items: center; gap: 1rem;">
                         <div>
-                            <div style="font-size: 1.5rem; font-weight: 800; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                            <div class="modal-dash-title" style="font-size: 1.5rem; font-weight: 800; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
                                 <span id="dash-stock-name">-</span>
                                 <span id="dash-stock-code" style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted); background: var(--bg-color); padding: 0.2rem 0.5rem; border-radius: 4px;">-</span>
                             </div>
@@ -514,9 +540,9 @@
                             </div>
                         </div>
                     </div>
-                    <div style="text-align: right;">
-                        <div id="dash-stock-price" style="font-size: 1.8rem; font-weight: 800; font-family: var(--font-outfit);">-</div>
-                        <div style="display: flex; align-items: center; gap: 0.8rem; justify-content: flex-end; margin-top: 0.2rem;">
+                    <div class="modal-dash-price-block" style="text-align: right;">
+                        <div id="dash-stock-price" class="modal-dash-price" style="font-size: 1.8rem; font-weight: 800; font-family: var(--font-outfit);">-</div>
+                        <div class="modal-dash-rate-vol" style="display: flex; align-items: center; gap: 0.8rem; justify-content: flex-end; margin-top: 0.2rem;">
                             <span id="dash-stock-rate" style="font-weight: 700; font-size: 1rem; font-family: var(--font-outfit);">-</span>
                             <span id="dash-stock-volume" style="font-size: 0.85rem; font-weight: 600; color: #4338ca; font-family: var(--font-outfit);">-</span>
                         </div>
@@ -524,10 +550,10 @@
                 </div>
 
                 <!-- Main Content Area: Left (Stats), Middle (News), Right (Disclosures) -->
-                <div style="display: flex; flex: 1; min-height: 0; gap: 1.5rem;">
+                <div class="modal-dash-body" style="display: flex; flex: 1; min-height: 0; gap: 1.5rem;">
                     
                     <!-- Left Panel -->
-                    <div style="flex: 0.8; display: flex; flex-direction: column; gap: 1rem; min-height: 0;">
+                    <div class="modal-panel-wrapper" style="flex: 0.8; display: flex; flex-direction: column; gap: 1rem; min-height: 0;">
                         <!-- 4M Stats Container -->
                         <div style="background: #ffffff; border-radius: 12px; border: 1px solid var(--border-color); padding: 1rem; display: flex; flex-direction: column;">
                             <div style="font-weight: 800; font-size: 0.95rem; color: var(--text-primary); margin-bottom: 0.8rem;">
@@ -592,11 +618,11 @@
                     </div>
 
                     <!-- Middle Panel -->
-                    <div style="flex: 1.1; display: flex; flex-direction: column; background: #ffffff; border-radius: 12px; border: 1px solid var(--border-color); overflow: hidden;">
+                    <div class="modal-panel" style="flex: 1.1; display: flex; flex-direction: column; background: #ffffff; border-radius: 12px; border: 1px solid var(--border-color); overflow: hidden;">
                         <div style="padding: 1rem; border-bottom: 1px solid var(--border-color); background: #f8fafc; flex-shrink: 0;">
                             <span style="font-weight: 800; font-size: 0.95rem; color: var(--text-primary);">📰 최근 뉴스</span>
                         </div>
-                        <div style="flex: 1; overflow-y: auto; padding: 1rem;" id="dash-news-container">
+                        <div class="modal-panel-content" style="flex: 1; overflow-y: auto; padding: 1rem;" id="dash-news-container">
                             <div style="text-align: center; color: var(--text-muted); font-size: 0.85rem; margin-top: 2rem;">
                                 종목을 선택하면 관련 뉴스가 표시됩니다.
                             </div>
@@ -604,11 +630,11 @@
                     </div>
                     
                     <!-- Right Panel -->
-                    <div style="flex: 1.1; display: flex; flex-direction: column; background: #ffffff; border-radius: 12px; border: 1px solid var(--border-color); overflow: hidden;">
+                    <div class="modal-panel" style="flex: 1.1; display: flex; flex-direction: column; background: #ffffff; border-radius: 12px; border: 1px solid var(--border-color); overflow: hidden;">
                         <div style="padding: 1rem; border-bottom: 1px solid var(--border-color); background: #f8fafc; flex-shrink: 0;">
                             <span style="font-weight: 800; font-size: 0.95rem; color: var(--text-primary);">📢 최근 공시</span>
                         </div>
-                        <div style="flex: 1; overflow-y: auto; padding: 1rem;" id="dash-notice-container">
+                        <div class="modal-panel-content" style="flex: 1; overflow-y: auto; padding: 1rem;" id="dash-notice-container">
                             <div style="text-align: center; color: var(--text-muted); font-size: 0.85rem; margin-top: 2rem;">
                                 종목을 선택하면 관련 공시가 표시됩니다.
                             </div>
@@ -779,10 +805,8 @@
                 </div>
             </div>
         </div>
-    </div>
-
     <!-- External App Business Logic Script -->
-    <script src="/static/js/main.js?v=3.0"></script>
+    <script src="/static/js/main.js?v=13.0"></script>
 </body>
 
 </html>

@@ -927,6 +927,8 @@ class NaverThemeService:
                                 rate = -abs(rate)
                             amount = item.get("aa", 0) # 거래대금(원 단위)
                             volume = item.get("aq", 0) # 누적거래량(주 단위)
+                            count_of_listed_stock = item.get("countOfListedStock", 0)
+                            market_cap = count_of_listed_stock * price
                             
                             result_map[code] = {
                                 "name": name,
@@ -934,7 +936,8 @@ class NaverThemeService:
                                 "high": high,
                                 "rate": rate,
                                 "amount": amount,
-                                "volume": volume
+                                "volume": volume,
+                                "market_cap": market_cap
                             }
                 time.sleep(0.05) # 미세한 딜레이 부여
             except Exception as e:
@@ -1036,6 +1039,17 @@ class NaverThemeService:
             t_billion = int((rr_amount % 1000000000000) // 100000000)
             volume_str = f"{t_trillion}조 {t_billion:,}억 원" if t_trillion > 0 else f"{t_billion:,}억 원"
 
+            # 시가총액 계산 및 포맷 변환
+            market_cap = naver_data.get("market_cap", 0) if naver_data else 0
+            mc_trillion = int(market_cap // 1000000000000)
+            mc_billion = int((market_cap % 1000000000000) // 100000000)
+            if mc_trillion > 0:
+                market_cap_str = f"{mc_trillion}조 {mc_billion:,}억" if mc_billion > 0 else f"{mc_trillion}조"
+            elif mc_billion > 0:
+                market_cap_str = f"{mc_billion:,}억"
+            else:
+                market_cap_str = "-"
+
             # 장중 고점 및 낙폭 계산 (Zero-Safe Guard)
             safe_price = max(1, price_won)
             day_high = (naver_data.get("high") if naver_data else 0) or stats.get("today_high", 0)
@@ -1061,6 +1075,8 @@ class NaverThemeService:
                 "rate_str": f"{rr_rate:+.2f}%",
                 "volume": rr_amount,
                 "volume_str": volume_str if rr_amount > 0 else "-",
+                "market_cap": market_cap,
+                "market_cap_str": market_cap_str,
                 "volume_shares": volume_shares,
                 "four_month_high": four_month_high,
                 "four_month_high_str": f"{four_month_high:,}원" if four_month_high > 0 else "-",
@@ -2127,4 +2143,127 @@ class NaverThemeService:
             "status": "success",
             "leader_stocks": [],
             "closing_bet_stocks": []
+        }
+
+    def scan_mid_long_term_candidates(self) -> Dict[str, Any]:
+        """
+        중장기 투자 종목 검색기 (월봉 10이평 돌파 & 기관 3일 연속 순매수 & 대장주/1등주 + 코스피 100)
+        """
+        import time
+        import requests
+        from bs4 import BeautifulSoup
+        
+        candidates = []
+        target_stocks = {} # code -> dict
+        
+        # 1. 코스피 시총 상위 100위 수집
+        try:
+            for page in [1, 2]:
+                url_kospi = f"https://finance.naver.com/sise/sise_market_sum.naver?sosok=0&page={page}"
+                rk = requests.get(url_kospi, headers={'User-Agent': 'Mozilla/5.0'}, timeout=3.0)
+                if rk.status_code == 200:
+                    soup_k = BeautifulSoup(rk.text, 'html.parser')
+                    table = soup_k.find('table', {'class': 'type_2'})
+                    if table:
+                        tbody = table.find('tbody')
+                        if tbody:
+                            rows = tbody.find_all('tr')
+                            for row in rows:
+                                cols = row.find_all('td')
+                                if len(cols) >= 2:
+                                    a_tag = cols[1].find('a')
+                                    if a_tag:
+                                        name = a_tag.text.strip()
+                                        code = a_tag['href'].split('code=')[1]
+                                        price_str = cols[2].text.strip() + "원"
+                                        target_stocks[code] = {
+                                            "code": code,
+                                            "name": name,
+                                            "theme": "코스피 대형주",
+                                            "price_str": price_str,
+                                            "role": "⭐ KOSPI 100"
+                                        }
+        except Exception as e:
+            logger.error(f"코스피 상위 100 파싱 오류: {e}")
+        
+        # 2. 대상 종목 추출 (대장주 및 1등주)
+        themes_summary = self.get_naver_themes_summary()
+        themes_data = themes_summary.get("themes", []) if isinstance(themes_summary, dict) else []
+        
+        for theme in themes_data:
+            if not theme.get("top_stocks"): continue
+            for stock in theme["top_stocks"]:
+                role = stock.get("role", "")
+                is_leader = stock.get("is_leader", False)
+                if is_leader or "대장주" in role or "1등주" in role:
+                    code = stock.get("stock_code")
+                    if code and code not in target_stocks:
+                        target_stocks[code] = {
+                            "code": code,
+                            "name": stock.get("stock_name"),
+                            "theme": theme.get("theme_name"),
+                            "price_str": stock.get("price_str", "-"),
+                            "role": f"👑 {role}" if "대장주" not in role else role
+                        }
+        
+        # 3. 각 종목에 대해 월봉 및 수급 검사
+        for code, info in target_stocks.items():
+            # (1) 최근 10개월 내 월봉 10 이평 돌파 & 장대양봉 검사
+            period2 = int(time.time())
+            period1 = period2 - (730 * 24 * 3600) # 약 24개월 (MA10 계산 + 10개월치 과거 검사)
+            
+            is_ma10_break = False
+            ma10_val = 0
+            
+            for suffix in [".KS", ".KQ"]:
+                symbol = f"{code}{suffix}"
+                url_chart = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1mo&period1={period1}&period2={period2}"
+                try:
+                    rc = requests.get(url_chart, headers={'User-Agent': 'Mozilla/5.0'}, timeout=3.0)
+                    if rc.status_code == 200:
+                        chart_res = rc.json()
+                        result = chart_res.get("chart", {}).get("result")
+                        if result and result[0].get("timestamp"):
+                            closes = result[0].get("indicators", {}).get("quote", [{}])[0].get("close", [])
+                            opens = result[0].get("indicators", {}).get("quote", [{}])[0].get("open", [])
+                            valid_data = [(o, c) for o, c in zip(opens, closes) if o is not None and c is not None]
+                            
+                            if len(valid_data) >= 20: # MA10 계산용 10개월 + 검사용 10개월
+                                valid_closes = [d[1] for d in valid_data]
+                                
+                                # 최근 10개월(index: -10 ~ -1) 각각에 대해 조건 만족 여부 확인
+                                for i in range(-10, 0):
+                                    # i월의 10이평: i-9 부터 i까지 (총 10개)
+                                    # i-1월의 10이평: i-10 부터 i-1까지
+                                    if (i + 1) == 0:
+                                        cur_ma10 = sum(valid_closes[i-9:]) / 10
+                                    else:
+                                        cur_ma10 = sum(valid_closes[i-9:i+1]) / 10
+                                    
+                                    prev_ma10 = sum(valid_closes[i-10:i]) / 10
+                                    
+                                    cur_close = valid_closes[i]
+                                    prev_close = valid_closes[i-1]
+                                    
+                                    is_below_ma10_start = prev_close <= prev_ma10
+                                    is_above_ma10_end = cur_close > cur_ma10
+                                    is_massive_bullish = prev_close > 0 and ((cur_close - prev_close) / prev_close) >= 0.07
+                                    
+                                    if is_below_ma10_start and is_above_ma10_end and is_massive_bullish:
+                                        is_ma10_break = True
+                                        ma10_val = cur_ma10
+                                        break # 발견 즉시 중단 (최소 1회 이상 발생)
+                                        
+                                break # Found data for this symbol
+                except Exception as e:
+                    pass
+            
+            if is_ma10_break:
+                info["ma10_str"] = f"{int(ma10_val):,}원"
+                candidates.append(info)
+                
+        return {
+            "status": "success",
+            "count": len(candidates),
+            "candidates": candidates
         }

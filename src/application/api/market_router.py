@@ -470,6 +470,12 @@ class MarketController:
         return naver_theme_service.fetch_investor_trend(stock_code)
 
     @staticmethod
+    @market_entrypoint.get(path="/scanner/mid-long-term",
+                           summary="[MARKET] : 중장기 투자 종목 후보 검색기 (대장주, 월봉 10이평 돌파, 기관 3일 순매수)")
+    def scan_mid_long_term_stocks():
+        return naver_theme_service.scan_mid_long_term_candidates()
+
+    @staticmethod
     @market_entrypoint.get(path="/loading-progress",
                            summary="[MARKET] : 실시간 연산 데이터 로딩 진행률 조회")
     def get_loading_progress():

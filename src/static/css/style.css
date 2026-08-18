@@ -820,6 +820,7 @@ header {
 .stock-name-line {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 0.35rem;
 }
 
@@ -827,9 +828,8 @@ header {
     font-size: 0.85rem;
     font-weight: 600;
     color: var(--text-primary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    word-break: keep-all;
+    line-height: 1.2;
 }
 
 .stock-code {
@@ -1949,4 +1949,193 @@ header {
     margin-left: 0.25rem;
     font-weight: 700;
     vertical-align: middle;
+    flex-shrink: 0;
+}
+
+/* ==========================================================================
+   Responsive Design (Mobile & Tablet)
+   ========================================================================== */
+
+@media (max-width: 1200px) {
+    .dashboard-layout {
+        grid-template-columns: 280px 1fr;
+    }
+}
+
+@media (max-width: 1024px) {
+    .dashboard-layout {
+        grid-template-columns: 1fr;
+        height: auto; /* Allow natural scrolling on mobile */
+        min-height: auto;
+    }
+
+    .ranking-sidebar {
+        border-right: none;
+        border-bottom: 2px solid var(--border-color);
+        max-height: 400px;
+    }
+
+    /* Wrap the inner grid and tech panel */
+    .dashboard-main-wrapper {
+        flex-direction: column !important;
+    }
+
+    #stock-tech-panel {
+        margin: 1rem 1.5rem !important;
+        flex: auto !important;
+    }
+}
+
+@media (max-width: 768px) {
+    /* Header Adjustments */
+    header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+        padding: 1rem;
+    }
+
+    /* Hide the core principle text on small screens to save space */
+    .header-core-principle {
+        display: none !important;
+    }
+
+    .header-meta {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    /* Summary Dashboard Adjustments */
+    .summary-dashboard {
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+        padding: 1rem;
+    }
+
+    /* Control Bar Adjustments */
+    .control-bar {
+        padding: 1rem;
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .search-filter-group {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .search-wrapper {
+        width: 100%;
+        margin-left: 0;
+        margin-top: 0.5rem;
+    }
+
+    .header-indices-container {
+        margin-left: 0 !important;
+        padding-left: 0 !important;
+        border-left: none !important;
+        flex-wrap: wrap;
+        margin-top: 0.5rem;
+    }
+
+    .control-actions {
+        flex-direction: column;
+        align-items: stretch;
+        margin-top: 0.5rem;
+    }
+
+    /* Grid layout adjustments */
+    .dashboard-grid {
+        column-width: 100%;
+        padding: 1rem;
+    }
+    
+    .theme-card {
+        margin-bottom: 1rem;
+    }
+
+    /* Tabs Adjustments */
+    .main-tabs {
+        flex-wrap: wrap;
+        padding: 0 1rem;
+    }
+
+    .main-tab {
+        padding: 0.8rem 1rem;
+        font-size: 0.8rem;
+        flex: 1;
+        text-align: center;
+        white-space: nowrap;
+    }
+
+    /* Table Container Adjustments */
+    #stock-view-wrapper, #sangtta-view-container, #heatmap-subview-container {
+        margin: 0.5rem 1rem 1rem 1rem !important;
+        padding: 1rem !important;
+    }
+
+    /* Ensure tables can scroll horizontally or convert to cards */
+    .table-responsive {
+        overflow-x: auto;
+        width: 100%;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Hide specific table columns on mobile */
+    .hide-on-mobile {
+        display: none !important;
+    }
+
+    /* Dashboard Modal Mobile Optimization */
+    .dashboard-modal {
+        width: 95% !important;
+        height: 96vh !important;
+        border-radius: 12px !important;
+    }
+    .modal-dash-header {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 0.8rem !important;
+    }
+    .modal-dash-price-block {
+        width: 100%;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+    }
+    .modal-dash-price-block > div {
+        text-align: left;
+    }
+    .modal-dash-price {
+        font-size: 1.6rem !important;
+    }
+    .modal-dash-rate-vol {
+        flex-direction: column !important;
+        align-items: flex-end !important;
+        gap: 0.2rem !important;
+        margin-top: 0 !important;
+    }
+    .modal-dash-body {
+        flex-direction: column !important;
+    }
+    .modal-panel-wrapper, .modal-panel {
+        flex: none !important;
+    }
+    .modal-panel-content {
+        overflow-y: visible !important;
+        height: auto !important;
+        min-height: 200px;
+    }
+}
+
+@media (max-width: 480px) {
+    .header-title-container h1 {
+        font-size: 1.2rem;
+    }
+    
+    .header-meta {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
 }
