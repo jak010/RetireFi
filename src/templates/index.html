@@ -223,7 +223,7 @@
                 <button class="main-tab active" id="tab-grid-view" onclick="switchMainView('grid')">전광판 매트릭스</button>
                 <button class="main-tab" id="tab-stock-view" onclick="switchMainView('stock')">종목 압축 관찰판</button>
                 <button class="main-tab" id="tab-sangtta-view" onclick="switchMainView('sangtta')">🔥 종가베팅 & 상따</button>
-                <button class="main-tab" id="tab-scanner-view" onclick="switchMainView('scanner')" style="color: var(--accent-blue); border-color: var(--accent-blue); font-weight: 700;">🎯 중장기 검색</button>
+                <button class="main-tab" id="tab-scanner-view" onclick="switchMainView('scanner')" style="color: var(--accent-blue); border-color: var(--accent-blue); font-weight: 700;">🎯 스윙 후보 검색</button>
             </div>
 
             <!-- Tab Content 1: Grid View -->
@@ -499,15 +499,23 @@
             <!-- Tab Content: Scanner View -->
             <div id="content-scanner-view" style="display: none; padding: 1.5rem; overflow-y: auto;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                    <h2 style="margin: 0; font-size: 1.5rem; font-weight: 800; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">🎯 중장기 투자 종목 후보 검색기</h2>
+                    <h2 style="margin: 0; font-size: 1.5rem; font-weight: 800; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">🎯 스윙 후보 검색기</h2>
                     <button id="btn-run-scanner" style="padding: 0.5rem 1.5rem; background: var(--accent-blue); color: white; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'" onclick="runScannerTab()">새로 검색하기</button>
                 </div>
                 <div style="padding: 1rem; background: rgba(37,99,235,0.05); border-radius: 8px; border: 1px solid rgba(37,99,235,0.1); font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1.5rem; line-height: 1.6;">
-                    <span style="font-weight: 700; color: var(--accent-blue);">검색 대상:</span> 대장주/1등주 + 코스피 시총 상위 100위<br>
-                    <span style="font-weight: 700; color: var(--accent-blue);">검색 조건:</span> <span style="background: rgba(37,99,235,0.1); padding: 0.1rem 0.3rem; border-radius: 4px;">최근 10개월 이내 1회 이상 발생</span> 전월 종가 10이평 하회 &rarr; 10이평 상향 돌파 장대양봉 (전월 종가 대비 +7% 이상)
+                    <span style="font-weight: 700; color: var(--accent-blue);">검색 조건:</span><br>
+                    1. 코스피 시총 상위 150 이내 & 시총 3조 이상<br>
+                    2. 3개월 고점 대비 12% 이상 하락<br>
+                    3. 최근 2주 이내 외국인/기관 수급 3일 이상 발생<br>
+                    4. 이평선(20, 60, 120) 정배열
                 </div>
-                <div id="scanner-tab-content" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem;">
-                    <div style="grid-column: 1 / -1; text-align: center; padding: 4rem 0; color: var(--text-muted);">
+                
+                <div id="scanner-loading" style="display: none; text-align: center; padding: 4rem 0; color: var(--text-muted);">
+                    <div style="margin-bottom: 1rem;">불러오는 중... (최대 15초 소요될 수 있습니다)</div>
+                </div>
+
+                <div id="scanner-tab-content" style="display: flex; flex-direction: column; gap: 1.5rem;">
+                    <div style="text-align: center; padding: 4rem 0; color: var(--text-muted);" id="scanner-initial-msg">
                         우측 상단의 "새로 검색하기" 버튼을 눌러 조건에 맞는 종목을 스캔하세요.
                     </div>
                 </div>
@@ -589,9 +597,13 @@
                                         <th style="padding: 0.6rem; color: var(--text-secondary);">현재 주가 위치</th>
                                         <td id="dash-stat-current-loc" style="padding: 0.6rem; font-weight: 700; color: var(--text-primary); font-family: var(--font-outfit);">-</td>
                                     </tr>
+                                    <tr style="border-bottom: 1px solid var(--border-color);">
+                                        <th style="padding: 0.6rem; color: var(--text-secondary);">20-60 이평배열</th>
+                                        <td id="dash-stat-ma-20-60" style="padding: 0.6rem; font-weight: 700; color: var(--text-primary); font-family: var(--font-outfit);">-</td>
+                                    </tr>
                                     <tr>
-                                        <th style="padding: 0.6rem; color: var(--text-secondary);">이평선 배열</th>
-                                        <td id="dash-stat-ma" style="padding: 0.6rem; font-weight: 700; color: var(--text-primary); font-family: var(--font-outfit);">-</td>
+                                        <th style="padding: 0.6rem; color: var(--text-secondary);">60-120 이평배열</th>
+                                        <td id="dash-stat-ma-60-120" style="padding: 0.6rem; font-weight: 700; color: var(--text-primary); font-family: var(--font-outfit);">-</td>
                                     </tr>
                                 </tbody>
                             </table>

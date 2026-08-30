@@ -2145,22 +2145,31 @@ class NaverThemeService:
             "closing_bet_stocks": []
         }
 
-    def scan_mid_long_term_candidates(self) -> Dict[str, Any]:
+    def scan_swing_candidates(self) -> Dict[str, Any]:
         """
-        중장기 투자 종목 검색기 (월봉 10이평 돌파 & 기관 3일 연속 순매수 & 대장주/1등주 + 코스피 100)
+        스윙 후보 검색기:
+        - Step 1: 코스피 시총 상위 150 이내 & 3조 이상
+        - Step 2: 3개월 고점 대비 12% 이상 하락
+        - Step 3: 최근 2주(10일) 이내 외국인/기관 수급 3일 이상 발생
+        - Step 4: 이평선(20, 60, 120) 정배열
         """
         import time
         import requests
         from bs4 import BeautifulSoup
-        
-        candidates = []
-        target_stocks = {} # code -> dict
-        
-        # 1. 코스피 시총 상위 100위 수집
+        import concurrent.futures
+
+        step1_stocks = []
+        step2_stocks = []
+        step3_stocks = []
+        step4_stocks = []
+
+        headers = {'User-Agent': 'Mozilla/5.0'}
+
+        # Step 1: KOSPI Top 150 & > 3 Trillion
         try:
-            for page in [1, 2]:
+            for page in [1, 2, 3]:
                 url_kospi = f"https://finance.naver.com/sise/sise_market_sum.naver?sosok=0&page={page}"
-                rk = requests.get(url_kospi, headers={'User-Agent': 'Mozilla/5.0'}, timeout=3.0)
+                rk = requests.get(url_kospi, headers=headers, timeout=5.0)
                 if rk.status_code == 200:
                     soup_k = BeautifulSoup(rk.text, 'html.parser')
                     table = soup_k.find('table', {'class': 'type_2'})
@@ -2170,100 +2179,171 @@ class NaverThemeService:
                             rows = tbody.find_all('tr')
                             for row in rows:
                                 cols = row.find_all('td')
-                                if len(cols) >= 2:
+                                if len(cols) > 6:
                                     a_tag = cols[1].find('a')
                                     if a_tag:
                                         name = a_tag.text.strip()
                                         code = a_tag['href'].split('code=')[1]
-                                        price_str = cols[2].text.strip() + "원"
-                                        target_stocks[code] = {
-                                            "code": code,
-                                            "name": name,
-                                            "theme": "코스피 대형주",
-                                            "price_str": price_str,
-                                            "role": "⭐ KOSPI 100"
-                                        }
+                                        price_str = cols[2].text.strip().replace(',', '')
+                                        mcap_str = cols[6].text.strip().replace(',', '')
+                                        try:
+                                            price_val = int(price_str)
+                                            mcap_val = int(mcap_str)
+                                            if mcap_val >= 30000: # 30000 억원 = 3조
+                                                step1_stocks.append({
+                                                    "code": code,
+                                                    "name": name,
+                                                    "price": price_val,
+                                                    "market_cap": mcap_val
+                                                })
+                                        except:
+                                            pass
         except Exception as e:
-            logger.error(f"코스피 상위 100 파싱 오류: {e}")
-        
-        # 2. 대상 종목 추출 (대장주 및 1등주)
-        themes_summary = self.get_naver_themes_summary()
-        themes_data = themes_summary.get("themes", []) if isinstance(themes_summary, dict) else []
-        
-        for theme in themes_data:
-            if not theme.get("top_stocks"): continue
-            for stock in theme["top_stocks"]:
-                role = stock.get("role", "")
-                is_leader = stock.get("is_leader", False)
-                if is_leader or "대장주" in role or "1등주" in role:
-                    code = stock.get("stock_code")
-                    if code and code not in target_stocks:
-                        target_stocks[code] = {
-                            "code": code,
-                            "name": stock.get("stock_name"),
-                            "theme": theme.get("theme_name"),
-                            "price_str": stock.get("price_str", "-"),
-                            "role": f"👑 {role}" if "대장주" not in role else role
-                        }
-        
-        # 3. 각 종목에 대해 월봉 및 수급 검사
-        for code, info in target_stocks.items():
-            # (1) 최근 10개월 내 월봉 10 이평 돌파 & 장대양봉 검사
+            logger.error(f"코스피 상위 150 파싱 오류: {e}")
+
+        def process_stock(stock):
+            code = stock['code']
+            name = stock['name']
+            
             period2 = int(time.time())
-            period1 = period2 - (730 * 24 * 3600) # 약 24개월 (MA10 계산 + 10개월치 과거 검사)
+            period1 = period2 - (180 * 24 * 3600) # 6 months
             
-            is_ma10_break = False
-            ma10_val = 0
+            passes_step2 = False
+            passes_step4 = False
+            drop_rate = 0.0
+            recent_3m_hl = {}
             
-            for suffix in [".KS", ".KQ"]:
-                symbol = f"{code}{suffix}"
-                url_chart = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1mo&period1={period1}&period2={period2}"
-                try:
-                    rc = requests.get(url_chart, headers={'User-Agent': 'Mozilla/5.0'}, timeout=3.0)
-                    if rc.status_code == 200:
-                        chart_res = rc.json()
-                        result = chart_res.get("chart", {}).get("result")
-                        if result and result[0].get("timestamp"):
-                            closes = result[0].get("indicators", {}).get("quote", [{}])[0].get("close", [])
-                            opens = result[0].get("indicators", {}).get("quote", [{}])[0].get("open", [])
-                            valid_data = [(o, c) for o, c in zip(opens, closes) if o is not None and c is not None]
+            symbol = f"{code}.KS"
+            url_chart = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&period1={period1}&period2={period2}"
+            try:
+                rc = requests.get(url_chart, headers=headers, timeout=5.0)
+                if rc.status_code == 200:
+                    chart_res = rc.json()
+                    result = chart_res.get("chart", {}).get("result")
+                    if result and result[0].get("timestamp"):
+                        timestamps = result[0].get("timestamp", [])
+                        closes = result[0].get("indicators", {}).get("quote", [{}])[0].get("close", [])
+                        highs = result[0].get("indicators", {}).get("quote", [{}])[0].get("high", [])
+                        lows = result[0].get("indicators", {}).get("quote", [{}])[0].get("low", [])
+                        valid_data = [(t, h, l, c) for t, h, l, c in zip(timestamps, highs, lows, closes) if h is not None and c is not None and l is not None and t is not None]
+                        
+                        if valid_data:
+                            from datetime import datetime
+                            monthly_data = {}
+                            for t, h, l, c in valid_data:
+                                dt = datetime.fromtimestamp(t)
+                                m_key = f"{dt.year}-{dt.month:02d}"
+                                if m_key not in monthly_data:
+                                    monthly_data[m_key] = {'high': h, 'low': l}
+                                else:
+                                    if h > monthly_data[m_key]['high']:
+                                        monthly_data[m_key]['high'] = h
+                                    if l < monthly_data[m_key]['low']:
+                                        monthly_data[m_key]['low'] = l
                             
-                            if len(valid_data) >= 20: # MA10 계산용 10개월 + 검사용 10개월
-                                valid_closes = [d[1] for d in valid_data]
-                                
-                                # 최근 10개월(index: -10 ~ -1) 각각에 대해 조건 만족 여부 확인
-                                for i in range(-10, 0):
-                                    # i월의 10이평: i-9 부터 i까지 (총 10개)
-                                    # i-1월의 10이평: i-10 부터 i-1까지
-                                    if (i + 1) == 0:
-                                        cur_ma10 = sum(valid_closes[i-9:]) / 10
-                                    else:
-                                        cur_ma10 = sum(valid_closes[i-9:i+1]) / 10
-                                    
-                                    prev_ma10 = sum(valid_closes[i-10:i]) / 10
-                                    
-                                    cur_close = valid_closes[i]
-                                    prev_close = valid_closes[i-1]
-                                    
-                                    is_below_ma10_start = prev_close <= prev_ma10
-                                    is_above_ma10_end = cur_close > cur_ma10
-                                    is_massive_bullish = prev_close > 0 and ((cur_close - prev_close) / prev_close) >= 0.07
-                                    
-                                    if is_below_ma10_start and is_above_ma10_end and is_massive_bullish:
-                                        is_ma10_break = True
-                                        ma10_val = cur_ma10
-                                        break # 발견 즉시 중단 (최소 1회 이상 발생)
-                                        
-                                break # Found data for this symbol
-                except Exception as e:
-                    pass
-            
-            if is_ma10_break:
-                info["ma10_str"] = f"{int(ma10_val):,}원"
-                candidates.append(info)
+                            recent_months = sorted(monthly_data.keys(), reverse=True)[:3]
+                            recent_3m_hl = {m: monthly_data[m] for m in recent_months}
+
+                            valid_highs = [d[1] for d in valid_data]
+                            valid_closes = [d[3] for d in valid_data]
+                            last_close = stock.get('price', valid_closes[-1])
+                            
+                            high_3m = max(valid_highs[-60:]) if len(valid_highs) >= 60 else max(valid_highs)
+                            if high_3m > 0:
+                                drop_rate = ((high_3m - last_close) / high_3m) * 100
+                                if drop_rate >= 12.0:
+                                    passes_step2 = True
+                            
+                            if len(valid_closes) >= 120:
+                                ma20 = sum(valid_closes[-20:]) / 20
+                                ma60 = sum(valid_closes[-60:]) / 60
+                                ma120 = sum(valid_closes[-120:]) / 120
+                                if ma20 > ma60 > ma120:
+                                    passes_step4 = True
+            except Exception as e:
+                pass
                 
+            if not passes_step2:
+                return (None, None, None, 0.0, 0, {}, 0.0)
+                
+            passes_step3 = False
+            match_count = 0
+            url_frgn = f"https://finance.naver.com/item/frgn.naver?code={code}"
+            try:
+                rf = requests.get(url_frgn, headers=headers, timeout=5.0)
+                if rf.status_code == 200:
+                    soup_f = BeautifulSoup(rf.text, 'html.parser')
+                    tables = soup_f.find_all('table', {'class': 'type2'})
+                    if len(tables) > 1:
+                        table = tables[1]
+                        trs = table.find_all('tr')
+                        count = 0
+                        for tr in trs:
+                            if count >= 10: break
+                            tds = tr.find_all('td')
+                            if len(tds) >= 7 and not tr.get('class'):
+                                date_str = tds[0].text.strip()
+                                if not date_str or not date_str[0].isdigit(): continue
+                                inst_str = tds[5].text.strip().replace(',', '')
+                                fore_str = tds[6].text.strip().replace(',', '')
+                                try:
+                                    inst_val = int(inst_str)
+                                except:
+                                    inst_val = 0
+                                try:
+                                    fore_val = int(fore_str)
+                                except:
+                                    fore_val = 0
+                                
+                                if inst_val > 0 or fore_val > 0:
+                                    match_count += 1
+                                count += 1
+                        
+                        if match_count >= 3:
+                            passes_step3 = True
+            except Exception as e:
+                pass
+
+            return (
+                stock if passes_step2 else None,
+                stock if passes_step2 and passes_step3 else None,
+                stock if passes_step2 and passes_step3 and passes_step4 else None,
+                drop_rate, match_count, recent_3m_hl, last_close
+            )
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            futures = {executor.submit(process_stock, stock): stock for stock in step1_stocks}
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    res2, res3, res4, drop_rate, match_count, recent_3m_hl, last_close = future.result()
+                    if res2:
+                        res2_copy = res2.copy()
+                        res2_copy['drop_rate'] = drop_rate
+                        step2_stocks.append(res2_copy)
+                    if res3:
+                        res3_copy = res3.copy()
+                        res3_copy['match_count'] = match_count
+                        step3_stocks.append(res3_copy)
+                    if res4:
+                        res4_copy = res4.copy()
+                        res4_copy['drop_rate'] = drop_rate
+                        res4_copy['match_count'] = match_count
+                        res4_copy['monthly_hl'] = recent_3m_hl
+                        res4_copy['price'] = last_close
+                        step4_stocks.append(res4_copy)
+                except Exception as e:
+                    logger.error(f"Future error: {e}")
+
+        step2_stocks.sort(key=lambda x: x.get('drop_rate', 0), reverse=True)
+        step3_stocks.sort(key=lambda x: x.get('match_count', 0), reverse=True)
+        step4_stocks.sort(key=lambda x: x.get('market_cap', 0), reverse=True)
+
         return {
             "status": "success",
-            "count": len(candidates),
-            "candidates": candidates
+            "data": {
+                "step1": step1_stocks,
+                "step2": step2_stocks,
+                "step3": step3_stocks,
+                "step4": step4_stocks
+            }
         }

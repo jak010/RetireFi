@@ -3711,10 +3711,15 @@ async function openStockDashboard(stockCode, stockName, rate, volumeStr, themesS
     document.getElementById('dash-stat-knee').innerText = '로딩중...';
     document.getElementById('dash-stat-current-loc').innerText = '로딩중...';
     
-    const maElemLoading = document.getElementById('dash-stat-ma');
-    if (maElemLoading) {
-        maElemLoading.innerText = '로딩중...';
-        maElemLoading.style.color = 'var(--text-primary)';
+    const ma2060ElemLoading = document.getElementById('dash-stat-ma-20-60');
+    if (ma2060ElemLoading) {
+        ma2060ElemLoading.innerText = '로딩중...';
+        ma2060ElemLoading.style.color = 'var(--text-primary)';
+    }
+    const ma60120ElemLoading = document.getElementById('dash-stat-ma-60-120');
+    if (ma60120ElemLoading) {
+        ma60120ElemLoading.innerText = '로딩중...';
+        ma60120ElemLoading.style.color = 'var(--text-primary)';
     }
     
     const instElemLoading = document.getElementById('dash-investor-inst');
@@ -3778,12 +3783,22 @@ async function openStockDashboard(stockCode, stockName, rate, volumeStr, themesS
             }
             
             // MA Alignment
-            const maElem = document.getElementById('dash-stat-ma');
-            const maAlign = stats.ma_alignment || '-';
-            maElem.innerText = maAlign;
-            if (maAlign.includes('정배열')) maElem.style.color = '#ea580c';
-            else if (maAlign.includes('역배열')) maElem.style.color = '#2563eb';
-            else maElem.style.color = 'var(--text-primary)';
+            const ma2060Elem = document.getElementById('dash-stat-ma-20-60');
+            const align2060 = stats.ma_alignment_20_60 || '-';
+            if (ma2060Elem) {
+                ma2060Elem.innerText = align2060;
+                if (align2060.includes('정배열')) ma2060Elem.style.color = '#ea580c';
+                else if (align2060.includes('역배열')) ma2060Elem.style.color = '#2563eb';
+                else ma2060Elem.style.color = 'var(--text-primary)';
+            }
+            const ma60120Elem = document.getElementById('dash-stat-ma-60-120');
+            const align60120 = stats.ma_alignment_60_120 || '-';
+            if (ma60120Elem) {
+                ma60120Elem.innerText = align60120;
+                if (align60120.includes('정배열')) ma60120Elem.style.color = '#ea580c';
+                else if (align60120.includes('역배열')) ma60120Elem.style.color = '#2563eb';
+                else ma60120Elem.style.color = 'var(--text-primary)';
+            }
         } else {
             document.getElementById('dash-stat-mcap').innerText = '데이터 없음';
             document.getElementById('dash-stat-high').innerText = '데이터 없음';
@@ -3792,10 +3807,15 @@ async function openStockDashboard(stockCode, stockName, rate, volumeStr, themesS
             document.getElementById('dash-stat-shoulder').innerText = '데이터 없음';
             document.getElementById('dash-stat-knee').innerText = '데이터 없음';
             document.getElementById('dash-stat-current-loc').innerText = '데이터 없음';
-            const maElem = document.getElementById('dash-stat-ma');
-            if (maElem) {
-                maElem.innerText = '데이터 없음';
-                maElem.style.color = 'var(--text-primary)';
+            const ma2060Elem = document.getElementById('dash-stat-ma-20-60');
+            if (ma2060Elem) {
+                ma2060Elem.innerText = '데이터 없음';
+                ma2060Elem.style.color = 'var(--text-primary)';
+            }
+            const ma60120Elem = document.getElementById('dash-stat-ma-60-120');
+            if (ma60120Elem) {
+                ma60120Elem.innerText = '데이터 없음';
+                ma60120Elem.style.color = 'var(--text-primary)';
             }
         }
 
@@ -3903,59 +3923,110 @@ async function openStockDashboard(stockCode, stockName, rate, volumeStr, themesS
 // --- Mid-Long Term Scanner ---
 async function runScannerTab() {
     const content = document.getElementById('scanner-tab-content');
+    const loading = document.getElementById('scanner-loading');
     const btn = document.getElementById('btn-run-scanner');
     
     // UI Loading state
     btn.disabled = true;
-    btn.innerHTML = '<span class="pulse-dot" style="display:inline-block; width:8px; height:8px; background:white; margin-right:8px;"></span>검사 중...';
+    btn.innerHTML = '검사 중...';
     btn.style.opacity = '0.7';
-
-    content.innerHTML = `
-        <div style="grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4rem 0; gap: 1rem;">
-            <div class="pulse-dot" style="width: 24px; height: 24px; background: var(--accent-blue);"></div>
-            <div style="font-weight: 800; font-size: 1.1rem; color: var(--text-primary);">전체 대장주를 대상으로 검사 중입니다...</div>
-            <div style="font-size: 0.85rem; color: var(--text-muted);">이 작업은 약 5~10초 정도 소요될 수 있습니다.</div>
-        </div>
-    `;
+    
+    content.style.display = 'none';
+    loading.style.display = 'block';
 
     try {
-        const res = await fetch('/api/v1/market/scanner/mid-long-term');
+        const res = await fetch('/api/v1/market/scanner/swing');
         const data = await res.json();
 
-        if (data.status === 'success' && data.candidates) {
-            if (data.candidates.length === 0) {
-                content.innerHTML = `
-                    <div style="grid-column: 1 / -1; text-align: center; padding: 3rem; background: white; border-radius: 12px; border: 1px solid var(--border-color); color: var(--text-muted);">
-                        조건을 만족하는 종목이 없습니다.
-                    </div>
-                `;
-            } else {
-                let html = '';
-                data.candidates.forEach(c => {
-                    html += `
-                        <div class="stock-row-item leader" style="grid-template-columns: 1fr; gap: 0.5rem; cursor: pointer; transition: all 0.2s; padding: 1.25rem; background: white; border: 1px solid var(--border-color); border-radius: 12px;" onclick="openStockDashboard('${c.code}')">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <div style="display: flex; align-items: center; gap: 0.6rem;">
-                                    <span style="font-weight: 800; font-size: 1.15rem; color: var(--text-primary);">${c.name}</span>
-                                    <span style="font-size: 0.75rem; color: var(--text-muted);">${c.code}</span>
-                                    <span style="font-size: 0.7rem; padding: 0.2rem 0.5rem; background: rgba(37, 99, 235, 0.1); color: var(--accent-blue); border-radius: 4px; font-weight: 700;">${c.role}</span>
-                                </div>
-                                <span style="font-weight: 800; font-size: 1.2rem; font-family: var(--font-outfit);">${c.price_str}</span>
+        loading.style.display = 'none';
+        content.style.display = 'flex';
+
+        if (data.status === 'success' && data.data) {
+            const steps = data.data;
+            
+            function renderStepTags(stepData) {
+                if (!stepData || stepData.length === 0) {
+                    return `<div style="color: var(--text-muted); font-size: 0.9rem;">해당 조건을 만족하는 종목이 없습니다.</div>`;
+                }
+                return stepData.map(c => `<span style="display:inline-block; padding:0.3rem 0.6rem; background:#f1f5f9; border:1px solid #e2e8f0; border-radius:6px; font-size:0.85rem; color:var(--text-secondary); cursor:pointer;" onclick="openStockDashboard('${c.code}')" onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">${c.name}</span>`).join('');
+            }
+            
+            function renderFinalList(stepData) {
+                if (!stepData || stepData.length === 0) {
+                    return `<div style="color: var(--text-muted); padding: 2rem 0; text-align: center;">최종 스윙 후보를 만족하는 종목이 없습니다.</div>`;
+                }
+                return stepData.map(c => {
+                    let hlHtml = '';
+                    if (c.monthly_hl) {
+                        const months = Object.keys(c.monthly_hl).sort().reverse();
+                        hlHtml = `<div style="display:flex; gap:0.5rem; margin-top:0.8rem; flex-wrap:wrap;">`;
+                        months.forEach(m => {
+                            const hl = c.monthly_hl[m];
+                            const mStr = parseInt(m.split('-')[1], 10) + '월';
+                            hlHtml += `<span style="font-size:0.75rem; background:#f8fafc; padding:0.3rem 0.5rem; border-radius:4px; border:1px solid var(--border-color); color:var(--text-secondary);">
+                                <b style="color:var(--text-primary);">${mStr}</b> 고점: <span style="color:var(--accent-red);">${Math.round(hl.high).toLocaleString()}</span> / 저점: <span style="color:var(--accent-blue);">${Math.round(hl.low).toLocaleString()}</span>
+                            </span>`;
+                        });
+                        hlHtml += `</div>`;
+                    }
+                    return `
+                    <div style="display:flex; flex-direction:column; padding:1rem; background:white; border:1px solid var(--border-color); border-radius:8px; cursor:pointer;" onclick="openStockDashboard('${c.code}')" onmouseover="this.style.borderColor='var(--accent-blue)'" onmouseout="this.style.borderColor='var(--border-color)'">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <div style="display:flex; align-items:center; gap:0.5rem;">
+                                <div style="font-weight:800; color:var(--text-primary); font-size:1.15rem;">${c.name}</div>
+                                <span style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">${c.code}</span>
                             </div>
-                            <div style="display: flex; gap: 1rem; font-size: 0.85rem; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed var(--border-color);">
-                                <span style="color: var(--text-secondary);">테마: <span style="font-weight: 700; color: var(--text-primary);">${c.theme}</span></span>
-                                <span style="color: var(--text-secondary);">월봉 10이평: <span style="font-weight: 700; color: var(--text-primary);">${c.ma10_str}</span></span>
+                            <div style="font-weight:800; font-size:1.1rem; color:var(--text-primary); font-family:var(--font-outfit);">
+                                ${Math.round(c.price || 0).toLocaleString()}원
                             </div>
                         </div>
-                    `;
-                });
-                content.innerHTML = html;
+                        <div style="display:flex; gap:1rem; font-size:0.85rem; color:var(--text-secondary); margin-top:0.4rem;">
+                            <span style="color:var(--text-primary);">시총: <b>${c.market_cap.toLocaleString()}억</b></span>
+                            <span style="color:var(--accent-blue);">하락률: <b>-${c.drop_rate.toFixed(1)}%</b></span>
+                            <span style="color:#d97706;">수급 <b>${c.match_count}일</b></span>
+                        </div>
+                        ${hlHtml}
+                    </div>
+                `}).join('');
             }
+
+            content.innerHTML = `
+                <!-- Step 1 -->
+                <div class="scanner-step-card" style="background: white; border-radius: 12px; padding: 1.5rem; box-shadow: var(--shadow-sm); border: 1px solid var(--border-color);">
+                    <h3 style="margin-top: 0; color: var(--text-primary);">Step 1: 시총 3조 이상 코스피 (통과: <span style="color:var(--accent-blue);">${(steps.step1||[]).length}</span>개)</h3>
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                        ${renderStepTags(steps.step1)}
+                    </div>
+                </div>
+                <!-- Step 2 -->
+                <div class="scanner-step-card" style="background: white; border-radius: 12px; padding: 1.5rem; box-shadow: var(--shadow-sm); border: 1px solid var(--border-color);">
+                    <h3 style="margin-top: 0; color: var(--text-primary);">Step 2: 3개월 고점대비 12% 이상 하락 (통과: <span style="color:var(--accent-blue);">${(steps.step2||[]).length}</span>개)</h3>
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                        ${renderStepTags(steps.step2)}
+                    </div>
+                </div>
+                <!-- Step 3 -->
+                <div class="scanner-step-card" style="background: white; border-radius: 12px; padding: 1.5rem; box-shadow: var(--shadow-sm); border: 1px solid var(--border-color);">
+                    <h3 style="margin-top: 0; color: var(--text-primary);">Step 3: 최근 2주 수급 3일 이상 (통과: <span style="color:var(--accent-blue);">${(steps.step3||[]).length}</span>개)</h3>
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                        ${renderStepTags(steps.step3)}
+                    </div>
+                </div>
+                <!-- Step 4 -->
+                <div class="scanner-step-card" style="background: white; border-radius: 12px; padding: 1.5rem; box-shadow: var(--shadow-sm); border: 1px solid var(--border-color); border-left: 4px solid var(--accent-green);">
+                    <h3 style="margin-top: 0; color: var(--accent-green);">최종 스윙 후보: 이평선 정배열 (통과: <span style="color:var(--accent-green);">${(steps.step4||[]).length}</span>개)</h3>
+                    <div style="display: flex; flex-direction: column; gap: 0.8rem;">
+                        ${renderFinalList(steps.step4)}
+                    </div>
+                </div>
+            `;
         } else {
-            content.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; padding: 3rem; color: var(--accent-red); background: white; border-radius: 12px; border: 1px solid var(--border-color);">검색 중 오류가 발생했습니다.</div>`;
+            content.innerHTML = `<div style="text-align: center; padding: 3rem; color: var(--accent-red); background: white; border-radius: 12px; border: 1px solid var(--border-color);">검색 중 오류가 발생했습니다.</div>`;
         }
     } catch (e) {
-        content.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; padding: 3rem; color: var(--accent-red); background: white; border-radius: 12px; border: 1px solid var(--border-color);">네트워크 오류가 발생했습니다.</div>`;
+        loading.style.display = 'none';
+        content.style.display = 'flex';
+        content.innerHTML = `<div style="text-align: center; padding: 3rem; color: var(--accent-red); background: white; border-radius: 12px; border: 1px solid var(--border-color);">네트워크 오류가 발생했습니다.</div>`;
     } finally {
         btn.disabled = false;
         btn.innerHTML = '새로 검색하기';
