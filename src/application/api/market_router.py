@@ -506,12 +506,29 @@ class MarketController:
                         auto_news.append(f"최근 공시: {', '.join(notice_titles)}")
                     if news_titles:
                         auto_news.append(f"최근 뉴스: {', '.join(news_titles)}")
-                        
                     if auto_news:
                         payload["user_news_summary"] = " | ".join(auto_news)
                 except Exception as e:
                     import logging
                     logging.getLogger("uvicorn").warning(f"Failed to auto fetch news for {stock_code}: {e}")
+
+            # If user didn't provide supply_info and we have a stock code, auto fetch investor trend
+            supply_info = payload.get("supply_info", "")
+            if stock_code and supply_info in ("없음", "", None, "파악안됨"):
+                try:
+                    inv_data = naver_theme_service.fetch_investor_trend(stock_code)
+                    if inv_data.get("status") == "success":
+                        inst = inv_data.get("institution", {})
+                        fore = inv_data.get("foreigner", {})
+                        signal = inv_data.get("supply_signal", "NEUTRAL")
+                        payload["supply_info"] = (
+                            f"[수급 동향 ({signal})] "
+                            f"당일 기관: {inst.get('today_net_buy', 0):+,}주 (최근 5일 누적 {inst.get('short_term_sum', 0):+,}주, 5일 중 {inst.get('buy_days_5d', 0)}일 순매수, {inst.get('trend')}) | "
+                            f"당일 외인: {fore.get('today_net_buy', 0):+,}주 (최근 5일 누적 {fore.get('short_term_sum', 0):+,}주, 5일 중 {fore.get('buy_days_5d', 0)}일 순매수, {fore.get('trend')})"
+                        )
+                except Exception as e:
+                    import logging
+                    logging.getLogger("uvicorn").warning(f"Failed to auto fetch investor trend for {stock_code}: {e}")
 
             result = await closing_bet_service.evaluate_material(payload)
             return {

@@ -2859,6 +2859,28 @@ async function showHoverChart(clientX, clientY, stockCode, stockName) {
 }
 
 // --- Closing Price Betting Algorithm & UI ---
+const cbInvestorCache = new Map();
+let cbInvestorFetching = new Set();
+
+async function fetchInvestorTrendForClosingBet(code, themesData) {
+    if (cbInvestorCache.has(code) || cbInvestorFetching.has(code)) return;
+    cbInvestorFetching.add(code);
+    try {
+        const res = await fetch(`/api/v1/market/stocks/${code}/investors`);
+        if (res.ok) {
+            const data = await res.json();
+            if (data && data.status === 'success') {
+                cbInvestorCache.set(code, data);
+                renderClosingBetCandidates(themesData);
+            }
+        }
+    } catch (e) {
+        console.warn(`Failed to fetch investor trend for ${code}:`, e);
+    } finally {
+        cbInvestorFetching.delete(code);
+    }
+}
+
 function renderClosingBetCandidates(themesData) {
     const section = document.getElementById('closing-bet-section');
     const container = document.getElementById('closing-bet-cards-container');
@@ -2896,9 +2918,42 @@ function renderClosingBetCandidates(themesData) {
             
             // Algorithm: Rate 7% ~ 25%, Drop 0 to -8%, Volume >= 1500억
             if (rate >= 7.0 && rate <= 25.0 && drop >= -8.0 && vol >= 1500) {
-                let score = rate + (dominance * 0.1) + themeScore;
-                if (drop >= -5.0) score += 3; // Bonus for strong holding power
-                if (vol >= 3000) score += 2; // Bonus for decent liquidity (>3000억)
+                let techScore = rate + (dominance * 0.1) + themeScore;
+                if (drop >= -5.0) techScore += 3; // Bonus for strong holding power
+                if (vol >= 3000) techScore += 2; // Bonus for decent liquidity (>3000억)
+                
+                // 수급 데이터 연동 (백엔드 주입 객체 또는 클라이언트 캐시)
+                let inv = stock.investor_trend || cbInvestorCache.get(stock.stock_code);
+                if (!inv && !cbInvestorCache.has(stock.stock_code)) {
+                    fetchInvestorTrendForClosingBet(stock.stock_code, themesData);
+                }
+
+                let supplyScore = 0;
+                let supplyReason = '';
+                let supplyBadgeHtml = '';
+
+                if (inv && inv.status === 'success') {
+                    supplyScore = inv.supply_score || 0;
+                    const sig = inv.supply_signal;
+                    const inst = inv.institution || {};
+                    const fore = inv.foreigner || {};
+
+                    if (sig === 'DOUBLE_BUY') {
+                        supplyReason = ' (외인·기관 쌍끌이 순매수 👑)';
+                        supplyBadgeHtml = `<span style="font-size: 0.6rem; font-weight: 800; color: #8b5cf6; background: rgba(139, 92, 246, 0.1); padding: 0.1rem 0.35rem; border-radius: 4px; border: 1px solid rgba(139, 92, 246, 0.3);">👑 쌍끌이</span>`;
+                    } else if (sig === 'INST_BUY') {
+                        supplyReason = ` (기관 순매수 ${inst.buy_days_5d || 0}일 유입 🏢)`;
+                        supplyBadgeHtml = `<span style="font-size: 0.6rem; font-weight: 800; color: #2563eb; background: rgba(37, 99, 235, 0.1); padding: 0.1rem 0.35rem; border-radius: 4px; border: 1px solid rgba(37, 99, 235, 0.3);">🏢 기관유입</span>`;
+                    } else if (sig === 'FORE_BUY') {
+                        supplyReason = ` (외국인 순매수 ${fore.buy_days_5d || 0}일 유입 🌐)`;
+                        supplyBadgeHtml = `<span style="font-size: 0.6rem; font-weight: 800; color: #059669; background: rgba(5, 150, 105, 0.1); padding: 0.1rem 0.35rem; border-radius: 4px; border: 1px solid rgba(5, 150, 105, 0.3);">🌐 외인유입</span>`;
+                    } else if (sig === 'INST_HEAVY_SELL') {
+                        supplyReason = ' (기관 매도세 주의 ⚠️)';
+                        supplyBadgeHtml = `<span style="font-size: 0.6rem; font-weight: 800; color: #ea580c; background: rgba(234, 88, 12, 0.1); padding: 0.1rem 0.35rem; border-radius: 4px; border: 1px solid rgba(234, 88, 12, 0.3);">⚠️ 기관매도</span>`;
+                    }
+                }
+
+                const totalScore = techScore + supplyScore;
                 
                 let reason = `주도 테마(${themeIndex + 1}위) 내 핵심주로 `;
                 if (drop >= -3.0) {
@@ -2912,8 +2967,9 @@ function renderClosingBetCandidates(themesData) {
                 if (dominance > 60) {
                     reason += ` (테마 수급 독식 👑)`;
                 }
+                reason += supplyReason;
                 
-                candidates.push({ stock, themeName: theme.theme_name, score, reason });
+                candidates.push({ stock, themeName: theme.theme_name, score: totalScore, techScore, supplyScore, supplyBadgeHtml, reason });
             }
         });
     });
@@ -2971,7 +3027,8 @@ function renderClosingBetCandidates(themesData) {
                     <span style="font-size: 0.95rem; font-weight: 800; color: var(--text-primary);">${s.stock_name}</span>
                     <span style="font-size: 0.75rem; font-weight: 800;" class="${rateClass}">${rateSign}${s.rate}%</span>
                 </div>
-                <div style="display: flex; gap: 0.2rem;">
+                <div style="display: flex; gap: 0.2rem; align-items: center;">
+                    ${c.supplyBadgeHtml || ''}
                     <span style="font-size: 0.6rem; font-weight: 800; color: #ef4444; background: rgba(239, 68, 68, 0.1); padding: 0.1rem 0.25rem; border-radius: 4px; border: 1px solid rgba(239, 68, 68, 0.2);">AI PICK</span>
                     <span style="font-size: 0.6rem; font-weight: 700; color: var(--text-muted); background: rgba(0,0,0,0.03); padding: 0.1rem 0.25rem; border-radius: 4px;">${s.volume_str || '-'}</span>
                 </div>

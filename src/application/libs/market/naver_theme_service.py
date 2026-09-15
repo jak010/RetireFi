@@ -763,10 +763,82 @@ class NaverThemeService:
                     stock_info["theme_name"] = theme_name
                     leader_stocks.append(stock_info)
                     
+        # 종가베팅 후보군 자동 도출 (TOP 8 주도테마의 핵심주 중 등락률 7~25%, 고점대비낙폭 0~-8%, 대금 1500억 이상 + 수급 점수)
+        closing_bet_stocks = []
+        seen_cb = set()
+        import re
+        for t_idx, theme in enumerate(sorted_by_volume[:8]):
+            theme_name = theme.get("theme_name")
+            theme_score = 8 - t_idx
+            t_vol_str = theme.get("total_volume_str", "0")
+            t_vol_num = float(re.sub(r'[^0-9.]', '', t_vol_str) or 1)
+
+            for stock in theme.get("top_stocks", [])[:2]:
+                code = stock.get("stock_code")
+                if not code or code in seen_cb:
+                    continue
+
+                try:
+                    rate = float(stock.get("rate", 0))
+                    drop = float(stock.get("drop", 0))
+                    v_str = stock.get("volume_str", "0")
+                    vol = float(re.sub(r'[^0-9.]', '', v_str) or 0)
+                except (ValueError, TypeError):
+                    continue
+
+                if 7.0 <= rate <= 25.0 and -8.0 <= drop <= 0.0 and vol >= 1500:
+                    seen_cb.add(code)
+                    dominance = min(100.0, (vol / t_vol_num) * 100.0) if t_vol_num > 0 else 0.0
+                    tech_score = rate + (dominance * 0.1) + theme_score
+                    if drop >= -5.0:
+                        tech_score += 3
+                    if vol >= 3000:
+                        tech_score += 2
+
+                    inv = self.fetch_investor_trend(code)
+                    supply_score = inv.get("supply_score", 0) if inv.get("status") == "success" else 0
+                    total_score = tech_score + supply_score
+
+                    reason = f"주도 테마({t_idx + 1}위) 내 핵심주로 "
+                    if drop >= -3.0:
+                        reason += f"고점 대비 낙폭({drop:.2f}%)이 적어 매수세가 강력합니다."
+                    elif drop >= -6.0:
+                        reason += f"안정적 낙폭({drop:.2f}%)으로 종가 눌림목 공략이 유효합니다."
+                    else:
+                        reason += f"지지선을 방어하며({drop:.2f}%) 재반등 추세를 보입니다."
+
+                    if dominance > 60:
+                        reason += " (테마 수급 독식 👑)"
+
+                    if inv.get("status") == "success":
+                        sig = inv.get("supply_signal")
+                        if sig == "DOUBLE_BUY":
+                            reason += " (외인·기관 쌍끌이 순매수 👑)"
+                        elif sig == "INST_BUY":
+                            reason += " (기관 순매수 유입 🏢)"
+                        elif sig == "FORE_BUY":
+                            reason += " (외국인 순매수 유입 🌐)"
+                        elif sig == "INST_HEAVY_SELL":
+                            reason += " (기관 매도세 주의 ⚠️)"
+
+                    cb_item = stock.copy()
+                    cb_item["theme_name"] = theme_name
+                    cb_item["score"] = round(total_score, 2)
+                    cb_item["tech_score"] = round(tech_score, 2)
+                    cb_item["dominance"] = round(dominance, 1)
+                    cb_item["reason"] = reason
+                    cb_item["investor_trend"] = inv if inv.get("status") == "success" else None
+                    closing_bet_stocks.append(cb_item)
+
+                    # 테마 내 종목 객체에도 investor_trend 주입
+                    stock["investor_trend"] = inv if inv.get("status") == "success" else None
+
+        closing_bet_stocks.sort(key=lambda x: x.get("score", 0), reverse=True)
+
         self.report_cache = {
             "status": "success",
             "leader_stocks": leader_stocks,
-            "closing_bet_stocks": []
+            "closing_bet_stocks": closing_bet_stocks[:4]
         }
         self.report_cache_time = current_time
 
@@ -1588,89 +1660,6 @@ class NaverThemeService:
         if not themes:
             return "조회된 테마 데이터가 없습니다."
 
-    def fetch_investor_trend(self, stock_code: str) -> Dict[str, Any]:
-        """최근 수급 동향 (단기 5일, 중장기 60일) 평가"""
-        code = stock_code.strip()
-        if len(code) != 6 or not code.isdigit():
-            return {"status": "error", "message": "잘못된 종목코드입니다."}
-            
-        import requests
-        from bs4 import BeautifulSoup
-        
-        inst_net_buys = []
-        fore_net_buys = []
-        
-        try:
-            # 60 days means we need 3 pages (20 days per page). We fetch 4 just to be safe.
-            for page in range(1, 5):
-                url = f"https://finance.naver.com/item/frgn.naver?code={code}&page={page}"
-                r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=3.0)
-                if r.status_code != 200:
-                    break
-                soup = BeautifulSoup(r.text, 'html.parser')
-                tables = soup.find_all('table', {'class': 'type2'})
-                if len(tables) < 2:
-                    break
-                
-                rows = tables[1].find_all('tr')
-                for row in rows:
-                    cols = row.find_all('td')
-                    if len(cols) == 9:
-                        try:
-                            # 기관 (Index 5)
-                            inst_str = cols[5].text.replace(',', '').replace('+', '').strip()
-                            # 외국인 (Index 6)
-                            fore_str = cols[6].text.replace(',', '').replace('+', '').strip()
-                            
-                            if inst_str and fore_str and inst_str != "" and fore_str != "":
-                                inst_val = int(inst_str)
-                                fore_val = int(fore_str)
-                                inst_net_buys.append(inst_val)
-                                fore_net_buys.append(fore_val)
-                        except ValueError:
-                            continue
-                            
-            if not inst_net_buys:
-                return {"status": "error", "message": "데이터를 파싱할 수 없습니다."}
-                
-            # 단기 (5일)
-            st_inst = sum(inst_net_buys[:5])
-            st_fore = sum(fore_net_buys[:5])
-            
-            # 중장기 (60일)
-            lt_inst = sum(inst_net_buys[:60])
-            lt_fore = sum(fore_net_buys[:60])
-            
-            def evaluate_trend(st, lt):
-                if st > 0 and lt > 0:
-                    return "강한 매수 우위"
-                elif st > 0 and lt <= 0:
-                    return "최근 매수 전환"
-                elif st <= 0 and lt > 0:
-                    return "최근 매도 전환"
-                else:
-                    return "강한 매도 우위"
-                    
-            inst_trend = evaluate_trend(st_inst, lt_inst)
-            fore_trend = evaluate_trend(st_fore, lt_fore)
-            
-            return {
-                "status": "success",
-                "institution": {
-                    "short_term_sum": st_inst,
-                    "long_term_sum": lt_inst,
-                    "trend": inst_trend
-                },
-                "foreigner": {
-                    "short_term_sum": st_fore,
-                    "long_term_sum": lt_fore,
-                    "trend": fore_trend
-                }
-            }
-        except Exception as e:
-            logger.error(f"수급 동향 조회 중 오류: {e}")
-            return {"status": "error", "message": "조회 실패"}
-
         # 상위 15개 테마 대상 (거래대금 기준 내림차순 정렬)
         sorted_themes = sorted(themes, key=lambda x: x.get("total_volume", 0), reverse=True)[:15]
 
@@ -1765,6 +1754,138 @@ class NaverThemeService:
             lines.append("────────────────────────────────────────────────")
 
         return "\n".join(lines)
+
+    def fetch_investor_trend(self, stock_code: str) -> Dict[str, Any]:
+        """최근 수급 동향 (네이버 모바일 트렌드 API 기반: 당일 및 최근 5일 기관/외국인 순매수 추이 및 수급 시그널 평가)"""
+        code = stock_code.strip()
+        if len(code) != 6 or not code.isdigit():
+            return {"status": "error", "message": "잘못된 종목코드입니다."}
+
+        current_time = time.time()
+        # 인메모리 캐시 (60초 TTL)
+        if not hasattr(self, "_investor_trend_cache"):
+            self._investor_trend_cache = {}
+        cached = self._investor_trend_cache.get(code)
+        if cached and (current_time - cached.get("timestamp", 0) < 60):
+            return cached.get("data")
+
+        try:
+            url = f"https://m.stock.naver.com/api/stock/{code}/trend"
+            headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"}
+            r = requests.get(url, headers=headers, timeout=4.0)
+            if r.status_code != 200:
+                return {"status": "error", "message": f"트렌드 조회 실패 ({r.status_code})"}
+
+            items = r.json()
+            if not isinstance(items, list) or len(items) == 0:
+                return {"status": "error", "message": "수급 데이터가 비어있습니다."}
+
+            # 최근 최대 5거래일 추출
+            recent_days = items[:5]
+
+            def parse_quant(val_str):
+                if not val_str:
+                    return 0
+                clean = str(val_str).replace(',', '').replace('+', '').strip()
+                try:
+                    return int(clean)
+                except ValueError:
+                    return 0
+
+            inst_quants = [parse_quant(day.get("organPureBuyQuant")) for day in recent_days]
+            fore_quants = [parse_quant(day.get("foreignerPureBuyQuant")) for day in recent_days]
+
+            today_inst = inst_quants[0] if inst_quants else 0
+            today_fore = fore_quants[0] if fore_quants else 0
+
+            st_inst = sum(inst_quants)
+            st_fore = sum(fore_quants)
+
+            inst_buy_days = sum(1 for q in inst_quants if q > 0)
+            fore_buy_days = sum(1 for q in fore_quants if q > 0)
+
+            # 트렌드 상태 문구
+            def evaluate_trend(today, st_sum, buy_days):
+                if today > 0 and st_sum > 0:
+                    return "강한 매수 우위"
+                elif today > 0 and st_sum <= 0:
+                    return "최근 매수 전환"
+                elif today <= 0 and st_sum > 0:
+                    return "매수세 둔화/보합"
+                elif buy_days >= 3:
+                    return "지속 매수 유입"
+                else:
+                    return "매도 우위"
+
+            inst_trend = evaluate_trend(today_inst, st_inst, inst_buy_days)
+            fore_trend = evaluate_trend(today_fore, st_fore, fore_buy_days)
+
+            # 수급 시그널 및 점수 산정
+            # 1. DOUBLE_BUY: 외인·기관 쌍끌이 순매수 (+5점)
+            # 2. INST_BUY: 기관 순매수 우위 (+3점)
+            # 3. FORE_BUY: 외인 순매수 우위 (+1점)
+            # 4. INST_HEAVY_SELL: 기관 대량 매도 우위 (-5점)
+            # 5. NEUTRAL: 중립 (0점)
+            is_double_buy = (today_inst > 0 and today_fore > 0) or (st_inst > 0 and st_fore > 0 and (today_inst > 0 or today_fore > 0))
+            is_inst_buy = today_inst > 0 or (st_inst > 0 and inst_buy_days >= 2)
+            is_fore_buy = today_fore > 0 or (st_fore > 0 and fore_buy_days >= 2)
+            is_inst_heavy_sell = today_inst < 0 and st_inst < 0 and inst_buy_days <= 1
+
+            if is_double_buy:
+                supply_signal = "DOUBLE_BUY"
+                supply_score = 5
+                badge_text = "👑 쌍끌이 수급 (외인+기관)"
+                badge_type = "purple"
+            elif is_inst_buy:
+                supply_signal = "INST_BUY"
+                supply_score = 3
+                badge_text = f"🏢 기관 유입 ({inst_buy_days}일 순매수)"
+                badge_type = "blue"
+            elif is_fore_buy:
+                supply_signal = "FORE_BUY"
+                supply_score = 1
+                badge_text = f"🌐 외인 유입 ({fore_buy_days}일 순매수)"
+                badge_type = "green"
+            elif is_inst_heavy_sell:
+                supply_signal = "INST_HEAVY_SELL"
+                supply_score = -5
+                badge_text = "⚠️ 기관 매도 우위"
+                badge_type = "orange"
+            else:
+                supply_signal = "NEUTRAL"
+                supply_score = 0
+                badge_text = "수급 중립"
+                badge_type = "neutral"
+
+            result = {
+                "status": "success",
+                "stock_code": code,
+                "supply_signal": supply_signal,
+                "supply_score": supply_score,
+                "badge_text": badge_text,
+                "badge_type": badge_type,
+                "institution": {
+                    "today_net_buy": today_inst,
+                    "short_term_sum": st_inst,
+                    "buy_days_5d": inst_buy_days,
+                    "trend": inst_trend
+                },
+                "foreigner": {
+                    "today_net_buy": today_fore,
+                    "short_term_sum": st_fore,
+                    "buy_days_5d": fore_buy_days,
+                    "trend": fore_trend
+                }
+            }
+
+            self._investor_trend_cache[code] = {
+                "timestamp": current_time,
+                "data": result
+            }
+            return result
+        except Exception as e:
+            logger.error(f"수급 동향 조회 중 오류 ({code}): {e}")
+            return {"status": "error", "message": f"수급 조회 실패: {str(e)}"}
 
     def get_stock_network(self, stock_name_or_code: str) -> Dict[str, Any]:
         return {"status": "error", "message": "Deprecated"}
