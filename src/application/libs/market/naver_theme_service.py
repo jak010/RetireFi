@@ -170,8 +170,11 @@ class NaverThemeService:
                     self.load_status = {"step": step, "progress": val}
                 # 1페이지 분량의 네이버 금융 테마 중 상위 15개를 메모리로 긁어옵니다.
                 self.mapping_df = mapper.build_mapping_data(max_pages=1, limit_themes=15, progress_callback=progress_cb)
-                self.mapping_df['stock_code'] = self.mapping_df['stock_code'].astype(str).str.zfill(6)
-                logger.info(f"✅ 네이버 테마 실시간 수집 완료 및 인메모리 적재 성공 (총 {len(self.mapping_df)}개 레코드)")
+                if not self.mapping_df.empty and 'stock_code' in self.mapping_df.columns:
+                    self.mapping_df['stock_code'] = self.mapping_df['stock_code'].astype(str).str.zfill(6)
+                    logger.info(f"✅ 네이버 테마 실시간 수집 완료 및 인메모리 적재 성공 (총 {len(self.mapping_df)}개 레코드)")
+                else:
+                    logger.warning("⚠️ 네이버 테마 수집 결과가 비어있습니다.")
             except Exception as e:
                 logger.error(f"❌ 네이버 테마 실시간 스크래핑 중 오류 발생: {e}")
 

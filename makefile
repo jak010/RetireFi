@@ -1,10 +1,10 @@
 deploy.dev:
-	docker compose -f deploy/docker-compose.yml up -d;
-	uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+# 	docker compose -f deploy/docker-compose.yml up -d;
+	uvicorn src.main:app --host 0.0.0.0 --port 9001 --reload
 
 deploy.dummy:
 	docker compose -f deploy/docker-compose.yml up -d;
-	USE_DUMMY=true uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+	USE_DUMMY=true uvicorn src.main:app --host 0.0.0.0 --port 9001 --reload
 
 
 db.fetch:

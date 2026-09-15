@@ -18,50 +18,47 @@ class ThemeStockMapper:
         themes = []
 
         for page in range(1, max_pages + 1):
-            url = f"https://finance.naver.com/sise/theme.naver?page={page}"
-            res = requests.get(url, headers=HEADERS)
-            soup = BeautifulSoup(res.text, 'html.parser')
-
-            rows = soup.select('table.type_1 tr')
-            for row in rows:
-                cols = row.select('td.col_type1 a')
-                if cols:
-                    theme_name = cols[0].text.strip()
-                    theme_no = cols[0]['href'].split('no=')[-1]
-                    themes.append({
-                        'theme_no': theme_no,
-                        'theme_name': theme_name
-                    })
-            time.sleep(0.1)
+            url = f"https://m.stock.naver.com/api/stocks/theme?page={page}"
+            try:
+                res = requests.get(url, headers=HEADERS, timeout=5)
+                if res.status_code == 200:
+                    data = res.json()
+                    for group in data.get("groups", []):
+                        themes.append({
+                            'theme_no': str(group.get('no')),
+                            'theme_name': group.get('name', '').strip()
+                        })
+            except Exception as e:
+                print(f"테마 목록 수집 실패 (page={page}): {e}")
+            time.sleep(0.05)
 
         print(f"🔍 총 {len(themes)}개 테마 목록 검색 완료!")
         return themes
 
     def get_stocks_in_theme(self, theme_no, theme_name):
         """특정 테마 고유번호에 속한 종목 리스트 수집"""
-        url = f"https://finance.naver.com/sise/sise_group_detail.naver?type=theme&no={theme_no}"
-        res = requests.get(url, headers=HEADERS)
-        soup = BeautifulSoup(res.text, 'html.parser')
-
-        stocks = []
-        rows = soup.select('table.type_5 tr')
-        for row in rows:
-            name_td = row.select('td.name a')
-            desc_td = row.select('td.info_add')  # 편입/연관 사유 요약
-
-            if name_td:
-                stock_name = name_td[0].text.strip()
-                stock_code = name_td[0]['href'].split('code=')[-1]
-                description = desc_td[0].text.strip() if desc_td else ""
-
-                stocks.append({
-                    'theme_no': theme_no,
-                    'theme_name': theme_name,
-                    'stock_code': stock_code,
-                    'stock_name': stock_name,
-                    'description': description
-                })
-        return stocks
+        url = f"https://m.stock.naver.com/api/stocks/theme/{theme_no}"
+        try:
+            res = requests.get(url, headers=HEADERS, timeout=5)
+            if res.status_code == 200:
+                data = res.json()
+                theme_item_info = data.get('themeItemInfoMap', {})
+                stocks = []
+                for s in data.get('stocks', []):
+                    code = str(s.get('itemCode', '')).zfill(6)
+                    stock_name = s.get('stockName', '').strip()
+                    description = theme_item_info.get(code, '')
+                    stocks.append({
+                        'theme_no': str(theme_no),
+                        'theme_name': theme_name,
+                        'stock_code': code,
+                        'stock_name': stock_name,
+                        'description': description
+                    })
+                return stocks
+        except Exception as e:
+            print(f"테마 종목 수집 실패 ({theme_name}, no={theme_no}): {e}")
+        return []
 
     def build_mapping_data(self, max_pages=1, limit_themes=None, progress_callback=None):
         """전체 테마-종목 매핑 데이터 생성 및 병합"""

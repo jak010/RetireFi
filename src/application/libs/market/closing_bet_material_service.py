@@ -8,11 +8,19 @@ logger = logging.getLogger(__name__)
 
 class ClosingBetMaterialService:
     def __init__(self):
-        self.llm = ChatGoogleGenerativeAI(
-            model="gemini-flash-latest", # Use gemini-flash-latest
-            temperature=0.2, # Low temperature for more analytical consistency
-            google_api_key=settings.GOOGLE_API_KEY
-        )
+        self._llm = None
+
+    @property
+    def llm(self):
+        if self._llm is None:
+            if not settings.GOOGLE_API_KEY:
+                raise ValueError("GOOGLE_API_KEY가 설정되지 않았습니다. .env 파일에 GOOGLE_API_KEY를 설정해주세요.")
+            self._llm = ChatGoogleGenerativeAI(
+                model="gemini-flash-latest", # Use gemini-flash-latest
+                temperature=0.2, # Low temperature for more analytical consistency
+                google_api_key=settings.GOOGLE_API_KEY
+            )
+        return self._llm
 
     async def evaluate_material(self, request_data: dict) -> dict:
         """
