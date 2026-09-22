@@ -1,4 +1,7 @@
 from fastapi.routing import APIRouter
+from fastapi.responses import FileResponse
+import os
+import datetime
 
 from src.application.libs.market.naver_theme_service import NaverThemeService
 from src.application.libs.market.news_summarizer_service import NewsSummaryService
@@ -540,4 +543,45 @@ class MarketController:
                 "status": "error",
                 "message": str(e)
             }
+
+    @staticmethod
+    @market_entrypoint.post(path="/closing-bet/save-csv",
+                            summary="[MARKET] : 실시간 종가베팅 후보군 CSV 파일 기록")
+    def save_closing_bet_csv(payload: dict = None):
+        try:
+            candidates = payload.get("candidates") if payload else None
+            res = naver_theme_service.save_closing_bet_to_csv(candidates)
+            return res
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+
+    @staticmethod
+    @market_entrypoint.get(path="/closing-bet/download-csv",
+                           summary="[MARKET] : 실시간 종가베팅 후보군 누적 CSV 다운로드")
+    def download_closing_bet_csv():
+        try:
+            base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../data"))
+            csv_file_path = os.path.join(base_dir, "closing_bet_candidates.csv")
+            if not os.path.exists(csv_file_path):
+                naver_theme_service.save_closing_bet_to_csv()
+
+            if not os.path.exists(csv_file_path):
+                return {"status": "error", "message": "다운로드할 종가베팅 데이터가 없습니다."}
+
+            today_str = datetime.datetime.now().strftime("%Y%m%d")
+            filename = f"closing_bet_candidates_{today_str}.csv"
+            return FileResponse(
+                path=csv_file_path,
+                filename=filename,
+                media_type="text/csv"
+            )
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+
 

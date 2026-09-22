@@ -2969,13 +2969,14 @@ function renderClosingBetCandidates(themesData) {
                 }
                 reason += supplyReason;
                 
-                candidates.push({ stock, themeName: theme.theme_name, score: totalScore, techScore, supplyScore, supplyBadgeHtml, reason });
+                candidates.push({ stock, themeName: theme.theme_name, score: totalScore, techScore, supplyScore, dominance, supplyBadgeHtml, reason });
             }
         });
     });
     
     candidates.sort((a, b) => b.score - a.score);
     const finalCandidates = candidates.slice(0, 4);
+    window.latestClosingBetCandidates = finalCandidates;
     
     if (finalCandidates.length === 0) {
         section.style.display = 'none';
@@ -3496,6 +3497,75 @@ window.toggleClosingBetCollapse = function() {
     } else {
         container.style.display = 'none';
         btn.textContent = '🔼';
+    }
+};
+
+window.saveAndDownloadClosingBetCsv = async function() {
+    const btn = document.getElementById('closing-bet-csv-btn');
+    const originalHtml = btn ? btn.innerHTML : '📥 CSV 저장';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '⏳ 저장 중...';
+    }
+
+    try {
+        const candidates = (window.latestClosingBetCandidates || []).map(c => {
+            const s = c.stock || {};
+            return {
+                stock_code: s.stock_code,
+                stock_name: s.stock_name,
+                theme_name: c.themeName || '',
+                rate: s.rate,
+                drop: s.drop,
+                volume_str: s.volume_str,
+                current_price: s.current_price || s.price || 0,
+                dominance: c.dominance || 0,
+                tech_score: c.techScore || 0,
+                score: c.score || 0,
+                reason: c.reason || '',
+                investor_trend: s.investor_trend || (typeof cbInvestorCache !== 'undefined' ? cbInvestorCache.get(s.stock_code) : null)
+            };
+        });
+
+        const res = await fetch('/api/v1/market/closing-bet/save-csv', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ candidates })
+        });
+
+        const result = await res.json();
+        if (result.status === 'success') {
+            // 브라우저 다운로드 트리거
+            const link = document.createElement('a');
+            link.href = '/api/v1/market/closing-bet/download-csv';
+            link.setAttribute('download', '');
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            if (btn) {
+                btn.innerHTML = '✅ 저장 완료!';
+                btn.style.background = 'rgba(16, 185, 129, 0.25)';
+                setTimeout(() => {
+                    btn.innerHTML = originalHtml;
+                    btn.style.background = 'rgba(16, 185, 129, 0.1)';
+                    btn.disabled = false;
+                }, 2500);
+            }
+        } else {
+            alert('CSV 저장 실패: ' + (result.message || '오류가 발생했습니다.'));
+            if (btn) {
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+            }
+        }
+    } catch (e) {
+        console.error('CSV 저장 중 오류:', e);
+        alert('CSV 저장 중 오류가 발생했습니다: ' + e.message);
+        if (btn) {
+            btn.innerHTML = originalHtml;
+            btn.disabled = false;
+        }
     }
 };
 

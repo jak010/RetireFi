@@ -254,6 +254,12 @@
                             <span style="display: inline-block; width: 5px; height: 5px; border-radius: 50%; background-color: #10b981; margin-right: 0.2rem;"></span>
                             알고리즘 연산 중
                             <div style="width: 1px; height: 12px; background-color: var(--border-color); margin: 0 0.2rem;"></div>
+                            <button id="closing-bet-csv-btn" onclick="saveAndDownloadClosingBetCsv()" 
+                                style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: #059669; border-radius: 6px; padding: 0.2rem 0.55rem; font-size: 0.7rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.25rem; transition: all 0.2s;" 
+                                title="현재 종가베팅 후보군을 CSV 파일로 저장하고 다운로드합니다">
+                                📥 CSV 저장
+                            </button>
+                            <div style="width: 1px; height: 12px; background-color: var(--border-color); margin: 0 0.2rem;"></div>
                             <button id="closing-bet-collapse-btn" onclick="toggleClosingBetCollapse()" style="background:none; border:none; cursor:pointer; font-size: 1rem; transition: all 0.2s;" title="접기/펼치기">🔽</button>
                             <button id="closing-bet-pin-btn" onclick="toggleClosingBetPin()" class="pinned" style="background:none; border:none; cursor:pointer; font-size: 1rem; transition: all 0.2s;" title="상단 고정 켜기/끄기">📌</button>
                         </div>

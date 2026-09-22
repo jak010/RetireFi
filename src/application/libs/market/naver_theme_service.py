@@ -846,6 +846,156 @@ class NaverThemeService:
         self.flush_pending_alerts()
         return result
 
+    def save_closing_bet_to_csv(self, candidates: List[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        실시간 종가베팅 후보군 목록을 data/closing_bet_candidates.csv 파일에 누적 기록합니다.
+        엑셀 호환을 위해 utf-8-sig 인코딩을 적용하며, (매매일자, 종목코드) 기준 중복 방지 및 수기 입력 보존을 지원합니다.
+        """
+        import csv
+        import re
+        import datetime
+
+        now = datetime.datetime.now()
+        record_time = now.strftime("%Y-%m-%d %H:%M:%S")
+        trade_date = now.strftime("%Y-%m-%d")
+
+        if candidates is None:
+            if self.report_cache and "closing_bet_stocks" in self.report_cache:
+                candidates = self.report_cache.get("closing_bet_stocks", [])
+            else:
+                candidates = []
+
+        # 저장 디렉토리 및 파일 경로 설정
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../data"))
+        os.makedirs(base_dir, exist_ok=True)
+        csv_file_path = os.path.join(base_dir, "closing_bet_candidates.csv")
+
+        headers = [
+            "기록일시", "매매일자", "종목코드", "종목명", "주도테마",
+            "당일등락률(%)", "장중낙폭(%)", "거래대금(억)",
+            "외인수급", "기관수급", "수급시그널", "수급점수",
+            "테마점유율(%)", "기술점수", "종합점수", "종가(진입가)",
+            "익일시초가", "익일고가", "매도가",
+            "시초갭(%)", "장중최고(%)", "실현수익률(%)", "선정사유"
+        ]
+
+        existing_rows = {}
+        if os.path.exists(csv_file_path):
+            try:
+                with open(csv_file_path, mode="r", encoding="utf-8-sig") as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        key = (row.get("매매일자", ""), row.get("종목코드", ""))
+                        if key[0] and key[1]:
+                            existing_rows[key] = row
+            except Exception as e:
+                logger.warning(f"기존 종가베팅 CSV 파일 로드 중 오류 발생: {e}")
+
+        # 신규 후보군 반영
+        saved_count = 0
+        for item in candidates:
+            code = str(item.get("stock_code") or "").zfill(6)
+            name = item.get("stock_name", "")
+            if not code or not name:
+                continue
+
+            theme_name = item.get("theme_name", "")
+            rate = item.get("rate", 0.0)
+            drop = item.get("drop", 0.0)
+            vol_str = item.get("volume_str", "0")
+            vol_num = float(re.sub(r'[^0-9.]', '', str(vol_str)) or 0)
+            price = item.get("current_price") or item.get("price") or 0
+
+            inv = item.get("investor_trend") or {}
+            inst = inv.get("institution", {}) if isinstance(inv, dict) else {}
+            fore = inv.get("foreigner", {}) if isinstance(inv, dict) else {}
+            sig = inv.get("supply_signal", "NEUTRAL") if isinstance(inv, dict) else "NEUTRAL"
+            supply_score = inv.get("supply_score", 0) if isinstance(inv, dict) else 0
+
+            fore_desc = f"{fore.get('today_net_buy', 0):+,}주" if fore else ""
+            inst_desc = f"{inst.get('today_net_buy', 0):+,}주" if inst else ""
+
+            dominance = item.get("dominance", 0.0)
+            tech_score = item.get("tech_score", 0.0)
+            score = item.get("score", 0.0)
+            reason = item.get("reason", "")
+
+            key = (trade_date, code)
+            prev_row = existing_rows.get(key, {})
+
+            # 포맷팅 보조
+            try:
+                rate_val = float(re.sub(r'[^0-9.-]', '', str(rate)))
+                rate_str = f"{rate_val:+.2f}%"
+            except Exception:
+                rate_str = str(rate)
+
+            try:
+                drop_val = float(re.sub(r'[^0-9.-]', '', str(drop)))
+                drop_str = f"{drop_val:.2f}%"
+            except Exception:
+                drop_str = str(drop)
+
+            try:
+                price_val = int(re.sub(r'[^0-9]', '', str(price)))
+                price_str = f"{price_val:,}원" if price_val > 0 else str(price)
+            except Exception:
+                price_str = str(price)
+
+            new_row = {
+                "기록일시": record_time,
+                "매매일자": trade_date,
+                "종목코드": code,
+                "종목명": name,
+                "주도테마": theme_name,
+                "당일등락률(%)": rate_str,
+                "장중낙폭(%)": drop_str,
+                "거래대금(억)": f"{vol_num:.0f}억",
+                "외인수급": fore_desc,
+                "기관수급": inst_desc,
+                "수급시그널": sig,
+                "수급점수": str(supply_score),
+                "테마점유율(%)": f"{float(dominance):.1f}%",
+                "기술점수": str(tech_score),
+                "종합점수": str(score),
+                "종가(진입가)": price_str,
+                "익일시초가": prev_row.get("익일시초가", ""),
+                "익일고가": prev_row.get("익일고가", ""),
+                "매도가": prev_row.get("매도가", ""),
+                "시초갭(%)": prev_row.get("시초갭(%)", ""),
+                "장중최고(%)": prev_row.get("장중최고(%)", ""),
+                "실현수익률(%)": prev_row.get("실현수익률(%)", ""),
+                "선정사유": reason
+            }
+
+            existing_rows[key] = new_row
+            saved_count += 1
+
+        # CSV 파일에 쓰기 (utf-8-sig)
+        try:
+            with open(csv_file_path, mode="w", encoding="utf-8-sig", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=headers)
+                writer.writeheader()
+                sorted_rows = sorted(
+                    existing_rows.values(),
+                    key=lambda r: (r.get("매매일자", ""), float(re.sub(r'[^0-9.-]', '', str(r.get("종합점수", 0))) or 0)),
+                    reverse=True
+                )
+                for r in sorted_rows:
+                    writer.writerow(r)
+            return {
+                "status": "success",
+                "file_path": csv_file_path,
+                "saved_count": saved_count,
+                "total_rows": len(existing_rows)
+            }
+        except Exception as e:
+            logger.error(f"종가베팅 CSV 저장 실패: {e}")
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+
     def get_sangtta_candidates_from_naver_and_royal(self, min_rate: float = 24.0) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, str], Dict[str, List[str]]]:
         """네이버 금융 및 로얄로더 시세 데이터에서 당일 등락률 min_rate(24%) 이상인 급등 후보 종목 조회"""
         self.get_naver_themes_summary()  # 캐시 갱신 또는 확인
