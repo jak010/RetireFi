@@ -2916,8 +2916,8 @@ function renderClosingBetCandidates(themesData) {
                 dominance = Math.min(100, (vol / themeVolumeNum) * 100);
             }
             
-            // Algorithm: Rate 7% ~ 25%, Drop 0 to -8%, Volume >= 1500억
-            if (rate >= 7.0 && rate <= 25.0 && drop >= -8.0 && vol >= 1500) {
+            // Algorithm: Rate 10% ~ 28%, Drop 0 to -8%, Volume >= 1500억
+            if (rate >= 10.0 && rate <= 28.0 && drop >= -8.0 && vol >= 1500) {
                 let techScore = rate + (dominance * 0.1) + themeScore;
                 if (drop >= -5.0) techScore += 3; // Bonus for strong holding power
                 if (vol >= 3000) techScore += 2; // Bonus for decent liquidity (>3000억)

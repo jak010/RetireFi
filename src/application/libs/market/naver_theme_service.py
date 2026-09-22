@@ -763,7 +763,7 @@ class NaverThemeService:
                     stock_info["theme_name"] = theme_name
                     leader_stocks.append(stock_info)
                     
-        # 종가베팅 후보군 자동 도출 (TOP 8 주도테마의 핵심주 중 등락률 7~25%, 고점대비낙폭 0~-8%, 대금 1500억 이상 + 수급 점수)
+        # 종가베팅 후보군 자동 도출 (TOP 8 주도테마의 핵심주 중 등락률 10~28%, 고점대비낙폭 0~-8%, 대금 1500억 이상 + 수급 점수)
         closing_bet_stocks = []
         seen_cb = set()
         import re
@@ -786,7 +786,7 @@ class NaverThemeService:
                 except (ValueError, TypeError):
                     continue
 
-                if 7.0 <= rate <= 25.0 and -8.0 <= drop <= 0.0 and vol >= 1500:
+                if 10.0 <= rate <= 28.0 and -8.0 <= drop <= 0.0 and vol >= 1500:
                     seen_cb.add(code)
                     dominance = min(100.0, (vol / t_vol_num) * 100.0) if t_vol_num > 0 else 0.0
                     tech_score = rate + (dominance * 0.1) + theme_score
