@@ -763,7 +763,7 @@ class NaverThemeService:
                     stock_info["theme_name"] = theme_name
                     leader_stocks.append(stock_info)
                     
-        # 종가베팅 후보군 자동 도출 (TOP 8 주도테마의 핵심주 중 등락률 10~28%, 고점대비낙폭 0~-8%, 대금 1500억 이상 + 수급 점수)
+        # 종가베팅 후보군 자동 도출 (TOP 8 주도테마의 핵심주 중 등락률 10~28%, 고점대비낙폭 0~-8%, 대금 1500억 이상, 시총 7500억 이상 + 수급 점수)
         closing_bet_stocks = []
         seen_cb = set()
         import re
@@ -786,7 +786,25 @@ class NaverThemeService:
                 except (ValueError, TypeError):
                     continue
 
-                if 10.0 <= rate <= 28.0 and -8.0 <= drop <= 0.0 and vol >= 1500:
+                # 시가총액 (7,500억 이상 필터)
+                mcap_raw = stock.get("market_cap", 0)
+                mcap_billion = 0.0
+                if isinstance(mcap_raw, (int, float)) and mcap_raw > 0:
+                    if mcap_raw >= 10_000_000_000:  # 100억 원 이상이면 원(KRW) 단위로 판단
+                        mcap_billion = mcap_raw / 100_000_000
+                    else:  # 이미 억 단위
+                        mcap_billion = float(mcap_raw)
+
+                if mcap_billion <= 0:
+                    mcap_str = str(stock.get("market_cap_str", ""))
+                    if mcap_str and mcap_str != "-":
+                        t_match = re.search(r'([0-9,.]+)\s*조', mcap_str)
+                        b_match = re.search(r'([0-9,.]+)\s*억', mcap_str)
+                        t_val = float(t_match.group(1).replace(',', '')) * 10000 if t_match else 0.0
+                        b_val = float(b_match.group(1).replace(',', '')) if b_match else 0.0
+                        mcap_billion = t_val + b_val
+
+                if 10.0 <= rate <= 28.0 and -8.0 <= drop <= 0.0 and vol >= 1500 and mcap_billion >= 7500:
                     seen_cb.add(code)
                     dominance = min(100.0, (vol / t_vol_num) * 100.0) if t_vol_num > 0 else 0.0
                     tech_score = rate + (dominance * 0.1) + theme_score
@@ -872,7 +890,7 @@ class NaverThemeService:
 
         headers = [
             "기록일시", "매매일자", "종목코드", "종목명", "주도테마",
-            "당일등락률(%)", "장중낙폭(%)", "거래대금(억)",
+            "당일등락률(%)", "장중낙폭(%)", "거래대금(억)", "시가총액",
             "외인수급", "기관수급", "수급시그널", "수급점수",
             "테마점유율(%)", "기술점수", "종합점수", "종가(진입가)",
             "익일시초가", "익일고가", "매도가",
@@ -905,6 +923,7 @@ class NaverThemeService:
             vol_str = item.get("volume_str", "0")
             vol_num = float(re.sub(r'[^0-9.]', '', str(vol_str)) or 0)
             price = item.get("current_price") or item.get("price") or 0
+            mcap_str = item.get("market_cap_str") or item.get("stock", {}).get("market_cap_str", "-")
 
             inv = item.get("investor_trend") or {}
             inst = inv.get("institution", {}) if isinstance(inv, dict) else {}
@@ -951,6 +970,7 @@ class NaverThemeService:
                 "당일등락률(%)": rate_str,
                 "장중낙폭(%)": drop_str,
                 "거래대금(억)": f"{vol_num:.0f}억",
+                "시가총액": mcap_str if mcap_str != "-" else prev_row.get("시가총액", "-"),
                 "외인수급": fore_desc,
                 "기관수급": inst_desc,
                 "수급시그널": sig,

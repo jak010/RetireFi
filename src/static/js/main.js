@@ -2916,8 +2916,26 @@ function renderClosingBetCandidates(themesData) {
                 dominance = Math.min(100, (vol / themeVolumeNum) * 100);
             }
             
-            // Algorithm: Rate 10% ~ 28%, Drop 0 to -8%, Volume >= 1500억
-            if (rate >= 10.0 && rate <= 28.0 && drop >= -8.0 && vol >= 1500) {
+            // Algorithm: Rate 10% ~ 28%, Drop 0 to -8%, Volume >= 1500억, Market Cap >= 7500억
+            let mcapBillion = 0;
+            const mcapRaw = stock.market_cap || 0;
+            if (typeof mcapRaw === 'number' && mcapRaw > 0) {
+                if (mcapRaw >= 10000000000) { // 100억 이상이면 원 단위
+                    mcapBillion = mcapRaw / 100000000;
+                } else { // 이미 억 단위
+                    mcapBillion = mcapRaw;
+                }
+            }
+            if (mcapBillion <= 0 && stock.market_cap_str && stock.market_cap_str !== '-') {
+                const str = stock.market_cap_str;
+                const tMatch = str.match(/([0-9,.]+)\s*조/);
+                const bMatch = str.match(/([0-9,.]+)\s*억/);
+                const tVal = tMatch ? parseFloat(tMatch[1].replace(/,/g, '')) * 10000 : 0;
+                const bVal = bMatch ? parseFloat(bMatch[1].replace(/,/g, '')) : 0;
+                mcapBillion = tVal + bVal;
+            }
+
+            if (rate >= 10.0 && rate <= 28.0 && drop >= -8.0 && vol >= 1500 && mcapBillion >= 7500) {
                 let techScore = rate + (dominance * 0.1) + themeScore;
                 if (drop >= -5.0) techScore += 3; // Bonus for strong holding power
                 if (vol >= 3000) techScore += 2; // Bonus for decent liquidity (>3000억)
@@ -3031,7 +3049,8 @@ function renderClosingBetCandidates(themesData) {
                 <div style="display: flex; gap: 0.2rem; align-items: center;">
                     ${c.supplyBadgeHtml || ''}
                     <span style="font-size: 0.6rem; font-weight: 800; color: #ef4444; background: rgba(239, 68, 68, 0.1); padding: 0.1rem 0.25rem; border-radius: 4px; border: 1px solid rgba(239, 68, 68, 0.2);">AI PICK</span>
-                    <span style="font-size: 0.6rem; font-weight: 700; color: var(--text-muted); background: rgba(0,0,0,0.03); padding: 0.1rem 0.25rem; border-radius: 4px;">${s.volume_str || '-'}</span>
+                    <span style="font-size: 0.6rem; font-weight: 700; color: #475569; background: rgba(0,0,0,0.04); padding: 0.1rem 0.25rem; border-radius: 4px;" title="시가총액">시총 ${s.market_cap_str || '-'}</span>
+                    <span style="font-size: 0.6rem; font-weight: 700; color: var(--text-muted); background: rgba(0,0,0,0.03); padding: 0.1rem 0.25rem; border-radius: 4px;" title="당일 거래대금">${s.volume_str || '-'}</span>
                 </div>
             </div>
             
@@ -3518,6 +3537,7 @@ window.saveAndDownloadClosingBetCsv = async function() {
                 rate: s.rate,
                 drop: s.drop,
                 volume_str: s.volume_str,
+                market_cap_str: s.market_cap_str || '',
                 current_price: s.current_price || s.price || 0,
                 dominance: c.dominance || 0,
                 tech_score: c.techScore || 0,
